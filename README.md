@@ -7,9 +7,9 @@ A repo for Quacky, the unhinged desktop assistant.
 - Ready for AI model integration
 
 ## The Stack
-> PyQt: UI and runtime
-> SpeechRecognition: Cross-platform speech-to-text
-> PyAudio: Audio input handling
+> PyQt: UI and runtime.
+> SpeechRecognition: Cross-platform speech-to-text.
+> PyAudio: Audio input handling.
 
 ## Project Structure
 ```
