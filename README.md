@@ -14,6 +14,8 @@ A repo for Quacky, the unhinged desktop assistant.
 ## Project Structure
 ```
 Quacky/
+|-- Server/
+|----- Server stuff
 ├── app.py              # Main application
 ├── speech_to_text.py   # Speech-to-text module
 ├── stt_demo.py         # Demo script for testing STT
@@ -39,6 +41,7 @@ Quacky/
    python app.py
    ```
 
+
 ### Manual Installation
 ```bash
 pip install -r requirements.txt
@@ -59,7 +62,11 @@ brew install portaudio
 **Windows:**
 PyAudio should install automatically. If issues occur, install Visual C++ Build Tools.
 
+## Server app
+This app has two processes: the client and the local server. The client handles the speech to text, text to speech, and User Interface.The local server sends this input to the API, receives the response by Gemini, handles system actions, and returns the response to the client.  
+
 ## Usage
+
 
 ### Using the Speech-to-Text Module
 
