@@ -3,10 +3,21 @@ from dotenv import load_dotenv
 import os
 
 load_dotenv()
-client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
 
-response = client.models.generate_content(
-    model="gemini-2.5-flash",
-    contents="What is the meaning of life, the universe, and everything?"
-)
-print(response.text)
+
+def get_response_stream(user_input):
+    for chunk in client.models.generate_content_stream(
+        model="gemini-2.5-flash",
+        contents=user_input
+    ):
+        print(chunk.text, end="", flush=True)
+    print() 
+
+client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+print("Google API key loaded")
+while True:
+    user_input = input("Enter your prompt: ")
+    get_response_stream(user_input)
+    if user_input == "exit":
+        break
+#Gemini will say goodbye!
