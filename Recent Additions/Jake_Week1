@@ -1,0 +1,7 @@
+Week 1 Summary
+
+- Set up a Gemini-backed local server with chat sessions and tool support.
+- Added a simple HTTP API for starting chats, sending messages, viewing history, and resetting sessions.
+- Wired tool stubs (calendar, email, open app) into the Gemini tool config and improved their docstrings.
+- Added missing dependencies for the Gemini SDK and dotenv in requirements.
+- Added a README tooling guide with example system instruction and prompts to encourage tool use.
