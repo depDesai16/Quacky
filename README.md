@@ -14,8 +14,8 @@ A repo for Quacky, the unhinged desktop assistant.
 ## Project Structure
 ```
 Quacky/
-|-- Server/
-|----- Server stuff
+|-- backend/
+|----- Backend services
 ├── app.py              # Main application
 ├── speech_to_text.py   # Speech-to-text module
 ├── stt_demo.py         # Demo script for testing STT
@@ -98,7 +98,7 @@ Additional stuff here
 > Quacky will have a "Quacked out" mode where he acts silly
 
 ## Tooling Guide (Gemini)
-The server exposes Gemini tools declared in `server/tools.py`. To encourage tool use, include a system instruction when you start a chat and then ask for actions in normal language.
+The server exposes Gemini tools declared in `backend/tools.py`. To encourage tool use, include a system instruction when you start a chat and then ask for actions in normal language.
 
 ### Example system instruction
 Use this in `POST /chat/start` as the `system` field:
