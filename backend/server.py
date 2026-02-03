@@ -11,7 +11,7 @@ try:
 except ImportError:
     load_dotenv = None
 
-from tools import get_calendar_events, send_email, open_app
+from backend.tools import get_calendar_events, send_email, open_app
 
 
 if load_dotenv:

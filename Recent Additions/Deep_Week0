@@ -1,0 +1,8 @@
+Week 0 Summary
+
+- Built a clean speech-to-text system with "Hey Quacky" wake word detection for JARVIS-like interaction.
+- Implemented microphone selection with automatic filtering of virtual/system audio devices to show only real input microphones.
+- Added continuous listening functionality that processes commands and immediately returns to listening for the next wake word.
+- Created voice command quit functionality with "quit" keyword for clean program termination.
+- Organized speech-to-text files into dedicated speechToText folder with proper path handling and launcher script.
+- Integrated PyAudio dependency and cross-platform microphone support with ambient noise calibration.
