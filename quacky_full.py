@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Quacky Full System - Combined AI Backend + Speech-to-Text
-Starts Jake's AI server and connects speech-to-text for complete JARVIS experience
+Starts AI server and connects speech-to-text
 """
 import threading
 import time
