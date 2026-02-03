@@ -96,3 +96,19 @@ The speech-to-text system provides two modes:
 
 Additional stuff here
 > Quacky will have a "Quacked out" mode where he acts silly
+
+## Tooling Guide (Gemini)
+The server exposes Gemini tools declared in `server/tools.py`. To encourage tool use, include a system instruction when you start a chat and then ask for actions in normal language.
+
+### Example system instruction
+Use this in `POST /chat/start` as the `system` field:
+“You can use tools to: get calendar events, send email, and open apps. Use them when needed and summarize the result.”
+
+### Example prompts
+- “What’s on my calendar today?”
+- “Email sam@example.com with subject ‘Status’ and say I’ll send notes tonight.”
+- “Open Spotify.”
+
+### Forcing tool usage
+If you want to be explicit, say:
+- “Use the send_email tool to send an email to sam@example.com with subject ‘Status’ and body ‘I’ll send notes tonight.’”
