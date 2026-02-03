@@ -14,7 +14,8 @@ def install_dependencies():
     
     # Install Python packages
     print("Installing Python packages...")
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
+    requirements_path = os.path.join(os.path.dirname(__file__), "..", "requirements.txt")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", requirements_path])
     
     # Platform-specific instructions
     if system == "linux":
@@ -34,7 +35,7 @@ def install_dependencies():
         print("PyAudio should install automatically on Windows")
         print("If you encounter issues, you may need to install Visual C++ Build Tools")
     
-    print("\nSetup complete! You can now run: python app.py")
+    print("\nSetup complete! You can now run: python run_quacky.py")
 
 if __name__ == "__main__":
     install_dependencies()
