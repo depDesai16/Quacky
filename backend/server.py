@@ -11,7 +11,10 @@ try:
 except ImportError:
     load_dotenv = None
 
-from backend.tools import get_calendar_events, send_email, open_app
+from backend.tools import (
+    get_calendar_events, send_email, open_app,
+    get_weather_today, get_weather_tomorrow, get_weather_week
+)
 
 
 if load_dotenv:
@@ -27,7 +30,14 @@ if not API_KEY:
 
 client = genai.Client(api_key=API_KEY)
 
-_TOOLS = [get_calendar_events, send_email, open_app]
+_TOOLS = [
+    get_calendar_events,
+    send_email,
+    open_app,
+    get_weather_today,
+    get_weather_tomorrow,
+    get_weather_week,
+]
 _CHATS: dict[str, object] = {}
 
 
