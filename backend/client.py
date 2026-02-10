@@ -7,8 +7,8 @@ class QuackyClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url.rstrip("/")
 
-    def _post(self, path: str, payload: dict) -> dict:
-        url = f"{self.base_url}{path}"
+    def _post(self, path: str, payload: dict):
+        url = self.base_url + path
         data = json.dumps(payload).encode("utf-8")
         req = urllib.request.Request(
             url,
@@ -16,12 +16,18 @@ class QuackyClient:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
+
         try:
             with urllib.request.urlopen(req) as resp:
-                return json.loads(resp.read().decode("utf-8"))
+                body = resp.read().decode("utf-8")
+                return json.loads(body) if body else {}
+
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8")
-            raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+            try:
+                return json.loads(body) if body else {"error": f"HTTP {exc.code}"}
+            except json.JSONDecodeError:
+                return {"error": f"HTTP {exc.code}: {body}"}
 
     def _get(self, path: str) -> dict:
         url = f"{self.base_url}{path}"

@@ -64,6 +64,10 @@ python run_quacky.py
 # From speechToText folder
 cd speechToText
 python quacky_stt.py
+
+# For text to text (testing features purposes)
+python -m backend.server # Terminal 1
+python backend/cli.py # Terminal 2 - use terminal 2 for chatting with ai
 ```
 
 ### Platform-Specific Notes

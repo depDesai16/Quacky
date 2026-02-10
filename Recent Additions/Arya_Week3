@@ -1,0 +1,7 @@
+Week 3 Summary:
+- Added a weather feature that allows users to get today’s weather, tomorrow’s forecast, or the full weekly forecast
+- Implemented context memory so the assistant can understand follow-up questions
+- Standardized the assistant’s personality across both text and speech modes
+- Enabled text-based interaction for easier testing without using speech
+- Weather feature works with speech-to-text input
+- Added graceful error handling for API rate limits so the assistant does not crash when quota is exceeded

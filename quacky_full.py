@@ -26,6 +26,10 @@ except ImportError as e:
 ai_client = None
 chat_id = None
 
+def load_system_prompt():
+    with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
+        return f.read()
+    
 def initialize_ai():
     """Initialize connection to AI backend"""
     global ai_client, chat_id
@@ -49,9 +53,8 @@ def initialize_ai():
     
     try:
         # Start a chat session with personality
-        response = ai_client.start_chat(
-            system="You are Quacky, an unhinged but helpful desktop assistant. Be conversational, witty, and add some personality to your responses. You have access to tools for calendar, email, and opening applications."
-        )
+        response = ai_client.start_chat(system=load_system_prompt())
+
         chat_id = response["chat_id"]
         print(f"✅ Connected to AI backend (Chat ID: {chat_id[:8]}...)")
         print(f"🤖 Using model: {response.get('model', 'unknown')}")

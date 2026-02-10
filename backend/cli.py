@@ -3,6 +3,9 @@ import sys
 
 from client import QuackyClient
 
+def load_system_prompt():
+    with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
+        return f.read()
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Quacky client CLI")
@@ -12,12 +15,17 @@ def main() -> int:
     args = parser.parse_args()
 
     client = QuackyClient(args.base_url)
-    chat = client.start_chat(system=args.system, model=args.model)
+
+    system_prompt = args.system or load_system_prompt()
+
+    chat = client.start_chat(system=system_prompt, model=args.model)
     chat_id = chat["chat_id"]
 
     print(f"Chat started: {chat_id}")
     print("Type 'exit' to quit.")
 
+
+    
     while True:
         try:
             message = input("> ").strip()
@@ -29,6 +37,10 @@ def main() -> int:
         if not message:
             continue
         response = client.send_message(chat_id, message)
+        if "error" in response:
+            print(f"[Error] {response['error']}")
+            continue
+
         print(response.get("text", ""))
 
     return 0
