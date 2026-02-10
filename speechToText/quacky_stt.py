@@ -8,6 +8,7 @@ import threading
 import time
 import os
 import sys
+import pyaudio
 from typing import Optional, Callable
 
 # Ensure we can find modules regardless of where script is run from
@@ -26,12 +27,17 @@ class QuackySpeechToText:
         # Initialize microphone
         try:
             if mic_index is not None:
-                self.microphone = sr.Microphone(device_index=mic_index)
-                print(f"🎤 Using microphone {mic_index}")
+                try:
+                    self.microphone = sr.Microphone(device_index=mic_index)
+                    print(f"🎤 Using microphone {mic_index}")
+                except Exception as e:
+                    print(f"❌ Selected microphone {mic_index} failed: {e}")
+                    print("🎤 Falling back to default microphone...")
+                    self.microphone = sr.Microphone()
             else:
                 self.microphone = sr.Microphone()
                 print("🎤 Using default microphone")
-            
+
             print("🎤 Initializing microphone...")
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
@@ -43,6 +49,7 @@ class QuackySpeechToText:
     @staticmethod
     def list_microphones():
         """List filtered microphones (real input devices only, deduplicated)"""
+        pa = pyaudio.PyAudio()
         all_mics = sr.Microphone.list_microphone_names()
         
         # Filter out virtual/system microphones
@@ -63,6 +70,14 @@ class QuackySpeechToText:
             if any(keyword in name_lower for keyword in skip_keywords):
                 continue
             
+            # Only include real input devices
+            try:
+                info = pa.get_device_info_by_index(i)
+                if info.get("maxInputChannels", 0) < 1:
+                    continue
+            except Exception:
+                continue
+
             # Clean up the name for deduplication
             clean_name = name.split('(')[0].strip()  # Remove parenthetical info
             
@@ -77,6 +92,7 @@ class QuackySpeechToText:
         for idx, (original_index, name) in enumerate(filtered_mics):
             print(f"  {idx+1}: {name}")
         
+        pa.terminate()
         return filtered_mics
     
     def test_microphone(self):
