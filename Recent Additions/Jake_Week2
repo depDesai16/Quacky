@@ -1,0 +1,6 @@
+Week 2 Summary
+
+- Built a modular app launcher that reads from backend/applist.txt with aliases and per-OS commands.
+- Added OS-specific command support (linux/macos/windows) and expanded the app list (Firefox, Chrome, Spotify, Discord, Cursor, VS Code).
+- Updated the system prompt so the AI knows it can use tools and should summarize tool results.
+- Improved client error handling so rate limits (429) return clean errors instead of crashing.
