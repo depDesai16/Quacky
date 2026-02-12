@@ -6,14 +6,15 @@ from backend.weather_api import (
     get_forecast_auto_ip,
     format_forecast_days,
 )
+from backend.outlook import send_email as outlook_send_email
 
 def get_calendar_events() -> str:
     """Return a short summary of upcoming calendar events."""
-    return "Calendar events"
+    return "You have a meeting tomorrow at 10 AM."
 
 def send_email(email_address: str, subject: str, body: str) -> str:
-    """Send an email to the recipient with the provided subject and body."""
-    return "Email sent"
+    """Send an email via Outlook or default mail client."""
+    return outlook_send_email(email_address, subject, body)
 
 def open_app(app_name: str) -> str:
     """Open a local application by name."""
