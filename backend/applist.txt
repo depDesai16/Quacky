@@ -1,0 +1,4 @@
+# Format: Name | Command | Aliases (comma-separated) | OS commands (key=value; key=value)
+# OS keys: linux, macos, windows
+# Example: Spotify | spotify | spotify, music | macos=open -a "Spotify"; windows=cmd /c start spotify
+Mozilla Firefox | firefox | firefox, mozilla, mozilla firefox | macos=open -a "Firefox"; windows=cmd /c start firefox

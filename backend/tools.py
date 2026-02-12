@@ -6,6 +6,7 @@ from backend.weather_api import (
     get_forecast_auto_ip,
     format_forecast_days,
 )
+from backend.openapp import open_app as open_local_app
 
 def get_calendar_events() -> str:
     """Return a short summary of upcoming calendar events."""
@@ -17,7 +18,7 @@ def send_email(email_address: str, subject: str, body: str) -> str:
 
 def open_app(app_name: str) -> str:
     """Open a local application by name."""
-    return "App opened"
+    return open_local_app(app_name)
 
 def get_weather_today() -> str:
     """Use when the user asks 'what's the weather' or asks for today's weather."""
