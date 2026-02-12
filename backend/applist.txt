@@ -5,5 +5,5 @@ Mozilla Firefox | firefox | firefox, mozilla, mozilla firefox | macos=open -a "F
 Spotify | spotify | spotify, music | linux=spotify-electron; macos=open -a "Spotify"; windows=cmd /c start spotify
 Discord | discord | discord | macos=open -a "Discord"; windows=cmd /c start discord
 Google Chrome | google-chrome-stable | chrome, google chrome | linux=google-chrome-stable; macos=open -a "Google Chrome"; windows=cmd /c start chrome
-Cursor | cursor | cursor, cursor-bin | linux=cursor; macos=open -a "cursor"; windows=cmd /c start cursor
-VS Code | code | code, VS Code, Visual Studio Code | linux=code; macos=open -a "code" windows=cmd /c start code
+Cursor | cursor | cursor, cursor-bin | linux=cursor; macos=open -a "Cursor"; windows=cmd /c start cursor
+VS Code | code | code, VS Code, Visual Studio Code | linux=code; macos=open -a "Code"; windows=cmd /c start code

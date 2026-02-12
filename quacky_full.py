@@ -74,7 +74,16 @@ def process_command(command: str):
     try:
         print(f"🧠 Thinking...")
         response = ai_client.send_message(chat_id, command)
-        ai_response = response["text"]
+        if not isinstance(response, dict):
+            print("❌ AI error: Unexpected response type")
+            return
+        if "error" in response:
+            print(f"❌ AI error: {response['error']}")
+            return
+        ai_response = response.get("text", "")
+        if not ai_response:
+            print("❌ AI error: Empty response")
+            return
         print(f"🦆 Quacky: {ai_response}")
         print()  # Add spacing for readability
         
