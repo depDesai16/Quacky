@@ -54,8 +54,29 @@ def open_outlook_calendar() -> str:
     webbrowser.open(web_url, new=2)
     return "Opened Outlook web calendar."
 
+_WEEKDAY_MAP = {
+    "monday": 0, "mon": 0,
+    "tuesday": 1, "tue": 1, "tues": 1,
+    "wednesday": 2, "wed": 2,
+    "thursday": 3, "thu": 3, "thur": 3, "thurs": 3,
+    "friday": 4, "fri": 4,
+    "saturday": 5, "sat": 5,
+    "sunday": 6, "sun": 6,
+}
+
 
 def _parse_time_component(value: str) -> tuple[int, int] | None:
+    """
+    Extract (hour, minute) from a string containing a time expression.
+    Returns None if no recognisable time is found.
+
+    Handles:
+      • "noon", "midnight"
+      • "3pm", "3 pm", "3:30pm", "3:30 pm"
+      • "15:30" (24-hour)
+      • Bare hours with am/pm implied by context are NOT assumed here —
+        callers supply a default_time for that.
+    """
     text = (value or "").strip().lower()
     if not text:
         return None
@@ -65,37 +86,128 @@ def _parse_time_component(value: str) -> tuple[int, int] | None:
     if "midnight" in text:
         return (0, 0)
 
-    match = re.search(r"\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b", text)
-    if match:
-        hour = int(match.group(1)) % 12
-        minute = int(match.group(2) or "0")
-        if match.group(3) == "pm":
+    m = re.search(r"\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b", text)
+    if m:
+        hour = int(m.group(1)) % 12
+        minute = int(m.group(2) or "0")
+        if m.group(3) == "pm":
             hour += 12
         return (hour, minute)
 
-    match = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
-    if match:
-        return (int(match.group(1)), int(match.group(2)))
+    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
 
     return None
 
 
-def _parse_relative_datetime(value: str, default_time: tuple[int, int]) -> datetime | None:
+def _next_weekday(today: date, weekday: int, force_next_week: bool = False) -> date:
+    """
+    Return the nearest future date that falls on *weekday* (0=Mon … 6=Sun).
+    If force_next_week is True, always skip to the following week's occurrence.
+    """
+    days_ahead = (weekday - today.weekday()) % 7
+    if days_ahead == 0:
+        days_ahead = 7  
+    if force_next_week:
+        days_ahead = days_ahead if days_ahead > 0 else 7
+        if days_ahead < 7:
+            days_ahead += 7
+    return today + timedelta(days=days_ahead)
+
+
+def _parse_date_component(text: str) -> date | None:
+    """
+    Resolve a date-bearing phrase to a concrete date.
+
+    Handles:
+      • "today", "tonight"
+      • "tomorrow"
+      • "this Friday", "this weekend" → nearest future occurrence
+      • "next Monday", "next week Monday"
+      • bare weekday names: "Friday", "Monday"
+      • "in N days"
+      • ISO: "2026-02-13"
+      • US: "02/13/2026", "2/13"
+    """
+    t = text.strip().lower()
+    today_date = datetime.now().date()
+
+    if re.search(r"\btonight\b", t) or re.search(r"\btoday\b", t):
+        return today_date
+    if "tomorrow" in t:
+        return today_date + timedelta(days=1)
+    if "yesterday" in t:
+        return today_date - timedelta(days=1)
+
+    m = re.match(r"in\s+(\d+)\s+days?", t)
+    if m:
+        return today_date + timedelta(days=int(m.group(1)))
+
+    m = re.match(r"next(?:\s+week)?\s+(\w+)", t)
+    if m:
+        day_name = m.group(1).rstrip("s")  
+        wd = _WEEKDAY_MAP.get(day_name)
+        if wd is not None:
+            return _next_weekday(today_date, wd, force_next_week=True)
+
+    m = re.match(r"this\s+(\w+)", t)
+    if m:
+        day_name = m.group(1)
+        wd = _WEEKDAY_MAP.get(day_name)
+        if wd is not None:
+            return _next_weekday(today_date, wd)
+
+    for name, wd in _WEEKDAY_MAP.items():
+        if re.match(rf"^{re.escape(name)}\b", t):
+            return _next_weekday(today_date, wd)
+
+    m = re.match(r"(\d{4})-(\d{2})-(\d{2})", t)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            pass
+
+    # US short: "2/13" or "02/13/2026"
+    m = re.match(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", t)
+    if m:
+        month, day = int(m.group(1)), int(m.group(2))
+        year = int(m.group(3)) if m.group(3) else today_date.year
+        if year < 100:
+            year += 2000
+        try:
+            return date(year, month, day)
+        except ValueError:
+            pass
+
+    return None
+
+
+def _parse_time_component(value: str) -> tuple[int, int] | None: 
+    """Extract (hour, minute) from a string containing a time expression."""
     text = (value or "").strip().lower()
-    now = datetime.now()
-
-    if "tomorrow" in text:
-        base_date = (now + timedelta(days=1)).date()
-    elif "today" in text:
-        base_date = now.date()
-    else:
+    if not text:
         return None
-
-    parsed_time = _parse_time_component(text) or default_time
-    return datetime.combine(base_date, time(parsed_time[0], parsed_time[1]))
+    if "noon" in text:
+        return (12, 0)
+    if "midnight" in text:
+        return (0, 0)
+    m = re.search(r"\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b", text)
+    if m:
+        hour = int(m.group(1)) % 12
+        minute = int(m.group(2) or "0")
+        if m.group(3) == "pm":
+            hour += 12
+        return (hour, minute)
+    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
+    if m:
+        return (int(m.group(1)), int(m.group(2)))
+    return None
 
 
 def _parse_common_datetime(value: str, default_time: tuple[int, int]) -> datetime | None:
+    """Parse explicit date+time strings like '2026-02-13 14:30' or '02/13/2026 3pm'."""
     raw = (value or "").strip()
     if not raw:
         return None
@@ -122,15 +234,22 @@ def _parse_common_datetime(value: str, default_time: tuple[int, int]) -> datetim
 
 
 def _parse_time_only_for_date(value: str, base_date: date) -> datetime | None:
+    """
+    If *value* looks like a bare time expression (no date part), combine it
+    with *base_date*.  Returns None when a date component is detected.
+    """
     text = (value or "").strip().lower()
     if not text:
         return None
     normalized = re.sub(r"^\s*at\s+", "", text)
-    parsed_time = _parse_time_component(normalized)
-    if not parsed_time:
+    parsed_t = _parse_time_component(normalized)
+    if not parsed_t:
         return None
-    if re.fullmatch(r"(?:\d{1,2}(?::[0-5]\d)?\s*(?:am|pm)?|[01]?\d|2[0-3]:[0-5]\d|noon|midnight)", normalized):
-        return datetime.combine(base_date, time(parsed_time[0], parsed_time[1]))
+    if re.fullmatch(
+        r"(?:\d{1,2}(?::[0-5]\d)?\s*(?:am|pm)?|[01]?\d:[0-5]\d|noon|midnight)",
+        normalized,
+    ):
+        return datetime.combine(base_date, time(parsed_t[0], parsed_t[1]))
     return None
 
 
@@ -140,6 +259,17 @@ def _parse_event_datetime(
     default_time: tuple[int, int],
     reference_date: date | None = None,
 ) -> datetime:
+    """
+    Parse *value* into a concrete datetime.
+
+    Resolution order:
+      1. Bare time expression anchored to *reference_date* (when provided)
+      2. Relative / weekday phrases ("tomorrow 3pm", "next Friday at 9am")
+      3. Explicit date+time formats ("2026-02-13 14:30", "02/13/2026 3pm")
+      4. ISO 8601 / datetime.fromisoformat
+
+    Raises ValueError with a helpful message on failure.
+    """
     parsed_raw = (value or "").strip()
     if not parsed_raw:
         raise ValueError(f"{field_name} is required.")
@@ -149,22 +279,32 @@ def _parse_event_datetime(
         if parsed_time_only is not None:
             return parsed_time_only
 
-    parsed_relative = _parse_relative_datetime(parsed_raw, default_time)
-    if parsed_relative is not None:
-        return parsed_relative
+    if "T" in parsed_raw or re.match(r"\d{4}-\d{2}-\d{2}", parsed_raw):
+        iso_raw = parsed_raw.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(iso_raw)
+        except ValueError:
+            pass
 
     parsed_common = _parse_common_datetime(parsed_raw, default_time)
     if parsed_common is not None:
         return parsed_common
 
-    iso_raw = parsed_raw.replace("Z", "+00:00")
-    try:
-        return datetime.fromisoformat(iso_raw)
-    except ValueError:
-        pass
+    text_lower = parsed_raw.lower()
+    base_date = _parse_date_component(text_lower)
+    if base_date is not None:
+        parsed_t = _parse_time_component(text_lower) or default_time
+        return datetime.combine(base_date, time(parsed_t[0], parsed_t[1]))
+
+    bare_time = _parse_time_component(text_lower)
+    if bare_time is not None:
+        anchor = reference_date if reference_date is not None else datetime.now().date()
+        return datetime.combine(anchor, time(bare_time[0], bare_time[1]))
 
     raise ValueError(
-        f"{field_name} must be like '2026-02-13T14:30', 'tomorrow 3pm', or '02/13/2026 15:30'."
+        f"{field_name!r} could not be parsed as a date/time. "
+        "Try something like '5 PM', 'tomorrow 3pm', 'Friday at 10am', 'next Monday 9am', "
+        "'2026-02-13T14:30', or '02/13/2026 3:30 PM'."
     )
 
 
@@ -336,10 +476,47 @@ def update_outlook_event(
     if not clean_title:
         raise ValueError("title is required.")
 
+    # Try to detect a bare time (e.g. '5 PM') and, if on Windows, look up
+    # the existing event so we can use its date as the reference — keeping
+    # 'change X to 5 PM' on the same calendar day as the original event.
+    raw_time_only = _parse_time_component((new_start_time or '').lower())
+    has_date_word = _parse_date_component((new_start_time or '').lower()) is not None
+    is_bare_time = (raw_time_only is not None) and not has_date_word
+
+    # For bare-time updates on Windows, look up the event first to get its date.
+    event_reference_date = None
+    if is_bare_time and os.name == 'nt':
+        try:
+            import pythoncom as _pc, win32com.client as _wc
+            _pc.CoInitialize()
+            try:
+                _ol = _wc.Dispatch('Outlook.Application')
+                _ns = _ol.GetNamespace('MAPI')
+                _cal = _ns.GetDefaultFolder(9)
+                _items = _cal.Items
+                _items.IncludeRecurrences = True
+                _items.Sort('[Start]')
+                _found = _items.Find(f"[Subject] = '{clean_title}'")
+                if _found:
+                    import re as _re
+                    # found.Start is a COM datetime string like '2/14/2026 14:00'
+                    _s = str(_found.Start)
+                    _dm = _re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', _s)
+                    if _dm:
+                        from datetime import date as _date
+                        event_reference_date = _date(
+                            int(_dm.group(3)), int(_dm.group(1)), int(_dm.group(2))
+                        )
+            finally:
+                _pc.CoUninitialize()
+        except Exception:
+            pass  # Fall back to today if lookup fails
+
     new_start_dt = _parse_event_datetime(
         new_start_time,
         "new_start_time",
         default_time=(9, 0),
+        reference_date=event_reference_date,
     )
 
     if new_end_time.strip():
@@ -426,7 +603,7 @@ def delete_outlook_event(title: str) -> str:
     try:
         outlook = win32com.client.Dispatch("Outlook.Application")
         namespace = outlook.GetNamespace("MAPI")
-        calendar = namespace.GetDefaultFolder(9)  # olFolderCalendar
+        calendar = namespace.GetDefaultFolder(9)  
         items = calendar.Items
         items.IncludeRecurrences = True
         items.Sort("[Start]")

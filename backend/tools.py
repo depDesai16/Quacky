@@ -2,7 +2,10 @@
 from backend.calendar.calendar_feature import create_outlook_event, open_outlook_calendar, update_outlook_event, delete_outlook_event
 from backend.weather.weather_feature import (
     get_forecast_auto_ip,
+    get_current_weather_auto_ip,
+    get_forecast_auto_ip,
     format_forecast_days,
+    format_current,
 )
 
 def send_email(email_address: str, subject: str, body: str) -> str:
@@ -87,5 +90,34 @@ def get_weather_week() -> str:
     return format_forecast_days(data, start_index=0, count=7)
 
 def get_weather_now() -> str:
-    """Alias for today's weather (kept for compatibility)."""
-    return get_weather_today()
+    data = get_current_weather_auto_ip()
+    return format_current(data)
+
+def get_weather_forecast(days: int = 3) -> str:
+    """Use when user asks for the forecast for N days (e.g., next 3 days)."""
+    if days < 1:
+        days = 1
+    if days > 10:
+        days = 10
+    data = get_forecast_auto_ip(days=days)
+    return format_forecast_days(data, start_index=0, count=days)
+
+def get_weather_weekend() -> str:
+    """Use when user asks about the weekend forecast."""
+    data = get_forecast_auto_ip(days=3)
+    return format_forecast_days(data, start_index=0, count=2)
+
+
+ALL_TOOLS = [
+    add_outlook_event,
+    open_app,
+    send_email,
+    get_weather_today,
+    get_weather_tomorrow,
+    get_weather_week,
+    get_weather_now,
+    get_weather_forecast,
+    get_weather_weekend,
+    update_outlook_event_time,
+    delete_outlook_event_by_title,
+]

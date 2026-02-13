@@ -1,4 +1,4 @@
-# backend/weather_api.py
+# backend/weather_feature.py
 import os
 import requests
 from dotenv import load_dotenv
@@ -19,49 +19,118 @@ def _get_key() -> str:
     return key
 
 
-def get_current_weather_auto_ip() -> dict:
+def _request(endpoint: str, params: dict) -> dict:
     """
-    Current conditions for the caller's IP-based location.
+    Shared request helper with consistent error handling.
     """
-    url = f"{BASE_URL}/current.json"
-    params = {"key": _get_key(), "q": "auto:ip", "aqi": "no"}
+    url = f"{BASE_URL}/{endpoint}"
+    try:
+        r = requests.get(url, params=params, timeout=10)
+    except requests.RequestException as e:
+        raise WeatherAPIError(f"WeatherAPI request failed: {e}") from e
 
-    r = requests.get(url, params=params, timeout=10)
     if r.status_code != 200:
+        # WeatherAPI often includes a JSON error body; keep text for debugging
         raise WeatherAPIError(f"WeatherAPI error {r.status_code}: {r.text}")
 
-    return r.json()
+    try:
+        return r.json()
+    except ValueError as e:
+        raise WeatherAPIError("WeatherAPI returned non-JSON response") from e
+
+
+def _normalize_days(days: int) -> int:
+    # WeatherAPI forecast typically supports up to 10 days depending on plan
+    if days < 1:
+        return 1
+    if days > 10:
+        return 10
+    return days
+
+
+def _normalize_query(q: str | None) -> str:
+    """
+    WeatherAPI 'q' supports: city name, zip/postal, lat/long, 'auto:ip', etc.
+    If empty/None, fall back to auto:ip.
+    """
+    q = (q or "").strip()
+    return q if q else "auto:ip"
+
+
+# -----------------------------
+# Public API (location-aware)
+# -----------------------------
+def get_current_weather(query: str = "") -> dict:
+    """
+    Current conditions for a given location query (city/zip/lat,long).
+    If query is empty -> auto:ip.
+    """
+    params = {"key": _get_key(), "q": _normalize_query(query), "aqi": "no"}
+    return _request("current.json", params)
+
+
+def get_forecast(query: str = "", days: int = 3) -> dict:
+    """
+    Forecast for a given location query (city/zip/lat,long).
+    If query is empty -> auto:ip.
+    """
+    days = _normalize_days(days)
+    params = {
+        "key": _get_key(),
+        "q": _normalize_query(query),
+        "days": days,
+        "aqi": "no",
+        "alerts": "no",
+    }
+    return _request("forecast.json", params)
+
+
+# -----------------------------
+# Backwards-compatible wrappers
+# (keep these so existing imports keep working)
+# -----------------------------
+def get_current_weather_auto_ip() -> dict:
+    return get_current_weather("auto:ip")
 
 
 def get_forecast_auto_ip(days: int = 3) -> dict:
-    """
-    Forecast for the caller's IP-based location.
-    WeatherAPI supports up to 10 days depending on plan; we clamp to 1..10.
-    """
-    if days < 1:
-        days = 1
-    if days > 10:
-        days = 10
-
-    url = f"{BASE_URL}/forecast.json"
-    params = {"key": _get_key(), "q": "auto:ip", "days": days, "aqi": "no", "alerts": "no"}
-
-    r = requests.get(url, params=params, timeout=10)
-    if r.status_code != 200:
-        raise WeatherAPIError(f"WeatherAPI error {r.status_code}: {r.text}")
-
-    return r.json()
+    return get_forecast("auto:ip", days=days)
 
 
+# -----------------------------
+# Formatting helpers
+# -----------------------------
 def format_current(data: dict) -> str:
-    loc = data["location"]
-    cur = data["current"]
-    place = f'{loc["name"]}, {loc.get("region","")}'.strip().strip(",")
-    cond = cur["condition"]["text"]
-    return (
-        f"{place}: {cond}, {cur['temp_f']}°F (feels {cur['feelslike_f']}°F), "
-        f"wind {cur['wind_mph']} mph, humidity {cur['humidity']}%."
-    )
+    loc = data.get("location", {})
+    cur = data.get("current", {})
+
+    name = (loc.get("name") or "").strip()
+    region = (loc.get("region") or "").strip()
+    country = (loc.get("country") or "").strip()
+
+    place = ", ".join([p for p in [name, region] if p]) or country or "Current location"
+
+    cond = (cur.get("condition") or {}).get("text", "Unknown conditions")
+    temp_f = cur.get("temp_f")
+    feels_f = cur.get("feelslike_f")
+    wind_mph = cur.get("wind_mph")
+    humidity = cur.get("humidity")
+
+    parts = [f"{place}: {cond}"]
+
+    if temp_f is not None:
+        if feels_f is not None:
+            parts.append(f"{temp_f}°F (feels {feels_f}°F)")
+        else:
+            parts.append(f"{temp_f}°F")
+
+    if wind_mph is not None:
+        parts.append(f"wind {wind_mph} mph")
+
+    if humidity is not None:
+        parts.append(f"humidity {humidity}%")
+
+    return ", ".join(parts) + "."
 
 
 def format_forecast_days(data: dict, start_index: int, count: int) -> str:
@@ -69,20 +138,43 @@ def format_forecast_days(data: dict, start_index: int, count: int) -> str:
     Formats a slice of forecast days from WeatherAPI's forecast response.
     start_index=0 => today, 1 => tomorrow, etc.
     """
-    loc = data["location"]
-    place = f'{loc["name"]}, {loc.get("region","")}'.strip().strip(",")
+    loc = data.get("location", {})
+    forecast = (data.get("forecast") or {}).get("forecastday", [])
 
-    all_days = data["forecast"]["forecastday"]
-    days = all_days[start_index : start_index + count]
+    name = (loc.get("name") or "").strip()
+    region = (loc.get("region") or "").strip()
+    country = (loc.get("country") or "").strip()
+    place = ", ".join([p for p in [name, region] if p]) or country or "Forecast"
+
+    if not isinstance(forecast, list) or not forecast:
+        return f"{place} forecast: (no forecast data available)"
+
+    # Clamp slice safely
+    if start_index < 0:
+        start_index = 0
+    if count < 1:
+        count = 1
+
+    days = forecast[start_index : start_index + count]
 
     lines = [f"{place} forecast:"]
     for d in days:
-        date = d["date"]
-        day = d["day"]
-        cond = day["condition"]["text"]
-        hi = day["maxtemp_f"]
-        lo = day["mintemp_f"]
+        date = d.get("date", "Unknown date")
+        day = d.get("day", {})
+        cond = (day.get("condition") or {}).get("text", "Unknown conditions")
+        hi = day.get("maxtemp_f")
+        lo = day.get("mintemp_f")
+
         rain = day.get("daily_chance_of_rain")
         rain_part = f", rain chance {rain}%" if rain is not None else ""
-        lines.append(f"- {date}: {cond}, high {hi}°F / low {lo}°F{rain_part}")
+
+        if hi is not None and lo is not None:
+            lines.append(f"- {date}: {cond}, high {hi}°F / low {lo}°F{rain_part}")
+        elif hi is not None:
+            lines.append(f"- {date}: {cond}, high {hi}°F{rain_part}")
+        elif lo is not None:
+            lines.append(f"- {date}: {cond}, low {lo}°F{rain_part}")
+        else:
+            lines.append(f"- {date}: {cond}{rain_part}")
+
     return "\n".join(lines)
