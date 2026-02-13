@@ -1,4 +1,6 @@
 import json
+import os
+import socket
 import urllib.error
 import urllib.request
 
@@ -6,6 +8,7 @@ import urllib.request
 class QuackyClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
         self.base_url = base_url.rstrip("/")
+        self.timeout_seconds = int(os.getenv("QUACKY_CLIENT_TIMEOUT", "180"))
 
     def _post(self, path: str, payload: dict):
         url = self.base_url + path
@@ -18,7 +21,7 @@ class QuackyClient:
         )
 
         try:
-            with urllib.request.urlopen(req) as resp:
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
                 body = resp.read().decode("utf-8")
                 return json.loads(body) if body else {}
 
@@ -28,15 +31,23 @@ class QuackyClient:
                 return json.loads(body) if body else {"error": f"HTTP {exc.code}"}
             except json.JSONDecodeError:
                 return {"error": f"HTTP {exc.code}: {body}"}
+        except (TimeoutError, socket.timeout) as exc:
+            return {"error": f"Request timed out after {self.timeout_seconds}s: {exc}"}
+        except urllib.error.URLError as exc:
+            return {"error": f"Request failed or timed out: {exc}"}
 
     def _get(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
         try:
-            with urllib.request.urlopen(url) as resp:
+            with urllib.request.urlopen(url, timeout=self.timeout_seconds) as resp:
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8")
             raise RuntimeError(f"HTTP {exc.code}: {body}") from exc
+        except (TimeoutError, socket.timeout) as exc:
+            raise RuntimeError(f"Request timed out after {self.timeout_seconds}s: {exc}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Request failed or timed out: {exc}") from exc
 
     def health(self) -> dict:
         return self._get("/health")

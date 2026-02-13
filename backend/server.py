@@ -1,6 +1,6 @@
+from email.mime import message
 import json
 import os
-from urllib import response
 import uuid
 import re
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,11 +14,26 @@ try:
 except ImportError:
     load_dotenv = None
 
-from backend.tools import (
-    get_calendar_events, send_email, open_app,
-    get_weather_today, get_weather_tomorrow, get_weather_week
+
+from backend.personality.init import (
+    merge_system_instruction,
+    augment_with_context,
+    update_memory,  
 )
 
+from backend.calendar.calendar_commands import maybe_handle_calendar_action
+from backend.weather.weather_commands import maybe_handle_weather_action
+
+from backend.tools import (
+    add_outlook_event,
+    open_app,
+    send_email,
+    get_weather_today,
+    get_weather_tomorrow,
+    get_weather_week,
+    update_outlook_event_time,
+    delete_outlook_event_by_title,
+)
 
 if load_dotenv:
     load_dotenv()
@@ -34,60 +49,38 @@ if not API_KEY:
 client = genai.Client(api_key=API_KEY)
 
 _TOOLS = [
-    get_calendar_events,
-    send_email,
+    add_outlook_event,
     open_app,
+    send_email,
     get_weather_today,
     get_weather_tomorrow,
     get_weather_week,
+    update_outlook_event_time,
+    delete_outlook_event_by_title,
+    maybe_handle_calendar_action,
+    maybe_handle_weather_action
 ]
-
-_TOPIC_KEYWORDS = {
-    "weather": ["weather", "forecast", "temperature", "temp", "rain", "snow", "wind", "umbrella"],
-    "calendar": ["calendar", "events", "schedule", "appointment", "meeting"],
-    "email": ["email", "mail", "message"],
-    "app": ["open", "launch", "start"],
-}
-
-_FOLLOWUP_PREFIXES = (
-    "what about",
-    "how about",
-    "and",
-    "tomorrow",
-    "next week",
-    "this week",
-    "this weekend",
-    "next weekend",
-    "the week",
-    "next day",
-    "later",
-)
-
-FOLLOWUP_POLICY = """
-After answering, ask at most one short follow-up question only when it helps.
-Do not ask follow-ups for every message.
-
-Ask follow-ups for these topics:
-- Weather: offer tomorrow or 7-day forecast.
-- Calendar/events: offer to add an event or set a reminder.
-- Email: offer to draft the email or open Outlook.
-- Tasks/reminders: offer to set a reminder with a suggested time.
-
-If the user already asked for the extended info (e.g., “tomorrow”, “week”, “add event”, “draft email”), do not ask a follow-up.
-Keep follow-ups to one sentence.
-"""
-
 
 _CHATS: dict[str, object] = {}
 _MEMORY: dict[str, dict] = {}
 
+def _style_direct_output(chat, user_message: str, tool_result: str) -> str:
+    """
+    Rephrase deterministic/tool output using the same chat (and therefore the system prompt).
+    Important: This does NOT re-run tools; it only rewrites the output.
+    """
+    prompt = (
+        "Rewrite the following tool result in Quacky's voice using the system instructions.\n"
+        "Keep the factual details exactly the same.\n"
+        "Be concise.\n\n"
+        f"User asked: {user_message}\n\n"
+        f"Tool result:\n{tool_result}"
+    )
+    response = chat.send_message(prompt)
+    return response.text
 
 def _create_chat(system_instruction: str | None = None, model: str | None = None):
-    merged_system = (system_instruction or "").strip()
-    if merged_system:
-        merged_system += "\n\n" + FOLLOWUP_POLICY
-    else:
-        merged_system = FOLLOWUP_POLICY
+    merged_system = merge_system_instruction(system_instruction)
 
     chat = client.chats.create(
         model=model or MODEL_NAME,
@@ -101,11 +94,14 @@ def _create_chat(system_instruction: str | None = None, model: str | None = None
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
     body = json.dumps(payload).encode("utf-8")
-    handler.send_response(status)
-    handler.send_header("Content-Type", "application/json")
-    handler.send_header("Content-Length", str(len(body)))
-    handler.end_headers()
-    handler.wfile.write(body)
+    try:
+        handler.send_response(status)
+        handler.send_header("Content-Type", "application/json")
+        handler.send_header("Content-Length", str(len(body)))
+        handler.end_headers()
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+        return
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     length = int(handler.headers.get("Content-Length", "0"))
@@ -114,40 +110,24 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     raw = handler.rfile.read(length)
     return json.loads(raw.decode("utf-8"))
 
-def _detect_topic(text: str) -> str | None:
-    t = text.lower()
-    for topic, words in _TOPIC_KEYWORDS.items():
-        if any(w in t for w in words):
-            return topic
+def _maybe_handle_direct_action(message: str) -> str | None:
+    """Run deterministic app actions for high-confidence commands."""
+    raw_text = (message or "").strip()
+    text = raw_text.lower()
+
+    weather_result = maybe_handle_weather_action(raw_text)
+    if weather_result is not None:
+        return weather_result
+
+    calendar_result = maybe_handle_calendar_action(raw_text)
+    if calendar_result is not None:
+        return calendar_result
+
+    app_match = re.match(r"^(open|launch|start)\s+(.+?)\s*$", text, flags=re.IGNORECASE)
+    if app_match:
+        return open_app(app_match.group(2))
+
     return None
-
-def _is_ambiguous_followup(text: str) -> bool:
-    t = text.strip().lower()
-    return any(t.startswith(p) for p in _FOLLOWUP_PREFIXES)
-
-def _augment_with_context(chat_id: str, message: str) -> str:
-    mem = _MEMORY.get(chat_id, {})
-    last_topic = mem.get("last_topic")
-
-    if _detect_topic(message):
-        return message
-
-    if last_topic and _is_ambiguous_followup(message):
-        if last_topic == "weather":
-            return f"Regarding the weather, {message}"
-        if last_topic == "calendar":
-            return f"Regarding my calendar, {message}"
-        if last_topic == "email":
-            return f"Regarding email, {message}"
-        if last_topic == "app":
-            return f"Regarding opening apps, {message}"
-
-    return message
-
-def _update_memory(chat_id: str, user_message: str):
-    topic = _detect_topic(user_message)
-    if topic:
-        _MEMORY.setdefault(chat_id, {})["last_topic"] = topic
 
 class QuackyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -198,8 +178,22 @@ class QuackyHandler(BaseHTTPRequestHandler):
 
             chat = _CHATS[chat_id]
 
-            augmented = _augment_with_context(chat_id, message)
-            _update_memory(chat_id, message)
+            direct_result = _maybe_handle_direct_action(message)
+            if direct_result is not None:
+                update_memory(_MEMORY, chat_id, message)
+                try:
+                    styled = _style_direct_output(chat, message, direct_result)
+                except genai_errors.ClientError:
+                    styled = direct_result
+
+                _json_response(self, 200, {
+                    "chat_id": chat_id,
+                    "text": styled
+                })
+                return
+
+            augmented = augment_with_context(_MEMORY, chat_id, message)
+            update_memory(_MEMORY, chat_id, message)
 
             try:
                 response = chat.send_message(augmented)
@@ -240,7 +234,12 @@ class QuackyHandler(BaseHTTPRequestHandler):
 def run_server():
     server = ThreadingHTTPServer(("", PORT), QuackyHandler)
     print(f"Quacky server listening on http://localhost:{PORT}")
-    server.serve_forever()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nShutting down server.")
+    finally:
+        server.server_close()
 
 
 if __name__ == "__main__":
