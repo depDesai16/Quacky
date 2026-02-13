@@ -50,3 +50,43 @@ Examples:
 ### Notes
 - If no timezone is specified, your default timezone is used.
 - Calendar changes sync automatically if Outlook is connected to a Microsoft account.
+
+## Using the Weather Feature
+
+You can ask about the weather using natural language commands.
+
+The assistant understands current conditions, today, tomorrow, weekends, weekly forecasts, and custom multi-day forecasts.
+
+### Examples
+
+- "What’s the weather?"
+- "How hot is it right now?"
+- "Will it rain tomorrow?"
+- "Weather this weekend"
+- "Next 3 days forecast"
+- "7 day weather outlook"
+- "Is it windy outside?"
+- "Do I need an umbrella today?"
+
+By default, weather is fetched using your current location (auto IP detection).
+
+
+## Holiday Feature
+
+The Holiday feature lets you ask natural-language questions about holidays.
+
+Holiday data is fetched from Calendarific and stored locally in `holidays.json`.  
+All responses are generated from this local file for fast performance.
+
+### Example Prompts
+
+- "Any holidays coming up?"
+- "Next 10 holidays"
+- "When’s Thanksgiving?"
+- "Date of Memorial Day"
+- "Is today a holiday?"
+- "Holidays in July"
+- "Federal holidays this month"
+- "On 7/4/2026 is it a holiday?"
+
+The assistant detects the intent (upcoming, specific holiday, month query, or date check) and searches the local dataset to return the correct information.

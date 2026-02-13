@@ -30,7 +30,6 @@ def _request(endpoint: str, params: dict) -> dict:
         raise WeatherAPIError(f"WeatherAPI request failed: {e}") from e
 
     if r.status_code != 200:
-        # WeatherAPI often includes a JSON error body; keep text for debugging
         raise WeatherAPIError(f"WeatherAPI error {r.status_code}: {r.text}")
 
     try:
@@ -40,7 +39,6 @@ def _request(endpoint: str, params: dict) -> dict:
 
 
 def _normalize_days(days: int) -> int:
-    # WeatherAPI forecast typically supports up to 10 days depending on plan
     if days < 1:
         return 1
     if days > 10:
@@ -56,10 +54,6 @@ def _normalize_query(q: str | None) -> str:
     q = (q or "").strip()
     return q if q else "auto:ip"
 
-
-# -----------------------------
-# Public API (location-aware)
-# -----------------------------
 def get_current_weather(query: str = "") -> dict:
     """
     Current conditions for a given location query (city/zip/lat,long).
@@ -84,22 +78,12 @@ def get_forecast(query: str = "", days: int = 3) -> dict:
     }
     return _request("forecast.json", params)
 
-
-# -----------------------------
-# Backwards-compatible wrappers
-# (keep these so existing imports keep working)
-# -----------------------------
 def get_current_weather_auto_ip() -> dict:
     return get_current_weather("auto:ip")
-
 
 def get_forecast_auto_ip(days: int = 3) -> dict:
     return get_forecast("auto:ip", days=days)
 
-
-# -----------------------------
-# Formatting helpers
-# -----------------------------
 def format_current(data: dict) -> str:
     loc = data.get("location", {})
     cur = data.get("current", {})

@@ -10,7 +10,19 @@ from backend.tools import (
 )
 
 _WEATHER_TRIGGER = re.compile(
-    r"\b(weather|forecast|temperature|temp|rain|snow|wind|windy|humid|humidity|uv|heat|cold)\b",
+    r"\b("
+    r"weather|forecast|temperature|temp|degree|degrees|"
+    r"rain|raining|drizzle|shower|storm|thunder|lightning|"
+    r"snow|snowing|sleet|hail|"
+    r"wind|windy|breeze|gust|"
+    r"humid|humidity|muggy|"
+    r"uv|uvi|"
+    r"heat|hot|warm|cold|cool|chilly|freezing|"
+    r"sunny|sun|cloud|cloudy|overcast|"
+    r"fog|foggy|mist|haze|"
+    r"outside|outdoors|"
+    r"umbrella|jacket|coat|sweater"
+    r")\b",
     re.IGNORECASE,
 )
 
