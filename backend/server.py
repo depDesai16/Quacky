@@ -19,9 +19,9 @@ from backend.personality.init import (
     augment_with_context,
     update_memory,
 )
-
 from backend.calendar.calendar_commands import parse_calendar_action
 from backend.weather.weather_commands import maybe_handle_weather_action
+from backend.holidays.holidays_commands import maybe_handle_holiday_action
 
 from backend.tools import (
     add_outlook_event,
@@ -138,6 +138,10 @@ def _maybe_handle_direct_action(message: str) -> str | None:
     raw_text = (message or "").strip()
     text = raw_text.lower()
 
+    holiday_result = maybe_handle_holiday_action(raw_text)
+    if holiday_result is not None:
+        return holiday_result
+    
     weather_result = maybe_handle_weather_action(raw_text)
     if weather_result is not None:
         return weather_result

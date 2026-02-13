@@ -1,5 +1,4 @@
 """Tool methods callable by the AI model."""
-
 from backend.calendar.calendar_feature import create_outlook_event, open_outlook_calendar, update_outlook_event, delete_outlook_event
 from backend.weather.weather_feature import (
     get_forecast_auto_ip,
