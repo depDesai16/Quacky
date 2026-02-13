@@ -8,7 +8,7 @@ go to https://www.weatherapi.com/
 create an account and verify, then it will give you an api key
 after you get the key go to .env and make WEATHERAPI_KEY=, then place your key there
 
-## Using the Calendar
+# Using the Calendar Feature
 You can control your local Outlook calendar using natural language commands.
 
 ### Open Calendar
