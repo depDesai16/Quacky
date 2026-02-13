@@ -21,15 +21,12 @@ def maybe_handle_weather_action(raw_text: str) -> str | None:
     if not _WEATHER_TRIGGER.search(text):
         return None
 
-    # Specific intents first
     if _TOMORROW.search(text):
         return get_weather_tomorrow()
 
     if _WEEK.search(text):
         return get_weather_week()
 
-    # Default to "today" for any remaining weather trigger
-    # (covers: "what's the weather?", "forecast", etc.)
     if _TODAY.search(text) or True:
         return get_weather_today()
 
