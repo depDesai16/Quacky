@@ -1,8 +1,11 @@
 SpeechRecognition==3.10.0
-PyAudio==0.2.13
+PyAudio==0.2.11
 google-genai
 python-dotenv
 PyQt6
 setuptools
+
 msal
 pywin32
+standard-aifc
+
