@@ -3,6 +3,7 @@ import subprocess
 import webbrowser
 import urllib.parse
 
+
 def send_email(email_address: str, subject: str, body: str) -> str:
     """
     Opens the user's email client with a prefilled email.
@@ -13,28 +14,24 @@ def send_email(email_address: str, subject: str, body: str) -> str:
 
     try:
         if system == "Windows":
-            # Windows: Use Outlook COM automation if pywin32 is installed
             try:
                 import win32com.client
                 outlook = win32com.client.Dispatch("Outlook.Application")
-                mail = outlook.CreateItem(0)  # olMailItem
+                mail = outlook.CreateItem(0)
                 mail.To = email_address
                 mail.Subject = subject
                 mail.Body = body
-                mail.Display()  # Opens the email in Outlook
+                mail.Display()
                 return "Opened Outlook with email on Windows"
             except ImportError:
-                # win32com not installed, fallback to mailto
                 query = urllib.parse.urlencode({"subject": subject, "body": body})
                 webbrowser.open(f"mailto:{email_address}?{query}")
                 return "Opened default email client on Windows (win32com not installed)"
 
         elif system == "Darwin":
-            # macOS: Use AppleScript for Outlook
             subject_safe = subject.replace('"', '\\"')
             email_safe = email_address.replace('"', '\\"')
 
-            # Escape body for AppleScript (handle multi-line)
             body_lines = body.splitlines()
             body_safe = '\\n'.join(line.replace('"', '\\"') for line in body_lines)
 
@@ -51,7 +48,6 @@ def send_email(email_address: str, subject: str, body: str) -> str:
             return "Opened Outlook on macOS"
 
         else:
-            # Linux or unknown OS: fallback to default mail client
             query = urllib.parse.urlencode({"subject": subject, "body": body})
             webbrowser.open(f"mailto:{email_address}?{query}")
             return "Opened default email client"
