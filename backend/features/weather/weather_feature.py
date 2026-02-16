@@ -117,6 +117,65 @@ def format_current(data: dict) -> str:
     return ", ".join(parts) + "."
 
 
+def get_weekend_forecast_auto_ip() -> str:
+    """
+    Fetches Saturday and Sunday forecast regardless of what day today is.
+    Calculates exact days ahead needed to reach the weekend.
+    """
+    from datetime import date
+    today = date.today()
+    weekday = today.weekday()  
+
+    if weekday == 5:  
+        days_to_sat, days_to_sun = 0, 1
+    elif weekday == 6: 
+        days_to_sat, days_to_sun = 6, 0  
+    else:
+        days_to_sat = 5 - weekday
+        days_to_sun = 6 - weekday
+
+    days_needed = days_to_sun + 1  
+    if days_needed > 10:
+        days_needed = 10
+
+    data = get_forecast("auto:ip", days=days_needed)
+    forecast = (data.get("forecast") or {}).get("forecastday", [])
+
+    loc = data.get("location", {})
+    name = (loc.get("name") or "").strip()
+    region = (loc.get("region") or "").strip()
+    place = ", ".join([p for p in [name, region] if p]) or "Forecast"
+
+    weekend_days = []
+    for d in forecast:
+        try:
+            from datetime import date as date_cls
+            d_date = date_cls.fromisoformat(d.get("date", ""))
+            if d_date.weekday() in (5, 6):  # Saturday or Sunday
+                weekend_days.append(d)
+        except Exception:
+            continue
+
+    if not weekend_days:
+        return f"{place} forecast: (no weekend data available)"
+
+    lines = [f"{place} weekend forecast:"]
+    for d in weekend_days:
+        day_data = d.get("day", {})
+        cond = (day_data.get("condition") or {}).get("text", "Unknown conditions")
+        hi = day_data.get("maxtemp_f")
+        lo = day_data.get("mintemp_f")
+        rain = day_data.get("daily_chance_of_rain")
+        rain_part = f", rain chance {rain}%" if rain is not None else ""
+        label = d.get("date", "Unknown")
+        if hi is not None and lo is not None:
+            lines.append(f"- {label}: {cond}, high {hi}°F / low {lo}°F{rain_part}")
+        else:
+            lines.append(f"- {label}: {cond}{rain_part}")
+
+    return "\n".join(lines)
+
+
 def format_forecast_days(data: dict, start_index: int, count: int) -> str:
     """
     Formats a slice of forecast days from WeatherAPI's forecast response.
@@ -133,7 +192,6 @@ def format_forecast_days(data: dict, start_index: int, count: int) -> str:
     if not isinstance(forecast, list) or not forecast:
         return f"{place} forecast: (no forecast data available)"
 
-    # Clamp slice safely
     if start_index < 0:
         start_index = 0
     if count < 1:

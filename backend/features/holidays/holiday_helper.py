@@ -4,22 +4,54 @@ import re
 import calendar
 from datetime import datetime
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.path.join(BASE_DIR, "holidays.json")
+def find_backend_root(start: str) -> str:
+    """
+    Walk upward until we find the backend root (folder containing server.py + config.py).
+    """
+    cur = os.path.abspath(start)
+    while True:
+        if os.path.exists(os.path.join(cur, "server.py")) and os.path.exists(os.path.join(cur, "config.py")):
+            return cur
+        parent = os.path.dirname(cur)
+        if parent == cur:
+            raise RuntimeError("Could not locate backend root (server.py/config.py not found).")
+        cur = parent
 
+def get_data_file_path() -> str:
+    backend_dir = find_backend_root(os.path.dirname(__file__))
+    return os.path.join(backend_dir, "data", "holidays.json")
+
+DATA_FILE = get_data_file_path()
 
 class HolidayAssistant:
     def __init__(self, filepath=DATA_FILE):
+        self.holidays = []
+        self.holiday_names = set()
         try:
             with open(filepath, "r", encoding="utf-8") as f:
-                self.holidays = json.load(f)
+                data = json.load(f)
 
-            self.holiday_names = {h["name"].lower() for h in self.holidays if len(h["name"]) > 3}
+            if not isinstance(data, list):
+                raise ValueError("holidays.json must be a JSON array")
+
+            current_year = str(datetime.now().year)
+            years_in_data = {
+                h.get("date", {}).get("iso", "")[:4]
+                for h in data
+                if h.get("date", {}).get("iso")
+            }
+            if years_in_data and current_year not in years_in_data:
+                print(f"⚠️  holidays.json contains data for {years_in_data} — run fetch_holidays.py to update.")
+
+            self.holidays = data
+            self.holiday_names = {h["name"].lower() for h in self.holidays if len(h.get("name", "")) > 3}
 
             print(f"✅ Holiday Assistant loaded {len(self.holidays)} events.")
         except FileNotFoundError:
-            self.holidays = []
-            self.holiday_names = set()
+            print("⚠️  holidays.json not found — run fetch_holidays.py to populate it.")
+        except (json.JSONDecodeError, ValueError) as e:
+            print(f"❌ holidays.json is invalid: {e}")
+
 
     def check_date(self, date_str=None):
         """Checks if a specific date is a holiday."""
@@ -91,8 +123,10 @@ _UPCOMING_TRIGGERS = [
     "upcoming", "coming up", "soon",
     "next holiday", "next holidays",
     "list holiday", "list holidays",
-    "holiday list", "holidays", "calendar"
+    "holiday list", "holidays",
 ]
+
+_APP_OPEN_VERBS = re.compile(r"^\s*(open|launch|start)\s+", re.IGNORECASE)
 
 _TODAY_TRIGGERS = ["today", "right now", "currently"]
 
@@ -201,7 +235,7 @@ def maybe_handle_holiday_action(user_message: str) -> str | None:
     """
     Smarter router for holiday questions.
     Supports:
-    - "When’s Thanksgiving?"
+    - "When's Thanksgiving?"
     - "Is today a holiday?"
     - "Next 10 holidays"
     - "Holidays in July" / "Holidays this month"
@@ -212,6 +246,9 @@ def maybe_handle_holiday_action(user_message: str) -> str | None:
     if not msg:
         return None
 
+    if _APP_OPEN_VERBS.match(msg):
+        return None
+
     clean = re.sub(r"[^\w\s/'-]", "", msg.lower()).strip()
 
     m = _ON_DATE_PAT.search(clean)
@@ -219,11 +256,11 @@ def maybe_handle_holiday_action(user_message: str) -> str | None:
         iso = _parse_date_token(m.group(1))
         if iso:
             out = _assistant.check_date(iso)
-            return out if out else f"I don’t see a holiday on {iso}."
+            return out if out else f"I don't see a holiday on {iso}."
 
     if ("holiday" in clean or "holidays" in clean) and any(t in clean for t in _TODAY_TRIGGERS):
         out = _assistant.check_date()
-        return out if out else "I don’t see a holiday today."
+        return out if out else "I don't see a holiday today."
 
     nmatch = _NEXT_N_PAT.search(clean)
     if nmatch and any(k in clean for k in ("next holiday", "next holidays", "upcoming", "coming up", "soon")):
@@ -272,7 +309,7 @@ if __name__ == "__main__":
     print(maybe_handle_holiday_action("Tell me about Halloween please"))
     print(maybe_handle_holiday_action("Is Christmas coming up?"))
     print(maybe_handle_holiday_action("Any holidays soon?"))
-    print(maybe_handle_holiday_action("When’s Thanksgiving?"))
+    print(maybe_handle_holiday_action("When's Thanksgiving?"))
     print(maybe_handle_holiday_action("Holidays in July"))
     print(maybe_handle_holiday_action("Federal holidays this month"))
     print(maybe_handle_holiday_action("On 7/4/2026 is it a holiday?"))

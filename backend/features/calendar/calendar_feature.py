@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import os
 import re
 import shutil
@@ -63,42 +62,6 @@ _WEEKDAY_MAP = {
     "saturday": 5, "sat": 5,
     "sunday": 6, "sun": 6,
 }
-
-
-def _parse_time_component(value: str) -> tuple[int, int] | None:
-    """
-    Extract (hour, minute) from a string containing a time expression.
-    Returns None if no recognisable time is found.
-
-    Handles:
-      • "noon", "midnight"
-      • "3pm", "3 pm", "3:30pm", "3:30 pm"
-      • "15:30" (24-hour)
-      • Bare hours with am/pm implied by context are NOT assumed here —
-        callers supply a default_time for that.
-    """
-    text = (value or "").strip().lower()
-    if not text:
-        return None
-
-    if "noon" in text:
-        return (12, 0)
-    if "midnight" in text:
-        return (0, 0)
-
-    m = re.search(r"\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b", text)
-    if m:
-        hour = int(m.group(1)) % 12
-        minute = int(m.group(2) or "0")
-        if m.group(3) == "pm":
-            hour += 12
-        return (hour, minute)
-
-    m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
-    if m:
-        return (int(m.group(1)), int(m.group(2)))
-
-    return None
 
 
 def _next_weekday(today: date, weekday: int, force_next_week: bool = False) -> date:
@@ -169,7 +132,6 @@ def _parse_date_component(text: str) -> date | None:
         except ValueError:
             pass
 
-    # US short: "2/13" or "02/13/2026"
     m = re.match(r"(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?", t)
     if m:
         month, day = int(m.group(1)), int(m.group(2))
@@ -184,7 +146,7 @@ def _parse_date_component(text: str) -> date | None:
     return None
 
 
-def _parse_time_component(value: str) -> tuple[int, int] | None: 
+def _parse_time_component(value: str) -> tuple[int, int] | None:
     """Extract (hour, minute) from a string containing a time expression."""
     text = (value or "").strip().lower()
     if not text:
@@ -203,6 +165,13 @@ def _parse_time_component(value: str) -> tuple[int, int] | None:
     m = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b", text)
     if m:
         return (int(m.group(1)), int(m.group(2)))
+    m = re.search(r"\b(\d{1,2})\b", text)
+    if m:
+        hour = int(m.group(1))
+        if 1 <= hour <= 7:
+            return (hour + 12, 0)  
+        if 8 <= hour <= 11:
+            return (hour, 0)       
     return None
 
 
@@ -476,14 +445,10 @@ def update_outlook_event(
     if not clean_title:
         raise ValueError("title is required.")
 
-    # Try to detect a bare time (e.g. '5 PM') and, if on Windows, look up
-    # the existing event so we can use its date as the reference — keeping
-    # 'change X to 5 PM' on the same calendar day as the original event.
     raw_time_only = _parse_time_component((new_start_time or '').lower())
     has_date_word = _parse_date_component((new_start_time or '').lower()) is not None
     is_bare_time = (raw_time_only is not None) and not has_date_word
 
-    # For bare-time updates on Windows, look up the event first to get its date.
     event_reference_date = None
     if is_bare_time and os.name == 'nt':
         try:
@@ -497,9 +462,23 @@ def update_outlook_event(
                 _items.IncludeRecurrences = True
                 _items.Sort('[Start]')
                 _found = _items.Find(f"[Subject] = '{clean_title}'")
+                if not _found:
+                    _search_lower = clean_title.lower()
+                    _candidate = _items.GetFirst()
+                    while _candidate:
+                        try:
+                            _subj = (getattr(_candidate, "Subject", "") or "").strip()
+                            if _search_lower == _subj.lower():
+                                _found = _candidate
+                                break
+                        except Exception:
+                            pass
+                        try:
+                            _candidate = _items.GetNext()
+                        except Exception:
+                            break
                 if _found:
                     import re as _re
-                    # found.Start is a COM datetime string like '2/14/2026 14:00'
                     _s = str(_found.Start)
                     _dm = _re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', _s)
                     if _dm:
@@ -510,7 +489,7 @@ def update_outlook_event(
             finally:
                 _pc.CoUninitialize()
         except Exception:
-            pass  # Fall back to today if lookup fails
+            pass  
 
     new_start_dt = _parse_event_datetime(
         new_start_time,
@@ -554,6 +533,23 @@ def update_outlook_event(
         items.Sort("[Start]")
 
         found = items.Find(f"[Subject] = '{clean_title}'")
+
+        if not found:
+            search_lower = clean_title.lower()
+            candidate = items.GetFirst()
+            while candidate:
+                try:
+                    subject = (getattr(candidate, "Subject", "") or "").strip()
+                    if search_lower == subject.lower():
+                        found = candidate
+                        break
+                except Exception:
+                    pass
+                try:
+                    candidate = items.GetNext()
+                except Exception:
+                    break
+
         if not found:
             return f"Could not find an event named '{clean_title}' in your Outlook calendar."
 
@@ -603,17 +599,82 @@ def delete_outlook_event(title: str) -> str:
     try:
         outlook = win32com.client.Dispatch("Outlook.Application")
         namespace = outlook.GetNamespace("MAPI")
-        calendar = namespace.GetDefaultFolder(9)  
+        calendar = namespace.GetDefaultFolder(9)
         items = calendar.Items
         items.IncludeRecurrences = True
         items.Sort("[Start]")
 
+        search_lower = clean_title.lower()
+
         found = items.Find(f"[Subject] = '{clean_title}'")
+
+        if not found:
+            candidate = items.GetFirst()
+            while candidate:
+                try:
+                    subject = (getattr(candidate, "Subject", "") or "").strip()
+                    if search_lower == subject.lower():
+                        found = candidate
+                        break
+                except Exception:
+                    pass
+                try:
+                    candidate = items.GetNext()
+                except Exception:
+                    break
+
         if not found:
             return f"Could not find an event named '{clean_title}' in your Outlook calendar."
 
-        found.Delete()
-        return f"Deleted event '{clean_title}' from your Outlook calendar."
+        event_title = getattr(found, "Subject", clean_title)
+
+        try:
+            entry_id = found.EntryID
+        except Exception:
+            entry_id = None
+
+        deleted_folder = namespace.GetDefaultFolder(3)  
+        try:
+            moved = found.Move(deleted_folder)
+        except Exception:
+            moved = None
+
+        permanently_deleted = False
+        if entry_id:
+            try:
+                item_in_trash = namespace.GetItemFromID(entry_id)
+                item_in_trash.Delete()
+                permanently_deleted = True
+            except Exception:
+                pass
+
+        if not permanently_deleted:
+            try:
+                deleted_items = deleted_folder.Items
+                candidate = deleted_items.GetFirst()
+                while candidate:
+                    try:
+                        subj = (getattr(candidate, "Subject", "") or "").strip()
+                        if subj.lower() == event_title.lower():
+                            candidate.Delete()
+                            permanently_deleted = True
+                            break
+                    except Exception:
+                        pass
+                    try:
+                        candidate = deleted_items.GetNext()
+                    except Exception:
+                        break
+            except Exception:
+                pass
+
+        if not permanently_deleted:
+            try:
+                found.Delete()
+            except Exception:
+                pass
+
+        return f"Deleted '{event_title}' from your Outlook calendar."
 
     finally:
         pythoncom.CoUninitialize()
