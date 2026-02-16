@@ -9,7 +9,6 @@ load_dotenv()
 API_KEY = os.getenv("CALENDARIFIC_API_KEY")
 COUNTRY = "US"
 
-
 def find_backend_root(start: str) -> str:
     """
     Walk upward until we find the backend root (folder containing server.py + config.py).
@@ -24,13 +23,11 @@ def find_backend_root(start: str) -> str:
             raise RuntimeError("Could not locate backend root (server.py/config.py not found).")
         cur = parent
 
-
 def get_data_file_path() -> str:
     backend_dir = find_backend_root(os.path.dirname(__file__))
     data_dir = os.path.join(backend_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
     return os.path.join(data_dir, "holidays.json")
-
 
 def fetch_and_save(year: int | None = None):
     if not API_KEY:

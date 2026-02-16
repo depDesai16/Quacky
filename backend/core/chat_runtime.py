@@ -53,16 +53,12 @@ class ChatRuntime:
         chat = self._get_chat(chat_id)
         mem = self.memory.setdefault(chat_id, {})
 
-        # ── 1. Pending calendar confirmation ─────────────────────────────────
-        # Handle yes/no replies BEFORE classifying so "yes" stays as confirmation
         pending = mem.get("pending_action")
         if pending and pending.get("kind") == "calendar":
             return handle_pending_calendar(chat, self.memory, chat_id, message)
 
-        # ── 2. Classify intent ────────────────────────────────────────────────
         intents = classify(message, self.client, self.model_name)
 
-        # ── 3. Calendar → confirmation flow ──────────────────────────────────
         calendar_intent = extract_calendar_intent(intents)
         if calendar_intent is not None:
             action = build_calendar_action(calendar_intent)
@@ -71,15 +67,12 @@ class ChatRuntime:
                 mem["pending_action"] = action
                 update_memory(self.memory, chat_id, message)
                 return ask_quacky_confirmation(chat, message, action["summary"])
-            # Missing required fields - fall through to chat
 
-        # ── 4. Weather / holiday / open_app → dispatch ────────────────────────
         direct_result = dispatch_intents(intents)
         if direct_result is not None:
             update_memory(self.memory, chat_id, message)
             return style_direct_output(chat, message, direct_result)
 
-        # ── 5. Chat fallback ──────────────────────────────────────────────────
         augmented = augment_with_context(self.memory, chat_id, message)
         update_memory(self.memory, chat_id, message)
         return chat.send_message(augmented).text

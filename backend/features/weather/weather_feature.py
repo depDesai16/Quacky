@@ -7,17 +7,14 @@ load_dotenv()
 
 BASE_URL = "https://api.weatherapi.com/v1"
 
-
 class WeatherAPIError(Exception):
     pass
-
 
 def _get_key() -> str:
     key = os.getenv("WEATHERAPI_KEY")
     if not key:
         raise WeatherAPIError("Missing WEATHERAPI_KEY in .env")
     return key
-
 
 def _request(endpoint: str, params: dict) -> dict:
     """
