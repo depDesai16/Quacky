@@ -34,7 +34,7 @@ def get_data_file_path() -> str:
 
 def fetch_and_save(year: int | None = None):
     if not API_KEY:
-        print("❌ Error: CALENDARIFIC_API_KEY not found in .env")
+        print("Error: CALENDARIFIC_API_KEY not found in .env")
         return
 
     if year is None:
@@ -45,17 +45,17 @@ def fetch_and_save(year: int | None = None):
         f"?api_key={API_KEY}&country={COUNTRY}&year={year}"
     )
 
-    print(f"⏳ Fetching holidays for {year} ({COUNTRY})...")
+    print(f"Fetching holidays for {year} ({COUNTRY})...")
 
     try:
         response = requests.get(url, timeout=10)
         if response.status_code != 200:
-            print(f"❌ HTTP {response.status_code}: {response.text}")
+            print(f"HTTP {response.status_code}: {response.text}")
             return
 
         data = response.json()
         if "response" not in data or "holidays" not in data["response"]:
-            print(f"❌ Unexpected API response: {data}")
+            print(f"Unexpected API response: {data}")
             return
 
         holidays = data["response"]["holidays"]
@@ -64,12 +64,12 @@ def fetch_and_save(year: int | None = None):
         with open(file_path, "w", encoding="utf-8") as f:
             json.dump(holidays, f, indent=4, ensure_ascii=False)
 
-        print(f"✅ Saved {len(holidays)} holidays for {year} → {file_path}")
+        print(f"Saved {len(holidays)} holidays for {year} → {file_path}")
 
     except requests.Timeout:
-        print("❌ Request timed out — check your connection and try again.")
+        print("Request timed out — check your connection and try again.")
     except requests.RequestException as e:
-        print(f"❌ Connection failed: {e}")
+        print(f"Connection failed: {e}")
 
 
 if __name__ == "__main__":

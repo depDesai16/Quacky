@@ -41,16 +41,16 @@ class HolidayAssistant:
                 if h.get("date", {}).get("iso")
             }
             if years_in_data and current_year not in years_in_data:
-                print(f"⚠️  holidays.json contains data for {years_in_data} — run fetch_holidays.py to update.")
+                print(f"holidays.json contains data for {years_in_data} — run fetch_holidays.py to update.")
 
             self.holidays = data
             self.holiday_names = {h["name"].lower() for h in self.holidays if len(h.get("name", "")) > 3}
 
-            print(f"✅ Holiday Assistant loaded {len(self.holidays)} events.")
+            print(f"Holiday Assistant loaded {len(self.holidays)} events.")
         except FileNotFoundError:
-            print("⚠️  holidays.json not found — run fetch_holidays.py to populate it.")
+            print("holidays.json not found — run fetch_holidays.py to populate it.")
         except (json.JSONDecodeError, ValueError) as e:
-            print(f"❌ holidays.json is invalid: {e}")
+            print(f"holidays.json is invalid: {e}")
 
 
     def check_date(self, date_str=None):
@@ -78,7 +78,7 @@ class HolidayAssistant:
             if name in h_name.lower():
                 date = h.get("date", {}).get("iso", "Unknown date")
                 h_type = h.get("primary_type", (h.get("type") or ["Unknown"])[0])
-                results.append(f"📅 **{h_name}** is on {date} ({h_type})")
+                results.append(f"**{h_name}** is on {date} ({h_type})")
         return "\n".join(results) if results else None
 
     def get_upcoming(self, limit=5):

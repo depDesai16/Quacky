@@ -4,7 +4,6 @@ App tool wrapper for Quacky.
 
 from backend.features.calendar.calendar_feature import open_outlook_calendar
 
-
 def open_app(app_name: str) -> str:
     """
     Open an application by name.

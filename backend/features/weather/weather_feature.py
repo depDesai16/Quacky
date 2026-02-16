@@ -151,7 +151,7 @@ def get_weekend_forecast_auto_ip() -> str:
         try:
             from datetime import date as date_cls
             d_date = date_cls.fromisoformat(d.get("date", ""))
-            if d_date.weekday() in (5, 6):  # Saturday or Sunday
+            if d_date.weekday() in (5, 6):  
                 weekend_days.append(d)
         except Exception:
             continue
