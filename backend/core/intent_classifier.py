@@ -53,7 +53,14 @@ AVAILABLE INTENTS
 6. open_app
    Required: app (str - e.g. "outlook", "spotify", "vs code", "chrome")
 
-7. chat
+7. clarify
+   Required: question (str - what to ask the user), reason (str - why clarification is needed)
+   Use this when:
+   - Calendar title is ambiguous (e.g. "move my meeting to 3pm" - which meeting?)
+   - Multiple possible interpretations exist
+   - Critical information is missing that cannot be inferred
+
+8. chat
    No fields. Use for casual conversation or anything that does not match above.
 
 RULES
@@ -61,7 +68,8 @@ RULES
 - For combined questions return multiple intents in one array
 - Clean calendar titles - strip generic suffixes like "meeting", "appointment", "event", "call" unless they are part of the actual name
 - Keep natural language times as-is in start_time/new_start_time - do not convert to ISO
-- If intent is ambiguous or required fields are missing return [{"intent": "chat"}]
+- If intent is ambiguous or required fields are missing AND you cannot ask a clarifying question, return [{"intent": "chat"}]
+- Use "clarify" intent when you need ONE specific piece of info to proceed - do not use it for general confusion
 
 EXAMPLES
 
@@ -121,6 +129,15 @@ EXAMPLES
 
 "what's the weather this weekend and do we have any holidays coming up?"
 [{"intent": "weather", "timeframe": "weekend"}, {"intent": "holiday", "query_type": "upcoming"}]
+
+"move my meeting to 3pm"
+[{"intent": "clarify", "question": "Which meeting would you like to reschedule to 3pm?", "reason": "multiple_calendar_events"}]
+
+"cancel my appointment"
+[{"intent": "clarify", "question": "Which appointment should I cancel?", "reason": "ambiguous_title"}]
+
+"reschedule it to friday"
+[{"intent": "clarify", "question": "Which event would you like to move to Friday?", "reason": "ambiguous_reference"}]
 """
 
 

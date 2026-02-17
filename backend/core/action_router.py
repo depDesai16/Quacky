@@ -58,6 +58,61 @@ def extract_calendar_intent(intents: list[dict]) -> dict | None:
     return None
 
 
+def extract_clarify_intent(intents: list[dict]) -> dict | None:
+    """
+    Return the first clarify intent if present.
+    """
+    for intent in intents:
+        if intent.get("intent", "").lower() == "clarify":
+            return intent
+    return None
+
+
+def validate_calendar_intent(intent: dict) -> str | None:
+    """
+    Validate a calendar intent before execution.
+    Returns an error message string if validation fails, None if valid.
+    """
+    from datetime import datetime, timedelta
+    import re
+    
+    kind = intent.get("intent", "").lower()
+    
+    if kind in ("create_event", "update_event", "delete_event"):
+        title = (intent.get("title") or "").strip()
+        if not title:
+            return "Event title is required."
+        if len(title) > 255:
+            return "Event title is too long (max 255 characters)."
+        if title.lower() in ("meeting", "appointment", "event", "call"):
+            return "Please provide a more specific event title."
+    
+    if kind == "create_event":
+        duration = int(intent.get("duration_minutes") or 60)
+        if duration < 1:
+            return "Event duration must be at least 1 minute."
+        if duration > 480:  # 8 hours
+            return "Event duration seems unusually long (over 8 hours). Did you mean hours instead of minutes?"
+    
+    if kind in ("create_event", "update_event"):
+        time_field = "start_time" if kind == "create_event" else "new_start_time"
+        time_str = (intent.get(time_field) or "").strip().lower()
+        
+        if not time_str:
+            return "Event time is required."
+        
+        if any(word in time_str for word in ["yesterday", "last week", "last month", "ago"]):
+            return "Cannot schedule events in the past. Did you mean a future date?"
+        
+        year_match = re.search(r'\b(202[7-9]|20[3-9]\d)\b', time_str)
+        if year_match:
+            year = int(year_match.group(1))
+            if year > datetime.now().year + 2:
+                return f"Event is scheduled for {year}, which is quite far in the future. Is that correct?"
+    
+    return None
+
+
 def build_calendar_action(intent: dict) -> dict | None:
     """
     Convert a classified calendar intent into the action dict that

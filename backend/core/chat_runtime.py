@@ -8,7 +8,13 @@ from google.genai import types
 from backend.personality.__init__ import merge_system_instruction, augment_with_context, update_memory
 from backend.tools import ALL_TOOLS
 from backend.core.intent_classifier import classify
-from backend.core.action_router import dispatch_intents, extract_calendar_intent, build_calendar_action
+from backend.core.action_router import (
+    dispatch_intents,
+    extract_calendar_intent,
+    extract_clarify_intent,
+    validate_calendar_intent,
+    build_calendar_action,
+)
 from backend.core.response_style import ask_quacky_confirmation, style_direct_output
 from backend.core.confirmation import handle_pending_calendar
 
@@ -59,8 +65,24 @@ class ChatRuntime:
 
         intents = classify(message, self.client, self.model_name)
 
+        clarify_intent = extract_clarify_intent(intents)
+        if clarify_intent is not None:
+            question = clarify_intent.get("question", "Could you clarify that for me?")
+            update_memory(self.memory, chat_id, message)
+            return chat.send_message(
+                f"Rephrase this clarifying question in Quacky's voice, keep it short: {question}"
+            ).text
+
         calendar_intent = extract_calendar_intent(intents)
         if calendar_intent is not None:
+            # Validate before building action
+            validation_error = validate_calendar_intent(calendar_intent)
+            if validation_error:
+                update_memory(self.memory, chat_id, message)
+                return chat.send_message(
+                    f"Explain this validation error in Quacky's voice, friendly but clear: {validation_error}"
+                ).text
+            
             action = build_calendar_action(calendar_intent)
             if action is not None:
                 action["user_message"] = message

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import os
 import re
 import shutil
@@ -11,6 +12,7 @@ from urllib.parse import urlencode
 
 _RECENT_EVENT_SIGNATURES: dict[tuple[str, str, str], float] = {}
 _DEDUP_WINDOW_SECONDS = 120.0
+
 
 def _find_outlook_executable() -> str | None:
     """Best-effort lookup for Outlook desktop on Windows."""
@@ -31,6 +33,7 @@ def _find_outlook_executable() -> str | None:
         if str(path).strip() and path.exists():
             return str(path)
     return None
+
 
 def open_outlook_calendar() -> str:
     """Open desktop Outlook calendar when available; otherwise open Outlook web calendar."""
@@ -74,6 +77,7 @@ def _next_weekday(today: date, weekday: int, force_next_week: bool = False) -> d
         if days_ahead < 7:
             days_ahead += 7
     return today + timedelta(days=days_ahead)
+
 
 def _parse_date_component(text: str) -> date | None:
     """
@@ -141,6 +145,7 @@ def _parse_date_component(text: str) -> date | None:
 
     return None
 
+
 def _parse_time_component(value: str) -> tuple[int, int] | None:
     """Extract (hour, minute) from a string containing a time expression."""
     text = (value or "").strip().lower()
@@ -164,10 +169,11 @@ def _parse_time_component(value: str) -> tuple[int, int] | None:
     if m:
         hour = int(m.group(1))
         if 1 <= hour <= 7:
-            return (hour + 12, 0)  
+            return (hour + 12, 0)   
         if 8 <= hour <= 11:
             return (hour, 0)       
     return None
+
 
 def _parse_common_datetime(value: str, default_time: tuple[int, int]) -> datetime | None:
     """Parse explicit date+time strings like '2026-02-13 14:30' or '02/13/2026 3pm'."""
@@ -195,6 +201,7 @@ def _parse_common_datetime(value: str, default_time: tuple[int, int]) -> datetim
             continue
     return None
 
+
 def _parse_time_only_for_date(value: str, base_date: date) -> datetime | None:
     """
     If *value* looks like a bare time expression (no date part), combine it
@@ -213,6 +220,7 @@ def _parse_time_only_for_date(value: str, base_date: date) -> datetime | None:
     ):
         return datetime.combine(base_date, time(parsed_t[0], parsed_t[1]))
     return None
+
 
 def _parse_event_datetime(
     value: str,
@@ -268,6 +276,7 @@ def _parse_event_datetime(
         "'2026-02-13T14:30', or '02/13/2026 3:30 PM'."
     )
 
+
 def _create_outlook_event_desktop(
     title: str,
     start_dt: datetime,
@@ -302,6 +311,7 @@ def _create_outlook_event_desktop(
         f"Added Outlook event '{title}' from {start_dt.isoformat()} to {end_dt.isoformat()}."
     )
 
+
 def _to_local_naive(dt_value: datetime) -> datetime:
     """Convert timezone-aware datetimes to local wall time for Outlook desktop."""
     if dt_value.tzinfo is None:
@@ -324,6 +334,7 @@ def _event_signature(title: str, start_dt: datetime, end_dt: datetime) -> tuple[
         end_dt.isoformat(timespec="minutes"),
     )
 
+
 def _is_recent_duplicate(signature: tuple[str, str, str]) -> bool:
     now = clock.monotonic()
     cutoff = now - _DEDUP_WINDOW_SECONDS
@@ -337,8 +348,10 @@ def _is_recent_duplicate(signature: tuple[str, str, str]) -> bool:
         return False
     return seen_at >= cutoff
 
+
 def _mark_event_signature(signature: tuple[str, str, str]) -> None:
     _RECENT_EVENT_SIGNATURES[signature] = clock.monotonic()
+
 
 def create_outlook_event(
     title: str,
@@ -476,7 +489,7 @@ def update_outlook_event(
             finally:
                 _pc.CoUninitialize()
         except Exception:
-            pass  
+            pass 
 
     new_start_dt = _parse_event_datetime(
         new_start_time,
@@ -618,48 +631,45 @@ def delete_outlook_event(title: str) -> str:
         try:
             entry_id = found.EntryID
         except Exception:
-            entry_id = None
-
-        deleted_folder = namespace.GetDefaultFolder(3)  
-        try:
-            moved = found.Move(deleted_folder)
-        except Exception:
-            moved = None
-
-        permanently_deleted = False
-        if entry_id:
-            try:
-                item_in_trash = namespace.GetItemFromID(entry_id)
-                item_in_trash.Delete()
-                permanently_deleted = True
-            except Exception:
-                pass
-
-        if not permanently_deleted:
-            try:
-                deleted_items = deleted_folder.Items
-                candidate = deleted_items.GetFirst()
-                while candidate:
-                    try:
-                        subj = (getattr(candidate, "Subject", "") or "").strip()
-                        if subj.lower() == event_title.lower():
-                            candidate.Delete()
-                            permanently_deleted = True
-                            break
-                    except Exception:
-                        pass
-                    try:
-                        candidate = deleted_items.GetNext()
-                    except Exception:
-                        break
-            except Exception:
-                pass
-
-        if not permanently_deleted:
             try:
                 found.Delete()
             except Exception:
                 pass
+            return f"Deleted '{event_title}' from your Outlook calendar."
+
+        deleted_folder = namespace.GetDefaultFolder(3) 
+        try:
+            found.Move(deleted_folder)
+            item_in_trash = namespace.GetItemFromID(entry_id)
+            item_in_trash.Delete()
+        except Exception:
+            try:
+                found.Delete()
+            except Exception:
+                pass
+
+        try:
+            explorers = outlook.Explorers
+            for i in range(explorers.Count, 0, -1):
+                try:
+                    explorer = explorers.Item(i)
+                    if hasattr(explorer, 'CurrentFolder'):
+                        current = explorer.CurrentFolder
+                        if current.DefaultItemType == 1:  
+                            explorer.Close()
+                            break
+                except Exception:
+                    pass
+            
+            import time
+            time.sleep(0.1) 
+            calendar_explorer = outlook.ActiveExplorer()
+            if calendar_explorer:
+                calendar_explorer.CurrentFolder = calendar
+            else:
+                outlook.Explorers.Add(calendar)
+        except Exception:
+            pass
 
         return f"Deleted '{event_title}' from your Outlook calendar."
 
