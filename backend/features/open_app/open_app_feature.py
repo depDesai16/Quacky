@@ -4,12 +4,26 @@ import shlex
 import shutil
 import subprocess
 import sys
+import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
+from urllib.parse import quote_plus
 
 
-APPLIST_PATH = Path(__file__).with_name("applist.txt")
+APPLIST_PATH = Path(__file__).resolve().parents[2] / "applist.txt"
+
+_WEB_FALLBACK_URLS = {
+    "mozilla firefox": "https://www.mozilla.org/firefox/new/",
+    "firefox": "https://www.mozilla.org/firefox/new/",
+    "spotify": "https://open.spotify.com/",
+    "discord": "https://discord.com/app",
+    "google chrome": "https://www.google.com/chrome/",
+    "chrome": "https://www.google.com/chrome/",
+    "cursor": "https://cursor.com/",
+    "vs code": "https://vscode.dev/",
+    "visual studio code": "https://vscode.dev/",
+}
 
 
 @dataclass(frozen=True)
@@ -83,6 +97,21 @@ def load_app_list(path: Path = APPLIST_PATH) -> List[AppEntry]:
     return entries
 
 
+def get_classifier_app_hints(path: Path = APPLIST_PATH) -> str:
+    """
+    Build compact app-name/alias hints for the intent classifier prompt.
+    """
+    apps = load_app_list(path)
+    if not apps:
+        return "No apps configured in backend/applist.txt."
+
+    lines = []
+    for app in apps:
+        aliases = ", ".join(app.aliases) if app.aliases else "(none)"
+        lines.append(f"- {app.name} | aliases: {aliases}")
+    return "\n".join(lines)
+
+
 def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
     needle = _normalize(app_name)
     if not needle:
@@ -132,6 +161,28 @@ def _resolve_command(app: AppEntry) -> str:
     return app.os_commands.get(key, app.command)
 
 
+def _fallback_url(app: AppEntry, requested_name: str) -> str:
+    for name in app.all_names():
+        key = _normalize(name)
+        if key in _WEB_FALLBACK_URLS:
+            return _WEB_FALLBACK_URLS[key]
+
+    normalized_app_name = _normalize(app.name)
+    if normalized_app_name in _WEB_FALLBACK_URLS:
+        return _WEB_FALLBACK_URLS[normalized_app_name]
+
+    query = quote_plus((requested_name or app.name or "").strip())
+    return f"https://www.google.com/search?q={query}"
+
+
+def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
+    url = _fallback_url(app, requested_name)
+    opened = webbrowser.open(url, new=2)
+    if opened:
+        return f"Desktop app unavailable. Opened web fallback for {app.name}: {url}"
+    return f"Desktop app unavailable and browser fallback could not be opened for {app.name}."
+
+
 def open_app(app_name: str) -> str:
     apps = load_app_list()
     if not apps:
@@ -149,11 +200,12 @@ def open_app(app_name: str) -> str:
     app = matches[0]
     command = _resolve_command(app)
     if not _ensure_command_exists(command):
-        return f"Configured command not found for {app.name}: {command}"
+        return _open_fallback_in_browser(app, app_name)
 
     try:
         _launch_command(command)
     except Exception as exc:
-        return f"Failed to open {app.name}: {exc}"
+        fallback_result = _open_fallback_in_browser(app, app_name)
+        return f"Failed to open {app.name}: {exc}. {fallback_result}"
 
     return f"Opened {app.name}."

@@ -22,3 +22,14 @@ ALL_TOOLS = [
     open_app,
     send_email,
 ]
+
+__all__ = [
+    "get_weather",
+    "get_holidays",
+    "add_outlook_event",
+    "update_outlook_event_time",
+    "delete_outlook_event_by_title",
+    "open_app",
+    "send_email",
+    "ALL_TOOLS",
+]

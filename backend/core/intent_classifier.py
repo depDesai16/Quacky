@@ -17,11 +17,14 @@ Supported intents:
 
 import json
 import re
+from functools import lru_cache
 
 from google import genai
 from google.genai import types
 
-_CLASSIFIER_SYSTEM = """
+from backend.features.open_app import get_classifier_app_hints
+
+_CLASSIFIER_SYSTEM_BASE = """
 You are the intent classifier for Quacky, an unhinged but helpful desktop AI assistant.
 Your ONLY job is to read the user message and return a JSON array of intents.
 Output ONLY the JSON array - no explanation, no markdown, no backticks, nothing else.
@@ -54,7 +57,7 @@ AVAILABLE INTENTS
      n     (int) for upcoming/federal, how many to show (default 5)
 
 6. open_app
-   Required: app (str - e.g. "outlook", "spotify", "vs code", "chrome")
+   Required: app (str - resolved app name, e.g. "outlook", "spotify", "vs code", "chrome")
 
 7. clarify
    Required: question (str - what to ask the user), reason (str - why clarification is needed)
@@ -75,6 +78,12 @@ RULES
 - Use "clarify" intent when you need ONE specific piece of info to proceed - do not use it for general confusion
 - For weather: only include "location" if the user explicitly named a place. Never guess or infer a location.
 - For weather: cap timeframe at "7d" regardless of what the user asks for.
+- For open_app: resolve natural language requests to an app value.
+  Example mappings:
+  - "open my browser", "launch browser", "internet" -> configured browser app
+  - "play music", "open my music app" -> configured music app
+  - "open code editor", "launch IDE" -> configured coding app
+  If uncertain but clearly an app-open request, still return open_app with the best app match.
 
 EXAMPLES
 
@@ -147,6 +156,15 @@ EXAMPLES
 "open outlook"
 [{"intent": "open_app", "app": "outlook"}]
 
+"open my browser"
+[{"intent": "open_app", "app": "google chrome"}]
+
+"play some music"
+[{"intent": "open_app", "app": "spotify"}]
+
+"open my code editor"
+[{"intent": "open_app", "app": "vs code"}]
+
 "is it going to rain on july 4th and is that a holiday?"
 [{"intent": "weather", "timeframe": "today"}, {"intent": "holiday", "query_type": "check_date", "date": "2026-07-04"}]
 
@@ -164,6 +182,20 @@ EXAMPLES
 """
 
 
+@lru_cache(maxsize=1)
+def _classifier_system() -> str:
+    app_hints = get_classifier_app_hints()
+    open_app_context = f"""
+
+OPEN APP CATALOG (from backend/applist.txt)
+Use this app/alias catalog when choosing the open_app.app value:
+{app_hints}
+
+Prefer canonical app names shown above for the app field.
+"""
+    return _CLASSIFIER_SYSTEM_BASE + open_app_context
+
+
 def classify(message: str, client: genai.Client, model_name: str) -> list[dict]:
     """
     Classify a user message into a list of intent dicts.
@@ -177,7 +209,7 @@ def classify(message: str, client: genai.Client, model_name: str) -> list[dict]:
             model=model_name,
             contents=message.strip(),
             config=types.GenerateContentConfig(
-                system_instruction=_CLASSIFIER_SYSTEM,
+                system_instruction=_classifier_system(),
                 temperature=0.0,
                 max_output_tokens=512,
             ),
