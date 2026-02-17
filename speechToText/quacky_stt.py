@@ -21,29 +21,25 @@ class QuackySpeechToText:
         self.recognizer = sr.Recognizer()
         self.microphone = None
         self.is_listening = False
+        self.is_active = False  # Track if wake word has been said
         self.wake_word = "hey quacky"
         self.callback = None
         
-        # Initialize microphone
         try:
             if mic_index is not None:
                 try:
                     self.microphone = sr.Microphone(device_index=mic_index)
-                    print(f"🎤 Using microphone {mic_index}")
                 except Exception as e:
-                    print(f"❌ Selected microphone {mic_index} failed: {e}")
-                    print("🎤 Falling back to default microphone...")
+                    print(f"Selected microphone {mic_index} failed: {e}")
+                    print("Falling back to default microphone...")
                     self.microphone = sr.Microphone()
             else:
                 self.microphone = sr.Microphone()
-                print("🎤 Using default microphone")
 
-            print("🎤 Initializing microphone...")
             with self.microphone as source:
                 self.recognizer.adjust_for_ambient_noise(source, duration=1)
-            print("✅ Microphone ready!")
         except Exception as e:
-            print(f"❌ Microphone initialization failed: {e}")
+            print(f"Microphone initialization failed: {e}")
             raise
     
     @staticmethod
@@ -52,25 +48,30 @@ class QuackySpeechToText:
         pa = pyaudio.PyAudio()
         all_mics = sr.Microphone.list_microphone_names()
         
-        # Filter out virtual/system microphones
         filtered_mics = []
         seen_names = set()
         skip_keywords = [
             "stereo mix", "what u hear", "wave out mix", "loopback", 
-            "virtual", "output", "speakers", "headphones", "realtek hd audio rear output",
+            "virtual", "output", "speakers", "realtek hd audio rear output",
             "realtek hd audio front output", "realtek digital output", "sound mapper",
-            "primary sound", "voicemod", "steelseries sonar", "line out", "line in",
-            "earphone", "nvidia high definition"
+            "primary sound", "voicemod", "steelseries sonar", "line out",
+            "nvidia high definition"
         ]
         
         for i, name in enumerate(all_mics):
             name_lower = name.lower()
             
-            # Skip if contains filtered keywords
+            # Don't filter out iPhone or other phone microphones
+            if "iphone" in name_lower or "phone" in name_lower:
+                clean_name = name.split('(')[0].strip()
+                if clean_name.lower() not in seen_names:
+                    seen_names.add(clean_name.lower())
+                    filtered_mics.append((i, name))
+                continue
+            
             if any(keyword in name_lower for keyword in skip_keywords):
                 continue
             
-            # Only include real input devices
             try:
                 info = pa.get_device_info_by_index(i)
                 if info.get("maxInputChannels", 0) < 1:
@@ -78,46 +79,20 @@ class QuackySpeechToText:
             except Exception:
                 continue
 
-            # Clean up the name for deduplication
-            clean_name = name.split('(')[0].strip()  # Remove parenthetical info
+            clean_name = name.split('(')[0].strip()
             
-            # Skip if we've already seen this microphone name
             if clean_name.lower() in seen_names:
                 continue
             
             seen_names.add(clean_name.lower())
             filtered_mics.append((i, name))
         
-        print("🎤 Available input microphones:")
+        print("Available input microphones:")
         for idx, (original_index, name) in enumerate(filtered_mics):
-            print(f"  {idx+1}: {name}")
+            print(f"{idx+1}: {name}")
         
         pa.terminate()
         return filtered_mics
-    
-    def test_microphone(self):
-        """Test the current microphone"""
-        try:
-            print("🎤 Testing microphone... Say something!")
-            with self.microphone as source:
-                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=3)
-            
-            text = self.recognizer.recognize_google(audio)
-            print(f"✅ Microphone test successful! Heard: '{text}'")
-            return True
-            
-        except sr.UnknownValueError:
-            print("❌ Could not understand the audio")
-            return False
-        except sr.RequestError as e:
-            print(f"❌ Speech recognition error: {e}")
-            return False
-        except sr.WaitTimeoutError:
-            print("❌ No speech detected during test")
-            return False
-        except Exception as e:
-            print(f"❌ Microphone test failed: {e}")
-            return False
     
     def set_callback(self, callback: Callable[[str], None]):
         """Set callback function to process recognized speech after wake word"""
@@ -126,58 +101,57 @@ class QuackySpeechToText:
     def start_listening(self):
         """Start continuous listening for wake word"""
         if self.is_listening:
-            print("Already listening!")
             return
         
         self.is_listening = True
         self.listen_thread = threading.Thread(target=self._listen_worker)
         self.listen_thread.daemon = True
         self.listen_thread.start()
-        print("� Listening. ..")
     
     def _listen_worker(self):
-        """Main listening loop - waits for wake word and captures full phrase"""
+        """Main listening loop - waits for wake word once, then processes all commands"""
         while self.is_listening:
             try:
-                # Listen for a complete phrase that might contain wake word + command
                 full_text = self._listen_for_phrase()
                 if full_text:
-                    # Check for quit command first
                     if "quit" in full_text.lower():
-                        print("👋 Goodbye!")
                         import os
-                        os._exit(0)  # Force exit without thread cleanup
+                        os._exit(0)
                     
-                    # Check if it contains wake word and extract command
-                    command = self._extract_command_from_phrase(full_text)
-                    if command:
-                        print(f"{command}")
+                    # If not active yet, check for wake word
+                    if not self.is_active:
+                        command = self._extract_command_from_phrase(full_text)
+                        if command:
+                            self.is_active = True
+                            print("Quacky activated! Listening for all commands...")
+                            print(f"{command}")
+                            if self.callback:
+                                self.callback(command)
+                    else:
+                        # Already active, process everything as a command
+                        print(f"{full_text}")
                         if self.callback:
-                            self.callback(command)
-                        # Continue listening for next "Hey Quacky" command
+                            self.callback(full_text)
                 
             except Exception as e:
-                if self.is_listening:  # Only print error if we're still supposed to be listening
-                    print(f"❌ Error in listening: {e}")
+                if self.is_listening:
+                    print(f"Error in listening: {e}")
                 time.sleep(0.1)
     
     def _listen_for_phrase(self) -> Optional[str]:
         """Listen for a complete phrase"""
         try:
             with self.microphone as source:
-                # Listen for longer phrases to capture wake word + command
-                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=8)
+                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=15)
             
             text = self.recognizer.recognize_google(audio)
             return text
                 
         except sr.UnknownValueError:
-            # Speech was unintelligible - continue listening silently
             pass
         except sr.RequestError as e:
-            print(f"❌ Speech recognition error: {e}")
+            print(f"Speech recognition error: {e}")
         except sr.WaitTimeoutError:
-            # No speech detected - continue listening silently
             pass
         
         return None
@@ -186,19 +160,15 @@ class QuackySpeechToText:
         """Extract command from phrase if it contains wake word"""
         text_lower = text.lower()
         
-        # Check for wake words and extract everything after them
         wake_words = ["hey quacky", "hey quaky", "quacky", "hey ducky"]
         
         for wake_word in wake_words:
             if wake_word in text_lower:
-                # Find the position after the wake word
                 wake_pos = text_lower.find(wake_word)
                 command_start = wake_pos + len(wake_word)
                 
-                # Extract everything after the wake word
                 command = text[command_start:].strip()
                 
-                # Only return if there's actually a command after the wake word
                 if command:
                     return command
         
@@ -207,7 +177,6 @@ class QuackySpeechToText:
     def stop_listening(self):
         """Stop the listening loop"""
         self.is_listening = False
-        # Don't try to join the thread if we're calling this from within the thread
 
 def process_command(command: str):
     """Process the captured command - this is where you'll send to Gemini AI"""

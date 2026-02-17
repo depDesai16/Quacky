@@ -1,0 +1,7 @@
+Week 3 Summary
+
+- Increased speech listening time from 5 to 15 seconds
+- Removed microphone testing phase
+- Implemented persistent activation mode
+- Cleaned up speech-to-text module
+
