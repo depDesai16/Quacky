@@ -40,7 +40,10 @@ AVAILABLE INTENTS
    Required: title (str)
 
 4. weather
-   Required: timeframe - one of: "now", "today", "tomorrow", "weekend", "week", or "Nd" (e.g. "3d" for 3 days)
+   Required: timeframe - one of: "now", "today", "tomorrow", "weekend", "week", or "Nd" (e.g. "3d" for 3 days, max "7d")
+   Optional: location (str) - city name, zip/postal code, or "lat,long". Omit if user did not specify a location.
+   IMPORTANT: Maximum forecast is 7 days. If user asks for more than 7 days (e.g. "2 weeks", "10 days"), cap at "7d"
+   and note in chat that the forecast is limited to 7 days.
 
 5. holiday
    Required: query_type - one of: "upcoming", "federal", "check_date", "find", "month", "today"
@@ -70,6 +73,8 @@ RULES
 - Keep natural language times as-is in start_time/new_start_time - do not convert to ISO
 - If intent is ambiguous or required fields are missing AND you cannot ask a clarifying question, return [{"intent": "chat"}]
 - Use "clarify" intent when you need ONE specific piece of info to proceed - do not use it for general confusion
+- For weather: only include "location" if the user explicitly named a place. Never guess or infer a location.
+- For weather: cap timeframe at "7d" regardless of what the user asks for.
 
 EXAMPLES
 
@@ -79,11 +84,29 @@ EXAMPLES
 "what's the weather like today?"
 [{"intent": "weather", "timeframe": "today"}]
 
-"will it rain this weekend?"
-[{"intent": "weather", "timeframe": "weekend"}]
+"what's the weather in New York?"
+[{"intent": "weather", "timeframe": "today", "location": "New York"}]
+
+"will it rain this weekend in London?"
+[{"intent": "weather", "timeframe": "weekend", "location": "London"}]
+
+"give me a 5 day forecast for Miami"
+[{"intent": "weather", "timeframe": "5d", "location": "Miami"}]
 
 "give me a 5 day forecast"
 [{"intent": "weather", "timeframe": "5d"}]
+
+"weather for 90210"
+[{"intent": "weather", "timeframe": "today", "location": "90210"}]
+
+"what's the weather in Paris, France this week?"
+[{"intent": "weather", "timeframe": "week", "location": "Paris, France"}]
+
+"10 day forecast for Seattle"
+[{"intent": "weather", "timeframe": "7d", "location": "Seattle"}]
+
+"2 week forecast"
+[{"intent": "weather", "timeframe": "7d"}]
 
 "any holidays coming up?"
 [{"intent": "holiday", "query_type": "upcoming"}]

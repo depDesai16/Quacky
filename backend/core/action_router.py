@@ -4,9 +4,6 @@ Intent dispatcher for Quacky.
 
 Receives classified intents from intent_classifier.py and routes
 weather, holiday, and open_app to their handlers.
-
-Calendar intents are NOT handled here - they go through the
-confirmation flow in chat_runtime.py.
 """
 
 from backend.tools import get_weather, get_holidays, open_app
@@ -24,7 +21,8 @@ def dispatch_intents(intents: list[dict]) -> str | None:
 
         if kind == "weather":
             timeframe = intent.get("timeframe", "today")
-            result = get_weather(timeframe)
+            location = intent.get("location", "") 
+            result = get_weather(timeframe, location)
             if result:
                 results.append(result)
 
@@ -75,9 +73,9 @@ def validate_calendar_intent(intent: dict) -> str | None:
     """
     from datetime import datetime, timedelta
     import re
-    
+
     kind = intent.get("intent", "").lower()
-    
+
     if kind in ("create_event", "update_event", "delete_event"):
         title = (intent.get("title") or "").strip()
         if not title:
@@ -86,30 +84,30 @@ def validate_calendar_intent(intent: dict) -> str | None:
             return "Event title is too long (max 255 characters)."
         if title.lower() in ("meeting", "appointment", "event", "call"):
             return "Please provide a more specific event title."
-    
+
     if kind == "create_event":
         duration = int(intent.get("duration_minutes") or 60)
         if duration < 1:
             return "Event duration must be at least 1 minute."
-        if duration > 480:  # 8 hours
+        if duration > 480:  
             return "Event duration seems unusually long (over 8 hours). Did you mean hours instead of minutes?"
-    
+
     if kind in ("create_event", "update_event"):
         time_field = "start_time" if kind == "create_event" else "new_start_time"
         time_str = (intent.get(time_field) or "").strip().lower()
-        
+
         if not time_str:
             return "Event time is required."
-        
+
         if any(word in time_str for word in ["yesterday", "last week", "last month", "ago"]):
             return "Cannot schedule events in the past. Did you mean a future date?"
-        
+
         year_match = re.search(r'\b(202[7-9]|20[3-9]\d)\b', time_str)
         if year_match:
             year = int(year_match.group(1))
             if year > datetime.now().year + 2:
                 return f"Event is scheduled for {year}, which is quite far in the future. Is that correct?"
-    
+
     return None
 
 
