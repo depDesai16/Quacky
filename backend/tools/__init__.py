@@ -12,7 +12,6 @@ from .calendar_tool import (
 from .app_tool import open_app
 from .email_tool import send_email
 
-
 ALL_TOOLS = [
     get_weather,
     get_holidays,
