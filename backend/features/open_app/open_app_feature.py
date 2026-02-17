@@ -11,7 +11,7 @@ from typing import Iterable, List
 from urllib.parse import quote_plus
 
 
-APPLIST_PATH = Path(__file__).resolve().parents[2] / "applist.txt"
+APPLIST_PATH = Path(__file__).resolve().parent / "applist.txt"
 
 _WEB_FALLBACK_URLS = {
     "mozilla firefox": "https://www.mozilla.org/firefox/new/",
