@@ -57,7 +57,7 @@ AVAILABLE INTENTS
      n     (int) for upcoming/federal, how many to show (default 5)
 
 6. open_app
-   Required: app (str - resolved app name, e.g. "outlook", "spotify", "vs code", "chrome")
+   Required: app (str - resolved app name OR direct website/domain, e.g. "outlook", "spotify", "vs code", "chrome", "github.com", "https://news.ycombinator.com")
 
 7. clarify
    Required: question (str - what to ask the user), reason (str - why clarification is needed)
@@ -83,6 +83,10 @@ RULES
   - "open my browser", "launch browser", "internet" -> configured browser app
   - "play music", "open my music app" -> configured music app
   - "open code editor", "launch IDE" -> configured coding app
+- For website navigation requests, keep the exact site in open_app.app:
+  - "open github.com on my browser" -> {"intent":"open_app","app":"github.com"}
+  - "open https://news.ycombinator.com" -> {"intent":"open_app","app":"https://news.ycombinator.com"}
+  - "go to localhost:3000" -> {"intent":"open_app","app":"localhost:3000"}
   If uncertain but clearly an app-open request, still return open_app with the best app match.
 
 EXAMPLES
@@ -164,6 +168,15 @@ EXAMPLES
 
 "open my code editor"
 [{"intent": "open_app", "app": "vs code"}]
+
+"open github.com on my browser"
+[{"intent": "open_app", "app": "github.com"}]
+
+"open https://news.ycombinator.com"
+[{"intent": "open_app", "app": "https://news.ycombinator.com"}]
+
+"go to localhost:3000"
+[{"intent": "open_app", "app": "localhost:3000"}]
 
 "is it going to rain on july 4th and is that a holiday?"
 [{"intent": "weather", "timeframe": "today"}, {"intent": "holiday", "query_type": "check_date", "date": "2026-07-04"}]
