@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import webbrowser
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
@@ -23,6 +24,23 @@ _WEB_FALLBACK_URLS = {
     "cursor": "https://cursor.com/",
     "vs code": "https://vscode.dev/",
     "visual studio code": "https://vscode.dev/",
+}
+
+_URL_WITH_SCHEME_RE = re.compile(r"(https?://[^\s]+)", re.IGNORECASE)
+_URL_WWW_RE = re.compile(r"(www\.[^\s]+)", re.IGNORECASE)
+_URL_LOCALHOST_RE = re.compile(
+    r"\b(localhost|127\.0\.0\.1)(?::\d{2,5})?(?:/[^\s]*)?\b",
+    re.IGNORECASE,
+)
+_URL_DOMAIN_RE = re.compile(
+    r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{2,5})?(?:/[^\s]*)?\b",
+    re.IGNORECASE,
+)
+_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
+_LIKELY_FILE_EXTENSIONS = {
+    "py", "txt", "md", "json", "yaml", "yml", "xml", "csv",
+    "js", "ts", "jsx", "tsx", "java", "c", "cc", "cpp", "h", "hpp",
+    "go", "rs", "rb", "php", "swift", "kt", "sql", "log", "ini", "toml",
 }
 
 
@@ -132,6 +150,8 @@ def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
 
 
 def _ensure_command_exists(command: str) -> bool:
+    if command.startswith("terminal:"):
+        return True
     parts = shlex.split(command)
     if not parts:
         return False
@@ -142,10 +162,62 @@ def _ensure_command_exists(command: str) -> bool:
 
 
 def _launch_command(command: str) -> None:
+    if command.startswith("terminal:"):
+        _launch_in_new_terminal(command.split(":", 1)[1].strip())
+        return
     parts = shlex.split(command)
     if not parts:
         raise RuntimeError("Empty launch command.")
-    subprocess.Popen(parts)
+    _popen_detached(parts)
+
+
+def _popen_detached(cmd, *, shell: bool = False) -> None:
+    kwargs = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "shell": shell,
+    }
+    if sys.platform.startswith("win"):
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(cmd, **kwargs)
+
+
+def _launch_in_new_terminal(inner_command: str) -> None:
+    if not inner_command:
+        raise RuntimeError("Empty terminal command.")
+
+    if sys.platform.startswith("win"):
+        # Open a new cmd window and run the command.
+        _popen_detached(f'start "" cmd /k "{inner_command}"', shell=True)
+        return
+
+    if sys.platform.startswith("darwin"):
+        # Tell Terminal.app to open a new tab/window and run the command.
+        script = f'tell application "Terminal" to do script "{inner_command}"'
+        _popen_detached(["osascript", "-e", script])
+        return
+
+    # Linux and other Unix: use first available terminal emulator.
+    candidates = [
+        ["x-terminal-emulator", "-e", inner_command],
+        ["gnome-terminal", "--", "bash", "-lc", inner_command],
+        ["konsole", "-e", "bash", "-lc", inner_command],
+        ["xfce4-terminal", "-x", "bash", "-lc", inner_command],
+        ["xterm", "-e", inner_command],
+        ["kitty", "bash", "-lc", inner_command],
+        ["alacritty", "-e", "bash", "-lc", inner_command],
+    ]
+    for cmd in candidates:
+        if shutil.which(cmd[0]):
+            _popen_detached(cmd)
+            return
+
+    raise RuntimeError("No terminal emulator found for terminal: command.")
 
 
 def _platform_key() -> str:
@@ -179,11 +251,63 @@ def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
     url = _fallback_url(app, requested_name)
     opened = webbrowser.open(url, new=2)
     if opened:
-        return f"Desktop app unavailable. Opened web fallback for {app.name}: {url}"
+        return f"Desktop app unavailable. Opened web fallback for {app.name}"
     return f"Desktop app unavailable and browser fallback could not be opened for {app.name}."
 
 
+def _clean_url_candidate(candidate: str) -> str:
+    # Strip trailing punctuation commonly attached to spoken/written commands.
+    return candidate.strip().rstrip(".,;:!?)]}\"'")
+
+
+def _is_probably_filename(candidate: str) -> bool:
+    token = candidate.lower().split("/")[-1]
+    if "." not in token:
+        return False
+    ext = token.rsplit(".", 1)[-1]
+    return ext in _LIKELY_FILE_EXTENSIONS
+
+
+def _extract_url_candidate(text: str) -> str | None:
+    if not text:
+        return None
+
+    normalized = re.sub(r"\s+dot\s+", ".", text, flags=re.IGNORECASE)
+
+    for pattern in (_URL_WITH_SCHEME_RE, _URL_WWW_RE, _URL_LOCALHOST_RE, _URL_DOMAIN_RE):
+        match = pattern.search(normalized)
+        if not match:
+            continue
+        candidate = _clean_url_candidate(match.group(0))
+        if _is_probably_filename(candidate):
+            continue
+        return candidate
+
+    return None
+
+
+def _to_browsable_url(candidate: str) -> str:
+    if _SCHEME_RE.match(candidate):
+        return candidate
+    lower = candidate.lower()
+    if lower.startswith("localhost") or lower.startswith("127.0.0.1"):
+        return f"http://{candidate}"
+    return f"https://{candidate}"
+
+
+def _open_website(candidate: str) -> str:
+    url = _to_browsable_url(candidate)
+    opened = webbrowser.open(url, new=2)
+    if opened:
+        return f"Opened website: {url}"
+    return f"Could not open website: {url}"
+
+
 def open_app(app_name: str) -> str:
+    url_candidate = _extract_url_candidate(app_name)
+    if url_candidate:
+        return _open_website(url_candidate)
+
     apps = load_app_list()
     if not apps:
         return "No apps configured yet. Add entries to backend/applist.txt."

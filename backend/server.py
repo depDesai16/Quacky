@@ -5,7 +5,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend.config import get_settings
 from backend.core.chat_runtime import ChatRuntime
-from backend.core.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
+from backend.core.text_to_speech.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
 

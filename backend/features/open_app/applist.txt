@@ -2,10 +2,10 @@
 # OS keys: linux, macos, windows
 # Example: Spotify | spotify | spotify, music | macos=open -a "Spotify"; windows=cmd /c start spotify
 Mozilla Firefox | firefox | firefox, mozilla, mozilla firefox | linux=firefox; macos=open -a "Firefox"; windows=cmd /c start "" "C:\Program Files\Mozilla Firefox\firefox.exe"
-Spotify | spotify | spotify, music | linux=spotify-electron; macos=open -a "Spotify"; windows=%APPDATA%\Spotify\Spotify.exe
-Discord | discord | discord | linux=discord; macos=open -a "Discord"; windows=cmd /c start discord:
+Spotify | spotify | spotify, music | linux=spotify-electron; macos=open -a "Spotify"; windows=cmd /c start spotify
+Discord | discord | discord | linux=discord; macos=open -a "Discord"; windows=cmd /c start discord
 Google Chrome | google-chrome-stable | chrome, google chrome | linux=google-chrome-stable; macos=open -a "Google Chrome"; windows=cmd /c start chrome
-Cursor | cursor | cursor, cursor-bin | linux=cursor; macos=open -a "Cursor"; windows=cmd /c start "" "%LOCALAPPDATA%\Programs\cursor\Cursor.exe"
-VS Code | code | code, VS Code, Visual Studio Code | linux=code; macos=open -a "Code"; windows=cmd /c start "" "%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"
-Calculator | calc | calc, calculator | linux=gnome-calculator; macos=open -a "Calculator"; windows=cmd /c start calc
-Outlook Calendar | outlook | outlook calendar, calendar | linux=xdg-open https://outlook.live.com/calendar/; macos=open -a "Microsoft Outlook"; windows=cmd /c start outlookcal:
+Cursor | cursor | cursor, cursor-bin | linux=cursor; macos=open -a "Cursor"; windows=cmd /c start cursor
+VS Code | code | code, VS Code, Visual Studio Code | linux=code; macos=open -a "Code"; windows=cmd /c start code
+Calculator | calculator | calculator, calc, caluclator | ; ; windows=cmd /c start calculator
+Task Manager | htop | htop, task manager, system monitor | linux=terminal:htop; macos=terminal:top -o cpu; windows=cmd /c start taskmgr
