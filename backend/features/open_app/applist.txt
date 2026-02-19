@@ -7,4 +7,5 @@ Discord | discord | discord | macos=open -a "Discord"; windows=cmd /c start disc
 Google Chrome | google-chrome-stable | chrome, google chrome | linux=google-chrome-stable; macos=open -a "Google Chrome"; windows=cmd /c start chrome
 Cursor | cursor | cursor, cursor-bin | linux=cursor; macos=open -a "Cursor"; windows=cmd /c start cursor
 VS Code | code | code, VS Code, Visual Studio Code | linux=code; macos=open -a "Code"; windows=cmd /c start code
-Calculator | C:\Windows\System32\calc.exe | calc, calculator |
+Calculator | calculator | calculator, calc, caluclator | ; ; windows=cmd /c start calculator
+Task Manager | htop | htop, task manager, system monitor | linux=terminal:htop; macos=terminal:top -o cpu; windows=cmd /c start taskmgr

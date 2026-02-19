@@ -151,6 +151,8 @@ def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
 
 
 def _ensure_command_exists(command: str) -> bool:
+    if command.startswith("terminal:"):
+        return True
     parts = shlex.split(command)
     if not parts:
         return False
@@ -161,10 +163,62 @@ def _ensure_command_exists(command: str) -> bool:
 
 
 def _launch_command(command: str) -> None:
+    if command.startswith("terminal:"):
+        _launch_in_new_terminal(command.split(":", 1)[1].strip())
+        return
     parts = shlex.split(command)
     if not parts:
         raise RuntimeError("Empty launch command.")
-    subprocess.Popen(parts)
+    _popen_detached(parts)
+
+
+def _popen_detached(cmd, *, shell: bool = False) -> None:
+    kwargs = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "shell": shell,
+    }
+    if sys.platform.startswith("win"):
+        kwargs["creationflags"] = (
+            subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        )
+    else:
+        kwargs["start_new_session"] = True
+    subprocess.Popen(cmd, **kwargs)
+
+
+def _launch_in_new_terminal(inner_command: str) -> None:
+    if not inner_command:
+        raise RuntimeError("Empty terminal command.")
+
+    if sys.platform.startswith("win"):
+        # Open a new cmd window and run the command.
+        _popen_detached(f'start "" cmd /k "{inner_command}"', shell=True)
+        return
+
+    if sys.platform.startswith("darwin"):
+        # Tell Terminal.app to open a new tab/window and run the command.
+        script = f'tell application "Terminal" to do script "{inner_command}"'
+        _popen_detached(["osascript", "-e", script])
+        return
+
+    # Linux and other Unix: use first available terminal emulator.
+    candidates = [
+        ["x-terminal-emulator", "-e", inner_command],
+        ["gnome-terminal", "--", "bash", "-lc", inner_command],
+        ["konsole", "-e", "bash", "-lc", inner_command],
+        ["xfce4-terminal", "-x", "bash", "-lc", inner_command],
+        ["xterm", "-e", inner_command],
+        ["kitty", "bash", "-lc", inner_command],
+        ["alacritty", "-e", "bash", "-lc", inner_command],
+    ]
+    for cmd in candidates:
+        if shutil.which(cmd[0]):
+            _popen_detached(cmd)
+            return
+
+    raise RuntimeError("No terminal emulator found for terminal: command.")
 
 
 def _platform_key() -> str:
@@ -198,7 +252,7 @@ def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
     url = _fallback_url(app, requested_name)
     opened = webbrowser.open(url, new=2)
     if opened:
-        return f"Desktop app unavailable. Opened web fallback for {app.name}: {url}"
+        return f"Desktop app unavailable. Opened web fallback for {app.name}"
     return f"Desktop app unavailable and browser fallback could not be opened for {app.name}."
 
 
