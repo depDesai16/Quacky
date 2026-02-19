@@ -146,7 +146,6 @@ def _extract_exe_win(expanded: str) -> str:
     if expanded.startswith('"'):
         end = expanded.find('"', 1)
         return expanded[1:end] if end != -1 else expanded[1:]
-    # Unquoted: exe is everything up to the first space
     return expanded.split()[0] if expanded.split() else ""
 
 
