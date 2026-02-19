@@ -1,12 +1,9 @@
 SpeechRecognition==3.10.0
-# macOS
-PyAudio==0.2.14; sys_platform == "darwin"
-# Linux + Windows
-PyAudio==0.2.13; sys_platform != "darwin"
+PyAudio==0.2.13
 google-genai
 python-dotenv
 PyQt6
 setuptools
 standard-aifc
 msal
-pywin32
+pywin32; sys_platform == "win32"
