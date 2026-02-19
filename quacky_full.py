@@ -7,6 +7,10 @@ import threading
 import time
 import sys
 import os
+import base64
+import shutil
+import subprocess
+import tempfile
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
@@ -22,6 +26,36 @@ except ImportError as e:
 
 ai_client = None
 chat_id = None
+
+
+def _play_mp3_bytes(audio_bytes: bytes) -> bool:
+    """Play MP3 bytes with the first available system player."""
+    if not audio_bytes:
+        return False
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp:
+        tmp.write(audio_bytes)
+        audio_path = tmp.name
+
+    # Keep this simple and robust across common environments.
+    player_candidates = [
+        ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path],
+        ["mpg123", "-q", audio_path],
+        ["afplay", audio_path],
+    ]
+
+    try:
+        for cmd in player_candidates:
+            if shutil.which(cmd[0]):
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                if result.returncode == 0:
+                    return True
+        return False
+    finally:
+        try:
+            os.remove(audio_path)
+        except OSError:
+            pass
 
 def load_system_prompt():
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
@@ -66,7 +100,7 @@ def process_command(command: str):
     
     try:
         print(f"Thinking...")
-        response = ai_client.send_message(chat_id, command)
+        response = ai_client.send_message(chat_id, command, tts=True)
         if not isinstance(response, dict):
             print("AI error: Unexpected response type")
             return
@@ -78,6 +112,17 @@ def process_command(command: str):
             print("AI error: Empty response")
             return
         print(f"Quacky: {ai_response}")
+        audio_b64 = response.get("audio_base64")
+        if audio_b64:
+            try:
+                audio_bytes = base64.b64decode(audio_b64)
+                played = _play_mp3_bytes(audio_bytes)
+                if not played:
+                    print("(TTS audio returned, but no local MP3 player was found.)")
+            except Exception as audio_err:
+                print(f"(TTS playback error: {audio_err})")
+        elif response.get("tts_error"):
+            print(f"(TTS unavailable: {response['tts_error']})")
         print()
         
     except Exception as e:

@@ -1,9 +1,11 @@
 # backend/server.py
 import json
+import base64
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend.config import get_settings
 from backend.core.chat_runtime import ChatRuntime
+from backend.core.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
 
@@ -14,6 +16,25 @@ runtime = ChatRuntime(
 
 MODEL_NAME = settings.model_name
 PORT = settings.port
+tts_client = (
+    ElevenLabsTTS(
+        api_key=settings.elevenlabs_api_key,
+        voice_id=settings.elevenlabs_voice_id,
+        model_id=settings.elevenlabs_model_id,
+    )
+    if settings.elevenlabs_api_key
+    else None
+)
+
+
+def _as_bool(value, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
     body = json.dumps(payload).encode("utf-8")
@@ -83,6 +104,7 @@ class QuackyHandler(BaseHTTPRequestHandler):
             data = _read_json(self)
             chat_id = data.get("chat_id")
             message = data.get("message")
+            tts_requested = _as_bool(data.get("tts"), default=settings.tts_default_enabled)
 
             if not chat_id:
                 _json_response(self, 400, {"error": "chat_id is required"})
@@ -94,7 +116,18 @@ class QuackyHandler(BaseHTTPRequestHandler):
 
             try:
                 text = runtime.handle_message(chat_id, message)
-                _json_response(self, 200, {"chat_id": chat_id, "text": text})
+                payload = {"chat_id": chat_id, "text": text}
+                if tts_requested:
+                    if tts_client is None:
+                        payload["tts_error"] = "TTS unavailable: missing ELEVENLABS_API_KEY"
+                    else:
+                        try:
+                            audio_bytes = tts_client.synthesize(text)
+                            payload["audio_base64"] = base64.b64encode(audio_bytes).decode("ascii")
+                            payload["audio_mime_type"] = "audio/mpeg"
+                        except Exception as tts_exc:
+                            payload["tts_error"] = str(tts_exc)
+                _json_response(self, 200, payload)
             except KeyError:
                 _json_response(self, 404, {"error": "chat not found"})
             except Exception as e:

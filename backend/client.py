@@ -60,8 +60,11 @@ class QuackyClient:
             payload["model"] = model
         return self._post("/chat/start", payload)
 
-    def send_message(self, chat_id: str, message: str) -> dict:
-        return self._post("/chat/message", {"chat_id": chat_id, "message": message})
+    def send_message(self, chat_id: str, message: str, tts: bool | None = None) -> dict:
+        payload = {"chat_id": chat_id, "message": message}
+        if tts is not None:
+            payload["tts"] = tts
+        return self._post("/chat/message", payload)
 
     def history(self, chat_id: str) -> dict:
         return self._get(f"/chat/history?chat_id={chat_id}")
