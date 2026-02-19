@@ -24,6 +24,7 @@ _WEB_FALLBACK_URLS = {
     "cursor": "https://cursor.com/",
     "vs code": "https://vscode.dev/",
     "visual studio code": "https://vscode.dev/",
+    "calculator": "https://www.youtube.com/watch?v=XvG-ejH0zGg&list",
 }
 
 _URL_WITH_SCHEME_RE = re.compile(r"(https?://[^\s]+)", re.IGNORECASE)
