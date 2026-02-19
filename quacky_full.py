@@ -18,7 +18,7 @@ sys.path.insert(0, current_dir)
 try:
     from backend.server import run_server
     from backend.client import QuackyClient
-    from speechToText.quacky_stt import QuackySpeechToText
+    from backend.interact.speechToText.quacky_stt import QuackySpeechToText
 except ImportError as e:
     print(f"Import error: {e}")
     print("Make sure you're running from the project root directory")
