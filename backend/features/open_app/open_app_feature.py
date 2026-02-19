@@ -1,11 +1,11 @@
 from __future__ import annotations
 
+import os
 import shlex
 import shutil
 import subprocess
 import sys
 import webbrowser
-import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
@@ -24,23 +24,8 @@ _WEB_FALLBACK_URLS = {
     "cursor": "https://cursor.com/",
     "vs code": "https://vscode.dev/",
     "visual studio code": "https://vscode.dev/",
-}
-
-_URL_WITH_SCHEME_RE = re.compile(r"(https?://[^\s]+)", re.IGNORECASE)
-_URL_WWW_RE = re.compile(r"(www\.[^\s]+)", re.IGNORECASE)
-_URL_LOCALHOST_RE = re.compile(
-    r"\b(localhost|127\.0\.0\.1)(?::\d{2,5})?(?:/[^\s]*)?\b",
-    re.IGNORECASE,
-)
-_URL_DOMAIN_RE = re.compile(
-    r"\b(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}(?::\d{2,5})?(?:/[^\s]*)?\b",
-    re.IGNORECASE,
-)
-_SCHEME_RE = re.compile(r"^https?://", re.IGNORECASE)
-_LIKELY_FILE_EXTENSIONS = {
-    "py", "txt", "md", "json", "yaml", "yml", "xml", "csv",
-    "js", "ts", "jsx", "tsx", "java", "c", "cc", "cpp", "h", "hpp",
-    "go", "rs", "rb", "php", "swift", "kt", "sql", "log", "ini", "toml",
+    "outlook calendar": "https://outlook.live.com/calendar/",
+    "calendar": "https://outlook.live.com/calendar/",
 }
 
 
@@ -116,9 +101,7 @@ def load_app_list(path: Path = APPLIST_PATH) -> List[AppEntry]:
 
 
 def get_classifier_app_hints(path: Path = APPLIST_PATH) -> str:
-    """
-    Build compact app-name/alias hints for the intent classifier prompt.
-    """
+    """Build compact app-name/alias hints for the intent classifier prompt."""
     apps = load_app_list(path)
     if not apps:
         return "No apps configured in backend/applist.txt."
@@ -149,21 +132,74 @@ def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
     return exact or loose
 
 
+def _expand(command: str) -> str:
+    """Expand %ENV_VAR% and ~/… in a command string."""
+    return os.path.expandvars(os.path.expanduser(command))
+
+
+def _extract_exe_win(expanded: str) -> str:
+    """
+    Pull just the executable token from a Windows command string.
+    Handles both quoted paths ("C:\\foo\\bar.exe" /args) and unquoted ones.
+    """
+    expanded = expanded.strip()
+    if expanded.startswith('"'):
+        end = expanded.find('"', 1)
+        return expanded[1:end] if end != -1 else expanded[1:]
+    # Unquoted: exe is everything up to the first space
+    return expanded.split()[0] if expanded.split() else ""
+
+
 def _ensure_command_exists(command: str) -> bool:
-    parts = shlex.split(command)
-    if not parts:
+    """
+    Return True only if the executable referenced by `command` can actually
+    be found on disk or on PATH.
+
+    Key fix: expand %ENV_VARS% BEFORE inspecting the path, and on Windows
+    avoid shlex (it mangles backslashes).
+    """
+    expanded = _expand(command).strip()
+    if not expanded:
         return False
-    exe = parts[0]
-    if Path(exe).is_absolute():
-        return Path(exe).exists()
-    return shutil.which(exe) is not None
+
+    if sys.platform.startswith("win"):
+        exe = _extract_exe_win(expanded)
+        if not exe:
+            return False
+        exe_path = Path(exe)
+        if exe_path.is_absolute():
+            return exe_path.exists()
+        return shutil.which(exe) is not None
+    else:
+        try:
+            parts = shlex.split(expanded)
+        except ValueError:
+            return False
+        if not parts:
+            return False
+        exe = parts[0]
+        if Path(exe).is_absolute():
+            return Path(exe).exists()
+        return shutil.which(exe) is not None
 
 
 def _launch_command(command: str) -> None:
-    parts = shlex.split(command)
-    if not parts:
+    """
+    Launch `command`, expanding env vars first.
+    On Windows use shell=True so cmd.exe handles backslashes and extra args
+    (e.g. --processStart) correctly without shlex mangling anything.
+    """
+    expanded = _expand(command).strip()
+    if not expanded:
         raise RuntimeError("Empty launch command.")
-    subprocess.Popen(parts)
+
+    if sys.platform.startswith("win"):
+        subprocess.Popen(expanded, shell=True)
+    else:
+        parts = shlex.split(expanded)
+        if not parts:
+            raise RuntimeError("Empty launch command.")
+        subprocess.Popen(parts)
 
 
 def _platform_key() -> str:
@@ -201,59 +237,7 @@ def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
     return f"Desktop app unavailable and browser fallback could not be opened for {app.name}."
 
 
-def _clean_url_candidate(candidate: str) -> str:
-    # Strip trailing punctuation commonly attached to spoken/written commands.
-    return candidate.strip().rstrip(".,;:!?)]}\"'")
-
-
-def _is_probably_filename(candidate: str) -> bool:
-    token = candidate.lower().split("/")[-1]
-    if "." not in token:
-        return False
-    ext = token.rsplit(".", 1)[-1]
-    return ext in _LIKELY_FILE_EXTENSIONS
-
-
-def _extract_url_candidate(text: str) -> str | None:
-    if not text:
-        return None
-
-    normalized = re.sub(r"\s+dot\s+", ".", text, flags=re.IGNORECASE)
-
-    for pattern in (_URL_WITH_SCHEME_RE, _URL_WWW_RE, _URL_LOCALHOST_RE, _URL_DOMAIN_RE):
-        match = pattern.search(normalized)
-        if not match:
-            continue
-        candidate = _clean_url_candidate(match.group(0))
-        if _is_probably_filename(candidate):
-            continue
-        return candidate
-
-    return None
-
-
-def _to_browsable_url(candidate: str) -> str:
-    if _SCHEME_RE.match(candidate):
-        return candidate
-    lower = candidate.lower()
-    if lower.startswith("localhost") or lower.startswith("127.0.0.1"):
-        return f"http://{candidate}"
-    return f"https://{candidate}"
-
-
-def _open_website(candidate: str) -> str:
-    url = _to_browsable_url(candidate)
-    opened = webbrowser.open(url, new=2)
-    if opened:
-        return f"Opened website: {url}"
-    return f"Could not open website: {url}"
-
-
 def open_app(app_name: str) -> str:
-    url_candidate = _extract_url_candidate(app_name)
-    if url_candidate:
-        return _open_website(url_candidate)
-
     apps = load_app_list()
     if not apps:
         return "No apps configured yet. Add entries to backend/applist.txt."
