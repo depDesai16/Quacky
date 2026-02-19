@@ -19,11 +19,16 @@ sys.path.insert(0, parent_dir)
 class QuackySpeechToText:
     def __init__(self, mic_index=None):
         self.recognizer = sr.Recognizer()
+        self.recognizer.energy_threshold = 300
+        self.recognizer.dynamic_energy_threshold = True
+        self.recognizer.pause_threshold = 0.8
         self.microphone = None
         self.is_listening = False
-        self.is_active = False  # Track if wake word has been said
+        self.is_active = False
         self.wake_word = "hey quacky"
         self.callback = None
+        self.stop_and_listen_callback = None
+        self.background_listener = None  # For real-time speech detection
         
         try:
             if mic_index is not None:
@@ -98,63 +103,66 @@ class QuackySpeechToText:
         """Set callback function to process recognized speech after wake word"""
         self.callback = callback
     
+    def set_stop_callback(self, stop_callback: Callable[[], None]):
+        """Set callback to stop audio playback when speech is detected"""
+        self.stop_and_listen_callback = stop_callback
+    
     def start_listening(self):
         """Start continuous listening for wake word"""
         if self.is_listening:
             return
         
         self.is_listening = True
-        self.listen_thread = threading.Thread(target=self._listen_worker)
-        self.listen_thread.daemon = True
-        self.listen_thread.start()
-    
-    def _listen_worker(self):
-        """Main listening loop - waits for wake word once, then processes all commands"""
-        while self.is_listening:
-            try:
-                full_text = self._listen_for_phrase()
-                if full_text:
-                    if "quit" in full_text.lower():
-                        import os
-                        os._exit(0)
-                    
-                    # If not active yet, check for wake word
-                    if not self.is_active:
-                        command = self._extract_command_from_phrase(full_text)
-                        if command:
-                            self.is_active = True
-                            print("Quacky activated! Listening for all commands...")
-                            print(f"{command}")
-                            if self.callback:
-                                self.callback(command)
-                    else:
-                        # Already active, process everything as a command
-                        print(f"{full_text}")
-                        if self.callback:
-                            self.callback(full_text)
-                
-            except Exception as e:
-                if self.is_listening:
-                    print(f"Error in listening: {e}")
-                time.sleep(0.1)
-    
-    def _listen_for_phrase(self) -> Optional[str]:
-        """Listen for a complete phrase"""
-        try:
-            with self.microphone as source:
-                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=15)
+        
+        # Start background listener for real-time speech detection
+        def audio_callback(recognizer, audio):
+            """Called whenever audio is captured"""
+            # Stop any playing audio immediately when speech is detected
+            if self.stop_and_listen_callback:
+                self.stop_and_listen_callback()
             
+            # Process the audio in a separate thread
+            threading.Thread(target=self._process_audio, args=(audio,), daemon=True).start()
+        
+        self.background_listener = self.recognizer.listen_in_background(
+            self.microphone, 
+            audio_callback,
+            phrase_time_limit=10
+        )
+    
+    def _process_audio(self, audio):
+        """Process captured audio"""
+        try:
             text = self.recognizer.recognize_google(audio)
-            return text
-                
+            if not text:
+                return
+            
+            if "quit" in text.lower():
+                import os
+                os._exit(0)
+            
+            # If not active yet, check for wake word
+            if not self.is_active:
+                command = self._extract_command_from_phrase(text)
+                if command:
+                    self.is_active = True
+                    print("Quacky activated! Listening for all commands...")
+                    print(f"{command}")
+                    if self.callback:
+                        self.callback(command)
+            else:
+                # Already active, process everything as a command
+                print(f"{text}")
+                if self.callback:
+                    self.callback(text)
+                    
         except sr.UnknownValueError:
             pass
         except sr.RequestError as e:
             print(f"Speech recognition error: {e}")
-        except sr.WaitTimeoutError:
-            pass
-        
-        return None
+        except Exception as e:
+            if self.is_listening:
+                print(f"Error processing audio: {e}")
     
     def _extract_command_from_phrase(self, text: str) -> Optional[str]:
         """Extract command from phrase if it contains wake word"""
@@ -177,6 +185,8 @@ class QuackySpeechToText:
     def stop_listening(self):
         """Stop the listening loop"""
         self.is_listening = False
+        if self.background_listener:
+            self.background_listener(wait_for_stop=False)
 
 def process_command(command: str):
     """Process the captured command - this is where you'll send to Gemini AI"""

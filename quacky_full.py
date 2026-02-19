@@ -26,10 +26,13 @@ except ImportError as e:
 
 ai_client = None
 chat_id = None
+current_audio_process = None  # Track the currently playing audio
 
 
 def _play_mp3_bytes(audio_bytes: bytes) -> bool:
     """Play MP3 bytes with the first available system player."""
+    global current_audio_process
+    
     if not audio_bytes:
         return False
 
@@ -37,7 +40,6 @@ def _play_mp3_bytes(audio_bytes: bytes) -> bool:
         tmp.write(audio_bytes)
         audio_path = tmp.name
 
-    # Keep this simple and robust across common environments.
     player_candidates = [
         ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path],
         ["mpg123", "-q", audio_path],
@@ -47,15 +49,28 @@ def _play_mp3_bytes(audio_bytes: bytes) -> bool:
     try:
         for cmd in player_candidates:
             if shutil.which(cmd[0]):
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                if result.returncode == 0:
-                    return True
+                current_audio_process = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                current_audio_process.wait()
+                current_audio_process = None
+                return True
         return False
     finally:
         try:
             os.remove(audio_path)
         except OSError:
             pass
+
+
+def stop_audio():
+    """Stop currently playing audio"""
+    global current_audio_process
+    if current_audio_process and current_audio_process.poll() is None:
+        current_audio_process.terminate()
+        try:
+            current_audio_process.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            current_audio_process.kill()
+        current_audio_process = None
 
 def load_system_prompt():
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
@@ -93,6 +108,9 @@ def initialize_ai():
 def process_command(command: str):
     """Send command to AI and display response"""
     global ai_client, chat_id
+    
+    # Stop any currently playing audio when new command comes in
+    stop_audio()
     
     if not ai_client or not chat_id:
         print("AI backend not connected")
@@ -180,6 +198,7 @@ def main():
         
         stt = QuackySpeechToText(mic_index=mic_index)
         stt.set_callback(process_command)
+        stt.set_stop_callback(stop_audio)  # Set callback to stop audio on speech detection
         
         print("\n" + "=" * 40)
         print("Quacky is listening...")
