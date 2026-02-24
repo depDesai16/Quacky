@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Quacky Speech-to-Text - Clean implementation
-Listens for "Hey Quacky" wake word, then captures and processes speech
+Listens for the configured wake word, then captures and processes speech
 """
 import speech_recognition as sr
 import threading
@@ -9,15 +9,17 @@ import time
 import os
 import sys
 import pyaudio
+import audioop
 from typing import Optional, Callable
 
 # Ensure we can find modules regardless of where script is run from
 script_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(script_dir)
 sys.path.insert(0, parent_dir)
+from assistant_identity import get_assistant_name, get_wake_words
 
 class QuackySpeechToText:
-    def __init__(self, mic_index=None):
+    def __init__(self, mic_index=None, assistant_name: Optional[str] = None, wake_words: Optional[list[str]] = None):
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
@@ -25,10 +27,16 @@ class QuackySpeechToText:
         self.microphone = None
         self.is_listening = False
         self.is_active = False
-        self.wake_word = "hey quacky"
+        self.assistant_name = (assistant_name or get_assistant_name()).strip()
+        resolved_wake_words = wake_words or get_wake_words(self.assistant_name)
+        self.wake_words = [" ".join(word.strip().lower().split()) for word in resolved_wake_words if word.strip()]
+        self.wake_word = self.wake_words[0] if self.wake_words else self.assistant_name.lower()
         self.callback = None
         self.stop_and_listen_callback = None
         self.background_listener = None  # For real-time speech detection
+        # Slight gate for interruption so low-volume background chatter is ignored.
+        self.interrupt_gate_floor = int(os.getenv("QUACKY_INTERRUPT_GATE_FLOOR", "450"))
+        self.interrupt_gate_multiplier = float(os.getenv("QUACKY_INTERRUPT_GATE_MULTIPLIER", "1.25"))
         
         try:
             if mic_index is not None:
@@ -117,8 +125,8 @@ class QuackySpeechToText:
         # Start background listener for real-time speech detection
         def audio_callback(recognizer, audio):
             """Called whenever audio is captured"""
-            # Stop any playing audio immediately when speech is detected
-            if self.stop_and_listen_callback:
+            # Stop playback only when audio level is likely intentional speech.
+            if self.stop_and_listen_callback and self._should_interrupt_for_audio(audio):
                 self.stop_and_listen_callback()
             
             # Process the audio in a separate thread
@@ -129,6 +137,20 @@ class QuackySpeechToText:
             audio_callback,
             phrase_time_limit=10
         )
+
+    def _should_interrupt_for_audio(self, audio: sr.AudioData) -> bool:
+        """Return True when captured audio is strong enough to count as a user interrupt."""
+        try:
+            raw = audio.get_raw_data(convert_rate=16000, convert_width=2)
+            if not raw:
+                return False
+            rms = audioop.rms(raw, 2)
+            dynamic_gate = int(self.recognizer.energy_threshold * self.interrupt_gate_multiplier)
+            gate = max(self.interrupt_gate_floor, dynamic_gate)
+            return rms >= gate
+        except Exception:
+            # If energy measurement fails, preserve existing behavior.
+            return True
     
     def _process_audio(self, audio):
         """Process captured audio"""
@@ -146,7 +168,7 @@ class QuackySpeechToText:
                 command = self._extract_command_from_phrase(text)
                 if command:
                     self.is_active = True
-                    print("Quacky activated! Listening for all commands...")
+                    print(f"{self.assistant_name} activated! Listening for all commands...")
                     print(f"{command}")
                     if self.callback:
                         self.callback(command)
@@ -167,10 +189,8 @@ class QuackySpeechToText:
     def _extract_command_from_phrase(self, text: str) -> Optional[str]:
         """Extract command from phrase if it contains wake word"""
         text_lower = text.lower()
-        
-        wake_words = ["hey quacky", "hey quaky", "quacky", "hey ducky"]
-        
-        for wake_word in wake_words:
+
+        for wake_word in self.wake_words:
             if wake_word in text_lower:
                 wake_pos = text_lower.find(wake_word)
                 command_start = wake_pos + len(wake_word)
@@ -195,7 +215,10 @@ def process_command(command: str):
     pass
 
 def main():
-    print("🦆 Quacky Speech-to-Text")
+    assistant_name = get_assistant_name()
+    wake_words = get_wake_words(assistant_name)
+
+    print(f"🦆 {assistant_name} Speech-to-Text")
     print("=" * 30)
     
     # List filtered microphones
@@ -226,11 +249,12 @@ def main():
                 print("❌ Please enter a valid number.")
     
     print("\n" + "=" * 30)
-    print("🎧 Listening... (Say 'quit' to exit)")
+    print(f"🎧 Listening... Say '{wake_words[0]}' then your command.")
+    print("Say 'quit' to exit")
     print("=" * 30)
     
     try:
-        stt = QuackySpeechToText(mic_index=mic_index)
+        stt = QuackySpeechToText(mic_index=mic_index, assistant_name=assistant_name, wake_words=wake_words)
         
         # Test microphone first
         if stt.test_microphone():

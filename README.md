@@ -45,6 +45,9 @@ Quacky/
    - Get API key from https://aistudio.google.com/
    - Copy `.env.example` to `.env`
    - Add your API key: `GEMINI_API_KEY=your_key_here`
+   - Optional identity settings:
+     - `QUACKY_ASSISTANT_NAME=Quacky`
+     - `QUACKY_WAKE_WORDS=hey quacky,quacky`
 
 3. **Run the full system:**
    ```bash
@@ -150,7 +153,8 @@ If you want to be explicit, say:
 4. Restart server
 
 ### Customizing Voice Recognition
-- Modify wake words in `speechToText/quacky_stt.py`
+- Configure wake words with `QUACKY_WAKE_WORDS` (comma-separated)
+- Configure assistant name with `QUACKY_ASSISTANT_NAME`
 - Adjust microphone sensitivity and timeout settings
 - Add custom voice commands
 

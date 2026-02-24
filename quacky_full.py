@@ -11,6 +11,7 @@ import base64
 import shutil
 import subprocess
 import tempfile
+from assistant_identity import get_assistant_name, get_wake_words
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
@@ -27,6 +28,8 @@ except ImportError as e:
 ai_client = None
 chat_id = None
 current_audio_process = None  # Track the currently playing audio
+ASSISTANT_NAME = get_assistant_name()
+WAKE_WORDS = get_wake_words(ASSISTANT_NAME)
 
 
 def _play_mp3_bytes(audio_bytes: bytes) -> bool:
@@ -74,7 +77,9 @@ def stop_audio():
 
 def load_system_prompt():
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
-        return f.read()
+        prompt = f.read()
+    # Keep the default prompt template but reflect the configured assistant name.
+    return prompt.replace("Quacky", ASSISTANT_NAME)
     
 def initialize_ai():
     """Initialize connection to AI backend"""
@@ -129,7 +134,7 @@ def process_command(command: str):
         if not ai_response:
             print("AI error: Empty response")
             return
-        print(f"Quacky: {ai_response}")
+        print(f"{ASSISTANT_NAME}: {ai_response}")
         audio_b64 = response.get("audio_base64")
         if audio_b64:
             try:
@@ -155,7 +160,7 @@ def start_ai_server():
         print(f"AI server error: {e}")
 
 def main():
-    print("Quacky Full System")
+    print(f"{ASSISTANT_NAME} Full System")
     print("=" * 40)
     print("Starting AI backend + Speech-to-Text")
     print("=" * 40)
@@ -196,13 +201,17 @@ def main():
                 except ValueError:
                     print("Please enter a valid number.")
         
-        stt = QuackySpeechToText(mic_index=mic_index)
+        stt = QuackySpeechToText(
+            mic_index=mic_index,
+            assistant_name=ASSISTANT_NAME,
+            wake_words=WAKE_WORDS,
+        )
         stt.set_callback(process_command)
         stt.set_stop_callback(stop_audio)  # Set callback to stop audio on speech detection
         
         print("\n" + "=" * 40)
-        print("Quacky is listening...")
-        print("Say 'Hey Quacky' followed by your command")
+        print(f"{ASSISTANT_NAME} is listening...")
+        print(f"Say '{WAKE_WORDS[0]}' followed by your command")
         print("Say 'quit' to exit")
         print("=" * 40)
         
@@ -212,7 +221,7 @@ def main():
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
-            print("\nShutting down Quacky...")
+            print(f"\nShutting down {ASSISTANT_NAME}...")
             stt.stop_listening()
             
     except Exception as e:
