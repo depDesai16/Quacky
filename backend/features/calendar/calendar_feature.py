@@ -401,6 +401,7 @@ def create_outlook_event(
             f"{start_dt.isoformat()} to {end_dt.isoformat()}."
         )
 
+    _desktop_error: str | None = None
     try:
         result = _create_outlook_event_desktop(
             title=clean_title,
@@ -411,8 +412,14 @@ def create_outlook_event(
         )
         _mark_event_signature(signature)
         return result
-    except Exception:
-        pass
+    except Exception as _exc:
+        import traceback, sys
+        _desktop_error = str(_exc)
+        print(
+            f"[calendar_feature] Desktop Outlook save failed for '{clean_title}': {_exc}\n"
+            + traceback.format_exc(),
+            file=sys.stderr,
+        )
 
     query = urlencode(
         {
@@ -429,8 +436,9 @@ def create_outlook_event(
     webbrowser.open(compose_url, new=2)
 
     location_msg = f" at {clean_location}" if clean_location else ""
+    error_hint = f" (Reason: {_desktop_error})" if _desktop_error else ""
     return (
-        f"Could not auto-save in desktop Outlook. Opened web event form for '{clean_title}' from "
+        f"Could not auto-save in desktop Outlook{error_hint}. Opened web event form for '{clean_title}' from "
         f"{start_dt.isoformat()} to {end_dt.isoformat()}{location_msg}."
     )
 
