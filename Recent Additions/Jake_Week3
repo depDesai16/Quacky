@@ -1,0 +1,10 @@
+Week 3 Summary
+
+- Evaluated project user stories for completeness, updated status labels in `User_Stories.txt`, and added a prioritized next-steps roadmap.
+- Implemented a persistent JSON session memory framework in `backend/core/session_memory.py` with per-chat storage, atomic writes, and reset cleanup.
+- Added model-usable memory tools in `backend/tools/memory_tool.py` for remember/recall/forget plus task tracking (add/list/complete).
+- Registered memory tools in the backend tool registry so they are available to runtime tool-calling.
+- Wired chat runtime persistence to load/save memory by `chat_id` and keep pending action/topic context across messages.
+- Updated the system prompt to include memory/task tool usage guidance.
+- Added tests for session memory and memory tools in `tests/backend/core/test_session_memory.py` and `tests/backend/tools/test_memory_tool.py`.
+- Added `.gitignore` entries for runtime session memory artifacts.
