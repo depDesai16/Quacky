@@ -10,9 +10,9 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want the assistant to create reminders for me, so that I do not forget important tasks.
 
-[Not Started] As a user, I want the assistant to create, edit, and delete calendar events (with permission), so that I can manage my schedule more efficiently.
+[Done] As a user, I want the assistant to create, edit, and delete calendar events (with permission), so that I can manage my schedule more efficiently.
 
-[Partial] As a user, I want the assistant to open applications for me, so that I can launch tools quickly or hands-free.
+[Done] As a user, I want the assistant to open applications for me, so that I can launch tools quickly or hands-free.
 
 [Not Started] As a user, I want the assistant to perform basic actions within apps it has permission to use, so that I can save time on repetitive tasks.
 
@@ -22,10 +22,17 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want to enable or disable the assistant’s screen viewing at any time, so that I remain in control of my privacy.
 
-[Not Started] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
+[Done] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
 
 [Not Started] As a user, I want the assistant to learn my preferences over time, so that it becomes more personalized and helpful.
 
 [Not Started] As a user, I want the assistant to suggest helpful actions based on what I am doing, so that I can be more productive.
 
 [Partial] As a user, I want the assistant to remember tasks and context during a session, so that I do not need to repeat information.
+
+Recommended next steps (priority order):
+1) Add a permission model for app/tool control (allowlist by app + tool-level consent), then enforce it in `open_app` and calendar/email actions.
+2) Extend confirmation flow to all high-impact actions (email send, app launch, calendar delete/update), not just calendar actions.
+3) Implement reminders/timers/alarms with in-session scheduling first, then optional OS-native integrations.
+4) Add screen-context capability behind explicit opt-in: capture on demand, summarize, and answer questions about current screen content.
+5) Improve session memory from topic-only to task/context memory (active tasks, pending follow-ups, user preferences).

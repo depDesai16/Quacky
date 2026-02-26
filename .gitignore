@@ -1,3 +1,5 @@
 __pycache__/
 .env
 .venv/
+backend/data/session_memory.json
+backend/data/session_memory.json.tmp

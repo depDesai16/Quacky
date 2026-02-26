@@ -17,6 +17,7 @@ from backend.core.action_router import (
 )
 from backend.core.response_style import ask_quacky_confirmation, style_direct_output
 from backend.core.confirmation import handle_pending_calendar
+from backend.core.session_memory import SessionMemoryStore
 
 
 class ChatRuntime:
@@ -25,6 +26,7 @@ class ChatRuntime:
         self.model_name = model_name
         self.chats: dict[str, Any] = {}
         self.memory: dict[str, dict] = {}
+        self.memory_store = SessionMemoryStore()
 
     def create_chat(self, system_instruction: str | None = None, model: str | None = None) -> str:
         merged_system = merge_system_instruction(system_instruction)
@@ -38,7 +40,7 @@ class ChatRuntime:
         )
         chat_id = str(uuid.uuid4())
         self.chats[chat_id] = chat
-        self.memory[chat_id] = {}
+        self.memory[chat_id] = self.memory_store.get_session(chat_id)
         return chat_id
 
     def get_history(self, chat_id: str) -> list[dict]:
@@ -54,14 +56,19 @@ class ChatRuntime:
             raise KeyError("chat not found")
         del self.chats[chat_id]
         self.memory.pop(chat_id, None)
+        self.memory_store.delete_session(chat_id)
 
     def handle_message(self, chat_id: str, message: str) -> str:
         chat = self._get_chat(chat_id)
-        mem = self.memory.setdefault(chat_id, {})
+        mem = self.memory.setdefault(chat_id, self.memory_store.get_session(chat_id))
+
+        def _persist_and_return(text: str) -> str:
+            self.memory_store.save_session(chat_id, mem)
+            return text
 
         pending = mem.get("pending_action")
         if pending and pending.get("kind") == "calendar":
-            return handle_pending_calendar(chat, self.memory, chat_id, message)
+            return _persist_and_return(handle_pending_calendar(chat, self.memory, chat_id, message))
 
         intents = classify(message, self.client, self.model_name)
 
@@ -69,9 +76,9 @@ class ChatRuntime:
         if clarify_intent is not None:
             question = clarify_intent.get("question", "Could you clarify that for me?")
             update_memory(self.memory, chat_id, message)
-            return chat.send_message(
+            return _persist_and_return(chat.send_message(
                 f"Rephrase this clarifying question in Quacky's voice, keep it short: {question}"
-            ).text
+            ).text)
 
         calendar_intent = extract_calendar_intent(intents)
         if calendar_intent is not None:
@@ -79,25 +86,30 @@ class ChatRuntime:
             validation_error = validate_calendar_intent(calendar_intent)
             if validation_error:
                 update_memory(self.memory, chat_id, message)
-                return chat.send_message(
+                return _persist_and_return(chat.send_message(
                     f"Explain this validation error in Quacky's voice, friendly but clear: {validation_error}"
-                ).text
+                ).text)
             
             action = build_calendar_action(calendar_intent)
             if action is not None:
                 action["user_message"] = message
                 mem["pending_action"] = action
                 update_memory(self.memory, chat_id, message)
-                return ask_quacky_confirmation(chat, message, action["summary"])
+                return _persist_and_return(ask_quacky_confirmation(chat, message, action["summary"]))
 
         direct_result = dispatch_intents(intents)
         if direct_result is not None:
             update_memory(self.memory, chat_id, message)
-            return style_direct_output(chat, message, direct_result)
+            return _persist_and_return(style_direct_output(chat, message, direct_result))
 
         augmented = augment_with_context(self.memory, chat_id, message)
+        augmented = (
+            f"{augmented}\n\n"
+            f"[Internal tool hint: current_chat_id={chat_id}. "
+            "If memory tools are used, pass this value as chat_id.]"
+        )
         update_memory(self.memory, chat_id, message)
-        return chat.send_message(augmented).text
+        return _persist_and_return(chat.send_message(augmented).text)
 
     def _get_chat(self, chat_id: str):
         if not chat_id or chat_id not in self.chats:
