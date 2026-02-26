@@ -37,7 +37,6 @@ def _play_mp3_bytes(audio_bytes: bytes) -> bool:
         tmp.write(audio_bytes)
         audio_path = tmp.name
 
-    # Keep this simple and robust across common environments.
     player_candidates = [
         ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", audio_path],
         ["mpg123", "-q", audio_path],
@@ -57,16 +56,18 @@ def _play_mp3_bytes(audio_bytes: bytes) -> bool:
         except OSError:
             pass
 
+
 def load_system_prompt():
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
         return f.read()
-    
+
+
 def initialize_ai():
     """Initialize connection to AI backend"""
     global ai_client, chat_id
-    
+
     print("Connecting to AI backend...")
-    
+
     for i in range(10):
         try:
             ai_client = QuackyClient("http://localhost:8000")
@@ -79,7 +80,7 @@ def initialize_ai():
     else:
         print("Failed to connect to AI backend after 10 seconds")
         return False
-    
+
     try:
         response = ai_client.start_chat(system=load_system_prompt())
         chat_id = response["chat_id"]
@@ -90,43 +91,65 @@ def initialize_ai():
         print(f"Failed to start chat session: {e}")
         return False
 
+
 def process_command(command: str):
-    """Send command to AI and display response"""
+    """
+    AI callback (THINKING phase).
+    IMPORTANT: Do not print here. Return a response payload for RESPONDING phase.
+    """
     global ai_client, chat_id
-    
+
     if not ai_client or not chat_id:
-        print("AI backend not connected")
-        return
-    
+        return {"error": "AI backend not connected"}
+
+    print("Thinking...")
     try:
-        print(f"Thinking...")
         response = ai_client.send_message(chat_id, command, tts=True)
         if not isinstance(response, dict):
-            print("AI error: Unexpected response type")
-            return
+            return {"error": "Unexpected response type from AI"}
+
         if "error" in response:
-            print(f"AI error: {response['error']}")
-            return
-        ai_response = response.get("text", "")
-        if not ai_response:
-            print("AI error: Empty response")
-            return
-        print(f"Quacky: {ai_response}")
-        audio_b64 = response.get("audio_base64")
-        if audio_b64:
-            try:
-                audio_bytes = base64.b64decode(audio_b64)
-                played = _play_mp3_bytes(audio_bytes)
-                if not played:
-                    print("(TTS audio returned, but no local MP3 player was found.)")
-            except Exception as audio_err:
-                print(f"(TTS playback error: {audio_err})")
-        elif response.get("tts_error"):
-            print(f"(TTS unavailable: {response['tts_error']})")
-        print()
-        
+            return {"error": response["error"]}
+
+        return response  # expected keys: text, audio_base64, tts_error (optional)
+
     except Exception as e:
-        print(f"AI error: {e}")
+        return {"error": str(e)}
+
+
+def handle_response(response_payload):
+    """
+    RESPONDING phase: print + TTS playback.
+    This runs after STT sets [STATE] -> RESPONDING.
+    """
+    if not isinstance(response_payload, dict):
+        # fallback
+        if response_payload:
+            print(f"Quacky: {response_payload}")
+        return
+
+    if "error" in response_payload:
+        print(f"AI error: {response_payload['error']}")
+        return
+
+    ai_text = response_payload.get("text", "")
+    if ai_text:
+        print(f"Quacky: {ai_text}")
+
+    audio_b64 = response_payload.get("audio_base64")
+    if audio_b64:
+        try:
+            audio_bytes = base64.b64decode(audio_b64)
+            played = _play_mp3_bytes(audio_bytes)
+            if not played:
+                print("(TTS audio returned, but no local MP3 player was found.)")
+        except Exception as audio_err:
+            print(f"(TTS playback error: {audio_err})")
+    elif response_payload.get("tts_error"):
+        print(f"(TTS unavailable: {response_payload['tts_error']})")
+
+    print()
+
 
 def start_ai_server():
     """Start the AI server in background"""
@@ -136,33 +159,34 @@ def start_ai_server():
     except Exception as e:
         print(f"AI server error: {e}")
 
+
 def main():
     print("Quacky Full System")
     print("=" * 40)
     print("Starting AI backend + Speech-to-Text")
     print("=" * 40)
-    
+
     server_thread = threading.Thread(target=start_ai_server, daemon=True)
     server_thread.start()
-    
+
     if not initialize_ai():
         print("Failed to initialize AI system")
         return
-    
+
     print("\n" + "=" * 40)
     print("Setting up Speech-to-Text")
     print("=" * 40)
-    
+
     try:
         filtered_mics = QuackySpeechToText.list_microphones()
-        
+
         if not filtered_mics:
             print("No input microphones found. Using default.")
             mic_index = None
         else:
             print("\nSelect microphone:")
             print("0: Use default microphone")
-            
+
             while True:
                 try:
                     choice = input(f"\nEnter microphone number 1-{len(filtered_mics)} (or 0 for default): ").strip()
@@ -177,27 +201,29 @@ def main():
                         print(f"Please enter a number between 1 and {len(filtered_mics)}, or 0 for default.")
                 except ValueError:
                     print("Please enter a valid number.")
-        
+
         stt = QuackySpeechToText(mic_index=mic_index)
         stt.set_callback(process_command)
-        
+        stt.set_response_handler(handle_response)
+
         print("\n" + "=" * 40)
         print("Quacky is listening...")
         print("Say 'Hey Quacky' followed by your command")
         print("Say 'quit' to exit")
         print("=" * 40)
-        
-        stt.start_listening()
-        
+
+        stt.start()
+
         try:
             while True:
                 time.sleep(1)
         except KeyboardInterrupt:
             print("\nShutting down Quacky...")
-            stt.stop_listening()
-            
+            stt.shutdown()
+
     except Exception as e:
         print(f"Speech-to-text error: {e}")
+
 
 if __name__ == "__main__":
     main()

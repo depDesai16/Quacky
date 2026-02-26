@@ -1,30 +1,70 @@
 #!/usr/bin/env python3
 """
-Quacky Speech-to-Text - Clean implementation
-Listens for "Hey Quacky" wake word, then captures and processes speech
+Quacky Speech-to-Text
+
+Architecture:
+- STT thread (producer) listens and enqueues commands
+- AI worker thread (consumer) processes commands sequentially from a queue
+
+Features:
+- Idle timeout (15s): if ACTIVE and no commands for 15s -> deactivate and require wake word again
+- Clean state machine: INACTIVE -> LISTENING -> THINKING -> RESPONDING
+- Explicit active flag (no inference from timestamps)
+- Graceful shutdown via stop flag + sentinel in queue (no os._exit)
+- Terminal logs: what STT heard + state transitions
+
+Update (non-breaking):
+- Optional response_handler so RESPONDING can be set BEFORE printing/TTS.
+  - If response_handler is set: worker sets RESPONDING then calls handler(result)
+  - If not set: preserves existing behavior (logs AI response if result is a string)
 """
 import speech_recognition as sr
 import threading
 import time
 import os
 import sys
+import queue
 import pyaudio
-from typing import Optional, Callable
+from typing import Optional, Callable, Any
+from enum import Enum, auto
 
-# Ensure we can find modules regardless of where script is run from
 script_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(script_dir)
 sys.path.insert(0, parent_dir)
 
+
+class State(Enum):
+    INACTIVE = auto()   
+    LISTENING = auto()  
+    THINKING = auto()     
+    RESPONDING = auto()   
+    SHUTTING_DOWN = auto()
+
+
 class QuackySpeechToText:
-    def __init__(self, mic_index=None):
+    def __init__(self, mic_index=None, idle_timeout_seconds: int = 15):
         self.recognizer = sr.Recognizer()
-        self.microphone = None
-        self.is_listening = False
-        self.is_active = False  # Track if wake word has been said
+        self.microphone: Optional[sr.Microphone] = None
+
         self.wake_word = "hey quacky"
-        self.callback = None
-        
+        self.callback: Optional[Callable[[str], Any]] = None
+
+        self.response_handler: Optional[Callable[[Any], None]] = None
+
+        self.idle_timeout_seconds = idle_timeout_seconds
+        self._last_command_time: Optional[float] = None
+
+        self._active = False
+        self._active_lock = threading.Lock()
+
+        self._cmd_queue: "queue.Queue[Optional[str]]" = queue.Queue()
+        self._stop_event = threading.Event()
+
+        self._state = State.INACTIVE
+        self._state_lock = threading.Lock()
+
+        self.pause_listening_while_ai_busy = True
+
         try:
             if mic_index is not None:
                 try:
@@ -41,37 +81,136 @@ class QuackySpeechToText:
         except Exception as e:
             print(f"Microphone initialization failed: {e}")
             raise
-    
+
+        self.is_listening = False
+        self._stt_thread: Optional[threading.Thread] = None
+        self._worker_thread: Optional[threading.Thread] = None
+
+    def _set_state(self, new_state: State) -> None:
+        with self._state_lock:
+            if self._state != new_state:
+                self._state = new_state
+                print(f"[STATE] -> {self._state.name}")
+
+    def _get_state(self) -> State:
+        with self._state_lock:
+            return self._state
+
+    def _set_active(self, value: bool) -> None:
+        with self._active_lock:
+            self._active = value
+
+    def _is_active(self) -> bool:
+        with self._active_lock:
+            return self._active
+
+    def _log_heard(self, text: str) -> None:
+        print(f"[HEARD] {text}")
+
+    def _log_info(self, text: str) -> None:
+        print(f"[INFO] {text}")
+
+    def _log_command(self, text: str) -> None:
+        print(f"[COMMAND] {text}")
+
+    def _log_ai_response(self, text: str) -> None:
+        print(f"[AI RESPONSE] {text}")
+
+    def set_callback(self, callback: Callable[[str], Any]) -> None:
+        self.callback = callback
+
+    def set_response_handler(self, handler: Callable[[Any], None]) -> None:
+        """
+        Set a handler that will be called during RESPONDING state.
+        Use this if you want RESPONDING to appear before printing/TTS.
+        """
+        self.response_handler = handler
+
+    def start(self) -> None:
+        """Start STT producer + AI worker threads."""
+        if self.is_listening:
+            return
+
+        self.is_listening = True
+        self._stop_event.clear()
+        self._set_active(False)
+        self._set_state(State.INACTIVE)
+
+        self._worker_thread = threading.Thread(target=self._ai_worker, daemon=True)
+        self._stt_thread = threading.Thread(target=self._stt_loop, daemon=True)
+
+        self._worker_thread.start()
+        self._stt_thread.start()
+
+    def shutdown(self) -> None:
+        """Gracefully stop threads and exit loops."""
+        if not self.is_listening:
+            return
+
+        self._set_state(State.SHUTTING_DOWN)
+        self._log_info("Shutting down...")
+
+        self.is_listening = False
+        self._stop_event.set()
+
+        self._cmd_queue.put(None)
+
+        if self._stt_thread and self._stt_thread.is_alive():
+            self._stt_thread.join(timeout=2)
+        if self._worker_thread and self._worker_thread.is_alive():
+            self._worker_thread.join(timeout=2)
+
+        self._set_active(False)
+        self._set_state(State.INACTIVE)
+
+    def test_microphone(self) -> bool:
+        """Quick mic check: capture a short sample and run recognition."""
+        try:
+            print("🎙️ Testing microphone... say a few words.")
+            with self.microphone as source:
+                audio = self.recognizer.listen(source, timeout=5, phrase_time_limit=4)
+            _ = self.recognizer.recognize_google(audio)
+            print("✅ Microphone test passed.")
+            return True
+        except sr.WaitTimeoutError:
+            print("❌ Mic test timed out (no speech detected).")
+        except sr.UnknownValueError:
+            print("❌ Mic test heard audio but couldn't understand it.")
+        except sr.RequestError as e:
+            print(f"❌ Speech API error during test: {e}")
+        except Exception as e:
+            print(f"❌ Mic test failed: {e}")
+        return False
+
     @staticmethod
     def list_microphones():
-        """List filtered microphones (real input devices only, deduplicated)"""
+        """List filtered microphones (real input devices only, deduplicated)."""
         pa = pyaudio.PyAudio()
         all_mics = sr.Microphone.list_microphone_names()
-        
+
         filtered_mics = []
         seen_names = set()
         skip_keywords = [
-            "stereo mix", "what u hear", "wave out mix", "loopback", 
+            "stereo mix", "what u hear", "wave out mix", "loopback",
             "virtual", "output", "speakers", "realtek hd audio rear output",
             "realtek hd audio front output", "realtek digital output", "sound mapper",
             "primary sound", "voicemod", "steelseries sonar", "line out",
             "nvidia high definition"
         ]
-        
+
         for i, name in enumerate(all_mics):
             name_lower = name.lower()
-            
-            # Don't filter out iPhone or other phone microphones
+
             if "iphone" in name_lower or "phone" in name_lower:
                 clean_name = name.split('(')[0].strip()
                 if clean_name.lower() not in seen_names:
                     seen_names.add(clean_name.lower())
                     filtered_mics.append((i, name))
                 continue
-            
+
             if any(keyword in name_lower for keyword in skip_keywords):
                 continue
-            
+
             try:
                 info = pa.get_device_info_by_index(i)
                 if info.get("maxInputChannels", 0) < 1:
@@ -80,167 +219,232 @@ class QuackySpeechToText:
                 continue
 
             clean_name = name.split('(')[0].strip()
-            
             if clean_name.lower() in seen_names:
                 continue
-            
+
             seen_names.add(clean_name.lower())
             filtered_mics.append((i, name))
-        
+
         print("Available input microphones:")
-        for idx, (original_index, name) in enumerate(filtered_mics):
+        for idx, (_, name) in enumerate(filtered_mics):
             print(f"{idx+1}: {name}")
-        
+
         pa.terminate()
         return filtered_mics
-    
-    def set_callback(self, callback: Callable[[str], None]):
-        """Set callback function to process recognized speech after wake word"""
-        self.callback = callback
-    
-    def start_listening(self):
-        """Start continuous listening for wake word"""
-        if self.is_listening:
-            return
-        
-        self.is_listening = True
-        self.listen_thread = threading.Thread(target=self._listen_worker)
-        self.listen_thread.daemon = True
-        self.listen_thread.start()
-    
-    def _listen_worker(self):
-        """Main listening loop - waits for wake word once, then processes all commands"""
-        while self.is_listening:
+
+    def _stt_loop(self) -> None:
+        """Producer: listens and enqueues commands."""
+        while not self._stop_event.is_set():
             try:
-                full_text = self._listen_for_phrase()
-                if full_text:
-                    if "quit" in full_text.lower():
-                        import os
-                        os._exit(0)
-                    
-                    # If not active yet, check for wake word
-                    if not self.is_active:
-                        command = self._extract_command_from_phrase(full_text)
-                        if command:
-                            self.is_active = True
-                            print("Quacky activated! Listening for all commands...")
-                            print(f"{command}")
-                            if self.callback:
-                                self.callback(command)
+                if self.pause_listening_while_ai_busy:
+                    st = self._get_state()
+                    if st in (State.THINKING, State.RESPONDING):
+                        time.sleep(0.05)
+                        continue
+
+                self._maybe_deactivate_on_idle()
+
+                text = self._listen_for_phrase()
+                if not text:
+                    continue
+
+                self._log_heard(text)
+
+                if "quit" in text.lower():
+                    self.shutdown()
+                    break
+
+                st = self._get_state()
+
+                if st == State.INACTIVE:
+                    extracted = self._extract_command_from_phrase(text)
+                    if extracted is None:
+                        continue
+
+                    self._activate()
+
+                    cmd = extracted.strip()
+                    if cmd:
+                        self._enqueue_command(cmd)
                     else:
-                        # Already active, process everything as a command
-                        print(f"{full_text}")
-                        if self.callback:
-                            self.callback(full_text)
-                
+                        self._log_info("Activated. Listening...")
+
+                elif st == State.LISTENING:
+                    self._enqueue_command(text)
+
+                else:
+                    pass
+
             except Exception as e:
-                if self.is_listening:
-                    print(f"Error in listening: {e}")
+                if not self._stop_event.is_set():
+                    print(f"[ERROR] STT loop: {e}")
                 time.sleep(0.1)
-    
+
+    def _ai_worker(self) -> None:
+        """Consumer: processes commands sequentially."""
+        while not self._stop_event.is_set():
+            try:
+                cmd = self._cmd_queue.get(timeout=0.2)
+            except queue.Empty:
+                continue
+
+            if cmd is None:
+                self._cmd_queue.task_done()
+                break
+
+            if not self.callback:
+                self._log_info("No callback set; dropping command.")
+                self._cmd_queue.task_done()
+                continue
+
+            try:
+                self._set_state(State.THINKING)
+                result = self.callback(cmd) 
+
+                self._set_state(State.RESPONDING)
+
+                if self.response_handler is not None:
+                    self.response_handler(result)
+                else:
+                    if isinstance(result, str) and result.strip():
+                        self._log_ai_response(result)
+
+            except Exception as e:
+                print(f"[ERROR] AI worker: {e}")
+            finally:
+                if not self._stop_event.is_set() and self._get_state() != State.SHUTTING_DOWN:
+                    self._set_state(State.LISTENING if self._is_active() else State.INACTIVE)
+
+                self._cmd_queue.task_done()
+
+        if not self._stop_event.is_set():
+            self._set_state(State.INACTIVE)
+
+    # ----------------- helpers -----------------
+    def _activate(self) -> None:
+        self._set_active(True)
+        self._last_command_time = time.time()
+        self._set_state(State.LISTENING)
+
+    def _deactivate(self) -> None:
+        self._set_active(False)
+        self._last_command_time = None
+        self._set_state(State.INACTIVE)
+        self._log_info(f"Idle for {self.idle_timeout_seconds}s. Deactivated. Say '{self.wake_word}' again.")
+
+    def _maybe_deactivate_on_idle(self) -> None:
+        if not self._is_active():
+            return
+        if self._get_state() != State.LISTENING:
+            return
+        if self._last_command_time is None:
+            return
+        if not self._cmd_queue.empty():
+            return
+        if (time.time() - self._last_command_time) >= self.idle_timeout_seconds:
+            self._deactivate()
+
+    def _enqueue_command(self, text: str) -> None:
+        cmd = text.strip()
+        if not cmd:
+            return
+
+        self._last_command_time = time.time()
+        self._log_command(cmd)
+        self._cmd_queue.put(cmd)
+
     def _listen_for_phrase(self) -> Optional[str]:
-        """Listen for a complete phrase"""
+        """Listen for a complete phrase."""
         try:
             with self.microphone as source:
                 audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=15)
-            
-            text = self.recognizer.recognize_google(audio)
-            return text
-                
+            return self.recognizer.recognize_google(audio)
         except sr.UnknownValueError:
-            pass
-        except sr.RequestError as e:
-            print(f"Speech recognition error: {e}")
+            return None
         except sr.WaitTimeoutError:
-            pass
-        
-        return None
-    
-    def _extract_command_from_phrase(self, text: str) -> Optional[str]:
-        """Extract command from phrase if it contains wake word"""
-        text_lower = text.lower()
-        
-        wake_words = ["hey quacky", "hey quaky", "quacky", "hey ducky"]
-        
-        for wake_word in wake_words:
-            if wake_word in text_lower:
-                wake_pos = text_lower.find(wake_word)
-                command_start = wake_pos + len(wake_word)
-                
-                command = text[command_start:].strip()
-                
-                if command:
-                    return command
-        
-        return None
-    
-    def stop_listening(self):
-        """Stop the listening loop"""
-        self.is_listening = False
+            return None
+        except sr.RequestError as e:
+            print(f"[ERROR] Speech recognition error: {e}")
+            return None
 
-def process_command(command: str):
-    """Process the captured command - this is where you'll send to Gemini AI"""
-    # TODO: Send to Gemini AI here
-    # For now, just acknowledge silently - the command is already printed
-    pass
+    def _extract_command_from_phrase(self, text: str) -> Optional[str]:
+        """If wake word is present, return text after wake word (may be empty). Else return None."""
+        text_lower = text.lower()
+        wake_words = ["hey quacky", "hey quaky", "quacky", "hey ducky"]
+
+        for ww in wake_words:
+            if ww in text_lower:
+                pos = text_lower.find(ww)
+                start = pos + len(ww)
+                return text[start:].strip()
+        return None
+
+
+# ----------------- Example callback -----------------
+def process_command(command: str) -> str:
+    """
+    Put Gemini call + (optional) TTS here.
+    IMPORTANT: Keep this BLOCKING until you're done responding (including TTS playback)
+    so STT stays paused during AI output (if pause_listening_while_ai_busy=True).
+    """
+    time.sleep(2)  
+    response = f"Simulated response to: {command}"
+    time.sleep(2)  
+    return response
+
 
 def main():
     print("🦆 Quacky Speech-to-Text")
     print("=" * 30)
-    
-    # List filtered microphones
+
     filtered_mics = QuackySpeechToText.list_microphones()
-    
+
     if not filtered_mics:
         print("❌ No input microphones found. Using default.")
         mic_index = None
     else:
-        # Ask user to select microphone
         print("\nSelect microphone:")
         print("0: Use default microphone")
-        
+
         while True:
             try:
                 choice = input(f"\nEnter microphone number 1-{len(filtered_mics)} (or 0 for default): ").strip()
                 if choice == "" or choice == "0":
                     mic_index = None
                     break
-                choice = int(choice)
-                if 1 <= choice <= len(filtered_mics):
-                    # Get the original index from the filtered list
-                    mic_index = filtered_mics[choice - 1][0]
+                choice_int = int(choice)
+                if 1 <= choice_int <= len(filtered_mics):
+                    mic_index = filtered_mics[choice_int - 1][0]
                     break
-                else:
-                    print(f"❌ Please enter a number between 1 and {len(filtered_mics)}, or 0 for default.")
+                print(f"❌ Please enter a number between 1 and {len(filtered_mics)}, or 0 for default.")
             except ValueError:
                 print("❌ Please enter a valid number.")
-    
+
     print("\n" + "=" * 30)
     print("🎧 Listening... (Say 'quit' to exit)")
     print("=" * 30)
-    
+
+    stt: Optional[QuackySpeechToText] = None
     try:
-        stt = QuackySpeechToText(mic_index=mic_index)
-        
-        # Test microphone first
-        if stt.test_microphone():
-            stt.set_callback(process_command)
-            stt.start_listening()
-            
-            # Keep the main thread alive
-            while True:
-                time.sleep(1)
-        else:
+        stt = QuackySpeechToText(mic_index=mic_index, idle_timeout_seconds=15)
+        if not stt.test_microphone():
             print("❌ Microphone test failed. Please try a different microphone.")
-            
+            return
+
+        stt.set_callback(process_command)
+        stt.start()
+
+        while stt.is_listening:
+            time.sleep(0.2)
+
     except KeyboardInterrupt:
-        print("\n👋 Shutting down...")
-        if 'stt' in locals():
-            stt.stop_listening()
+        if stt:
+            stt.shutdown()
     except Exception as e:
         print(f"❌ Error: {e}")
-        if 'stt' in locals():
-            stt.stop_listening()
+        if stt:
+            stt.shutdown()
+
 
 if __name__ == "__main__":
     main()
