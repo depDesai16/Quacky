@@ -1,0 +1,22 @@
+# Blender 5.0.1 MTL File: 'quacky.blend'
+# www.blender.org
+
+newmtl duck
+Ns 0.000000
+Ka 1.000000 1.000000 1.000000
+Kd 0.588200 0.588200 0.588200
+Ks 0.000000 0.000000 0.000000
+Ke 0.932733 0.929600 0.007911
+Ni 1.500000
+d 1.000000
+illum 1
+
+newmtl eye
+Ns 10.000005
+Ka 1.000000 1.000000 1.000000
+Ks 0.000000 0.000000 0.000000
+Ke 0.000000 0.000000 0.000000
+Ni 1.500000
+d 1.000000
+illum 1
+map_Kd C:/Users/Logan/Downloads/duck/eye.jpg
