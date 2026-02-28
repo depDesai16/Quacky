@@ -16,11 +16,15 @@ DEFAULT_SESSION_MEMORY_PATH = Path(__file__).resolve().parent.parent / "data" / 
 
 
 def _utc_now_iso() -> str:
+    """Return the current UTC timestamp in ISO-8601 format without microseconds."""
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
 class SessionMemoryStore:
+    """JSON-backed store for per-chat facts, preferences, topic state, and tasks."""
+
     def __init__(self, path: str | Path | None = None):
+        """Initialize store path and create an empty persistence file if missing."""
         env_path = os.getenv("QUACKY_SESSION_MEMORY_PATH", "").strip()
         chosen = path or env_path or DEFAULT_SESSION_MEMORY_PATH
         self.path = Path(chosen)
@@ -30,9 +34,11 @@ class SessionMemoryStore:
             self._write_doc(self._empty_doc())
 
     def _empty_doc(self) -> dict:
+        """Return an empty top-level storage document skeleton."""
         return {"version": 1, "updated_at": _utc_now_iso(), "sessions": {}}
 
     def _empty_session(self) -> dict:
+        """Return an empty normalized session payload."""
         return {
             "last_topic": "",
             "pending_action": None,
@@ -43,6 +49,7 @@ class SessionMemoryStore:
         }
 
     def _read_doc(self) -> dict:
+        """Read and sanitize persisted JSON storage, falling back to an empty document."""
         if not self.path.exists():
             return self._empty_doc()
         try:
@@ -59,12 +66,14 @@ class SessionMemoryStore:
         return raw
 
     def _write_doc(self, doc: dict) -> None:
+        """Atomically write the storage document to disk using a temporary file."""
         doc["updated_at"] = _utc_now_iso()
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(doc, indent=2, sort_keys=True), encoding="utf-8")
         tmp.replace(self.path)
 
     def _normalize_session(self, session: dict | None) -> dict:
+        """Coerce untrusted session payloads into the expected internal schema."""
         base = self._empty_session()
         if isinstance(session, dict):
             last_topic = session.get("last_topic")
@@ -102,6 +111,7 @@ class SessionMemoryStore:
         return base
 
     def get_session(self, chat_id: str) -> dict:
+        """Return normalized session state for a chat id."""
         key = (chat_id or "").strip() or "default"
         with self._lock:
             doc = self._read_doc()
@@ -109,6 +119,7 @@ class SessionMemoryStore:
             return self._normalize_session(session)
 
     def save_session(self, chat_id: str, session: dict) -> None:
+        """Persist normalized session state for a chat id."""
         key = (chat_id or "").strip() or "default"
         with self._lock:
             doc = self._read_doc()
@@ -116,6 +127,7 @@ class SessionMemoryStore:
             self._write_doc(doc)
 
     def delete_session(self, chat_id: str) -> None:
+        """Delete stored state for a chat id."""
         key = (chat_id or "").strip() or "default"
         with self._lock:
             doc = self._read_doc()
@@ -123,6 +135,7 @@ class SessionMemoryStore:
             self._write_doc(doc)
 
     def remember_fact(self, chat_id: str, key: str, value: str) -> None:
+        """Save or overwrite a named fact in the chat session."""
         fact_key = (key or "").strip()
         fact_value = (value or "").strip()
         if not fact_key or not fact_value:
@@ -132,6 +145,7 @@ class SessionMemoryStore:
         self.save_session(chat_id, session)
 
     def recall_facts(self, chat_id: str, key: str = "") -> dict[str, str]:
+        """Return all facts, or only a specific fact when key is provided."""
         session = self.get_session(chat_id)
         facts = session.get("facts", {})
         if not key:
@@ -140,6 +154,7 @@ class SessionMemoryStore:
         return {key.strip(): value} if value else {}
 
     def forget_fact(self, chat_id: str, key: str) -> bool:
+        """Remove one fact by key and return whether it existed."""
         fact_key = (key or "").strip()
         if not fact_key:
             raise ValueError("key is required.")
@@ -150,6 +165,7 @@ class SessionMemoryStore:
         return removed
 
     def add_task(self, chat_id: str, task: str) -> None:
+        """Add a task to the active task list if not already present."""
         task_text = (task or "").strip()
         if not task_text:
             raise ValueError("task is required.")
@@ -161,6 +177,7 @@ class SessionMemoryStore:
         self.save_session(chat_id, session)
 
     def complete_task(self, chat_id: str, task: str) -> bool:
+        """Mark a task as complete by removing it; return True when removed."""
         task_text = (task or "").strip()
         if not task_text:
             raise ValueError("task is required.")
@@ -173,6 +190,7 @@ class SessionMemoryStore:
         return True
 
     def list_tasks(self, chat_id: str) -> list[str]:
+        """Return active tasks for a chat id."""
         session = self.get_session(chat_id)
         tasks = session.get("active_tasks", [])
         return list(tasks) if isinstance(tasks, list) else []

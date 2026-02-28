@@ -28,6 +28,7 @@ tts_client = (
 
 
 def _as_bool(value, default: bool = False) -> bool:
+    """Convert mixed-type truthy input into a boolean with default fallback."""
     if value is None:
         return default
     if isinstance(value, bool):
@@ -37,6 +38,7 @@ def _as_bool(value, default: bool = False) -> bool:
     return bool(value)
 
 def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
+    """Write a JSON HTTP response and safely ignore broken client connections."""
     body = json.dumps(payload).encode("utf-8")
     try:
         handler.send_response(status)
@@ -49,6 +51,7 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
 
 
 def _read_json(handler: BaseHTTPRequestHandler) -> dict:
+    """Read and decode JSON request body from an HTTP handler."""
     length = int(handler.headers.get("Content-Length", "0"))
     if length <= 0:
         return {}
@@ -56,8 +59,10 @@ def _read_json(handler: BaseHTTPRequestHandler) -> dict:
     return json.loads(raw.decode("utf-8"))
 
 class QuackyHandler(BaseHTTPRequestHandler):
+    """HTTP request handler that exposes health and chat endpoints."""
 
     def do_GET(self):
+        """Handle health and chat history read endpoints."""
         if self.path == "/health":
             _json_response(self, 200, {"status": "ok"})
             return
@@ -80,6 +85,7 @@ class QuackyHandler(BaseHTTPRequestHandler):
 
 
     def do_POST(self):
+        """Handle chat start, message, and reset write endpoints."""
         if self.path == "/chat/start":
             data = _read_json(self)
             system_instruction = data.get("system")
@@ -153,6 +159,7 @@ class QuackyHandler(BaseHTTPRequestHandler):
         _json_response(self, 404, {"error": "not found"})
 
 def run_server():
+    """Start the threaded HTTP server and block until shutdown."""
     server = ThreadingHTTPServer(("", PORT), QuackyHandler)
     print(f"Quacky server listening on http://localhost:{PORT}")
     try:

@@ -47,20 +47,25 @@ _LIKELY_FILE_EXTENSIONS = {
 
 @dataclass(frozen=True)
 class AppEntry:
+    """Single applist record with command, aliases, and optional per-OS overrides."""
+
     name: str
     command: str
     os_commands: dict[str, str]
     aliases: tuple[str, ...]
 
     def all_names(self) -> tuple[str, ...]:
+        """Return canonical name plus aliases for matching."""
         return (self.name, *self.aliases)
 
 
 def _normalize(text: str) -> str:
+    """Lowercase and collapse whitespace for tolerant text matching."""
     return " ".join(text.strip().lower().split())
 
 
 def _parse_kv_pairs(raw: str) -> dict[str, str]:
+    """Parse semicolon-separated key=value pairs into a dictionary."""
     pairs: dict[str, str] = {}
     for item in raw.split(";"):
         if not item.strip() or "=" not in item:
@@ -74,6 +79,7 @@ def _parse_kv_pairs(raw: str) -> dict[str, str]:
 
 
 def _parse_app_line(line: str) -> AppEntry | None:
+    """Parse one applist line into an AppEntry, ignoring invalid/comment lines."""
     raw = line.strip()
     if not raw or raw.startswith("#"):
         return None
@@ -105,6 +111,7 @@ def _parse_app_line(line: str) -> AppEntry | None:
 
 
 def load_app_list(path: Path = APPLIST_PATH) -> List[AppEntry]:
+    """Load all valid app definitions from the applist file."""
     if not path.exists():
         return []
 
@@ -132,6 +139,7 @@ def get_classifier_app_hints(path: Path = APPLIST_PATH) -> str:
 
 
 def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
+    """Return exact or fuzzy app matches for the requested app name."""
     needle = _normalize(app_name)
     if not needle:
         return []
@@ -151,6 +159,7 @@ def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
 
 
 def _ensure_command_exists(command: str) -> bool:
+    """Check whether a launch command is executable on this system."""
     if command.startswith("terminal:"):
         return True
     parts = shlex.split(command)
@@ -163,6 +172,7 @@ def _ensure_command_exists(command: str) -> bool:
 
 
 def _launch_command(command: str) -> None:
+    """Launch an app command directly or in a new terminal session."""
     if command.startswith("terminal:"):
         _launch_in_new_terminal(command.split(":", 1)[1].strip())
         return
@@ -173,6 +183,7 @@ def _launch_command(command: str) -> None:
 
 
 def _popen_detached(cmd, *, shell: bool = False) -> None:
+    """Spawn a detached process that does not block the assistant runtime."""
     kwargs = {
         "stdin": subprocess.DEVNULL,
         "stdout": subprocess.DEVNULL,
@@ -189,6 +200,7 @@ def _popen_detached(cmd, *, shell: bool = False) -> None:
 
 
 def _launch_in_new_terminal(inner_command: str) -> None:
+    """Run a command inside a new terminal window/tab using OS-specific tools."""
     if not inner_command:
         raise RuntimeError("Empty terminal command.")
 
@@ -222,6 +234,7 @@ def _launch_in_new_terminal(inner_command: str) -> None:
 
 
 def _platform_key() -> str:
+    """Return normalized platform key used by applist OS overrides."""
     if sys.platform.startswith("darwin"):
         return "macos"
     if sys.platform.startswith("win"):
@@ -230,11 +243,13 @@ def _platform_key() -> str:
 
 
 def _resolve_command(app: AppEntry) -> str:
+    """Resolve the best launch command for the current operating system."""
     key = _platform_key()
     return app.os_commands.get(key, app.command)
 
 
 def _fallback_url(app: AppEntry, requested_name: str) -> str:
+    """Build a web fallback URL when desktop launch is unavailable."""
     for name in app.all_names():
         key = _normalize(name)
         if key in _WEB_FALLBACK_URLS:
@@ -249,6 +264,7 @@ def _fallback_url(app: AppEntry, requested_name: str) -> str:
 
 
 def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
+    """Open browser fallback and return user-facing status text."""
     url = _fallback_url(app, requested_name)
     opened = webbrowser.open(url, new=2)
     if opened:
@@ -257,11 +273,13 @@ def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
 
 
 def _clean_url_candidate(candidate: str) -> str:
+    """Trim common trailing punctuation from extracted URL-like text."""
     # Strip trailing punctuation commonly attached to spoken/written commands.
     return candidate.strip().rstrip(".,;:!?)]}\"'")
 
 
 def _is_probably_filename(candidate: str) -> bool:
+    """Heuristically detect local filenames to avoid misclassifying as URLs."""
     token = candidate.lower().split("/")[-1]
     if "." not in token:
         return False
@@ -270,6 +288,7 @@ def _is_probably_filename(candidate: str) -> bool:
 
 
 def _extract_url_candidate(text: str) -> str | None:
+    """Extract the first URL/domain-like candidate from free text."""
     if not text:
         return None
 
@@ -288,6 +307,7 @@ def _extract_url_candidate(text: str) -> str | None:
 
 
 def _to_browsable_url(candidate: str) -> str:
+    """Normalize a URL candidate by adding an appropriate scheme when missing."""
     if _SCHEME_RE.match(candidate):
         return candidate
     lower = candidate.lower()
@@ -297,6 +317,7 @@ def _to_browsable_url(candidate: str) -> str:
 
 
 def _open_website(candidate: str) -> str:
+    """Open a URL candidate in the default browser and report result."""
     url = _to_browsable_url(candidate)
     opened = webbrowser.open(url, new=2)
     if opened:
@@ -305,6 +326,7 @@ def _open_website(candidate: str) -> str:
 
 
 def open_app(app_name: str) -> str:
+    """Open a website or configured desktop app, with browser fallback on failure."""
     url_candidate = _extract_url_candidate(app_name)
     if url_candidate:
         return _open_website(url_candidate)

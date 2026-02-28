@@ -76,6 +76,7 @@ def stop_audio():
         current_audio_process = None
 
 def load_system_prompt():
+    """Load system prompt and substitute configured assistant name placeholder."""
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
         prompt = f.read()
     # Keep the default prompt template but reflect the configured assistant name.
@@ -160,6 +161,7 @@ def start_ai_server():
         print(f"AI server error: {e}")
 
 def main():
+    """Start backend server and speech loop, then forward commands to the chat runtime."""
     print(f"{ASSISTANT_NAME} Full System")
     print("=" * 40)
     print("Starting AI backend + Speech-to-Text")

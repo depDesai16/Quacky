@@ -10,6 +10,8 @@ except ImportError:
 
 @dataclass(frozen=True)
 class Settings:
+    """Runtime settings loaded from environment variables."""
+
     api_key: str
     model_name: str
     port: int
@@ -20,12 +22,14 @@ class Settings:
 
 
 def _as_bool(value: str | None, default: bool = False) -> bool:
+    """Parse common truthy string values with a default for missing input."""
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def get_settings() -> Settings:
+    """Load environment configuration and return validated immutable settings."""
     if load_dotenv:
         load_dotenv()
 

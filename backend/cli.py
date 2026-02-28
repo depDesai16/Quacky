@@ -4,10 +4,12 @@ import sys
 from client import QuackyClient
 
 def load_system_prompt():
+    """Load the default system prompt text used to start chats."""
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:
         return f.read()
 
 def main() -> int:
+    """Run interactive terminal chat loop against the Quacky HTTP backend."""
     parser = argparse.ArgumentParser(description="Quacky client CLI")
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--system", default=None)

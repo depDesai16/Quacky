@@ -24,12 +24,14 @@ def find_backend_root(start: str) -> str:
         cur = parent
 
 def get_data_file_path() -> str:
+    """Return the holidays JSON path under backend/data, creating the folder if needed."""
     backend_dir = find_backend_root(os.path.dirname(__file__))
     data_dir = os.path.join(backend_dir, "data")
     os.makedirs(data_dir, exist_ok=True)
     return os.path.join(data_dir, "holidays.json")
 
 def fetch_and_save(year: int | None = None):
+    """Fetch holiday data for a year from Calendarific and save it to holidays.json."""
     if not API_KEY:
         print("Error: CALENDARIFIC_API_KEY not found in .env")
         return

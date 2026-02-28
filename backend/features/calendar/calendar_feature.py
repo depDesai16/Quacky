@@ -284,6 +284,7 @@ def _create_outlook_event_desktop(
     location: str = "",
     details: str = "",
 ) -> str:
+    """Create and save an Outlook desktop calendar item via COM on Windows."""
     if os.name != "nt":
         raise RuntimeError("Desktop Outlook event creation is supported on Windows only.")
 
@@ -328,6 +329,7 @@ def _to_outlook_web_datetime(dt_value: datetime) -> str:
 
 
 def _event_signature(title: str, start_dt: datetime, end_dt: datetime) -> tuple[str, str, str]:
+    """Build a stable dedupe key from event title and minute-level start/end."""
     return (
         title.strip().lower(),
         start_dt.isoformat(timespec="minutes"),
@@ -336,6 +338,7 @@ def _event_signature(title: str, start_dt: datetime, end_dt: datetime) -> tuple[
 
 
 def _is_recent_duplicate(signature: tuple[str, str, str]) -> bool:
+    """Check whether an event signature was seen within the dedupe window."""
     now = clock.monotonic()
     cutoff = now - _DEDUP_WINDOW_SECONDS
 
@@ -350,6 +353,7 @@ def _is_recent_duplicate(signature: tuple[str, str, str]) -> bool:
 
 
 def _mark_event_signature(signature: tuple[str, str, str]) -> None:
+    """Record an event signature timestamp for duplicate suppression."""
     _RECENT_EVENT_SIGNATURES[signature] = clock.monotonic()
 
 

@@ -46,6 +46,7 @@ def merge_system_instruction(user_system_instruction: str | None) -> str:
 
 
 def detect_topic(text: str) -> str | None:
+    """Detect the first supported topic mentioned in user text."""
     t = (text or "").lower()
     for topic, words in _TOPIC_KEYWORDS.items():
         if any(w in t for w in words):
@@ -54,6 +55,7 @@ def detect_topic(text: str) -> str | None:
 
 
 def _is_ambiguous_followup(text: str) -> bool:
+    """Return True when message starts like a context-dependent follow-up."""
     t = (text or "").strip().lower()
     return any(t.startswith(p) for p in _FOLLOWUP_PREFIXES)
 
@@ -81,6 +83,7 @@ def augment_with_context(memory: dict, chat_id: str, message: str) -> str:
 
 
 def update_memory(memory: dict, chat_id: str, user_message: str) -> None:
+    """Store the latest detected topic for a chat to support follow-up rewrites."""
     topic = detect_topic(user_message)
     if topic:
         memory.setdefault(chat_id, {})["last_topic"] = topic

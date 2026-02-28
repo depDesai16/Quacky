@@ -197,6 +197,7 @@ EXAMPLES
 
 @lru_cache(maxsize=1)
 def _classifier_system() -> str:
+    """Build and cache classifier system prompt including dynamic app catalog hints."""
     app_hints = get_classifier_app_hints()
     open_app_context = f"""
 

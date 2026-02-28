@@ -5,16 +5,22 @@ from PyQt6.QtGui import QPixmap
 
 
 class QuackyLogic(QThread):
+    """Background worker thread for assistant state logic and events."""
+
     update_state_signal = pyqtSignal(str)  # Signal to send data back to UI
 
     def run(self):
+        """Main worker loop; reserved for future state updates."""
         while True:
             # TODO: Add states
             pass
 
 
 class QuackyGUI(QWidget):
+    """Frameless always-on-top window that renders the Quacky image."""
+
     def __init__(self):
+        """Initialize transparent window, layout, and scaled mascot image."""
         super().__init__()
 
         self.setWindowFlags(

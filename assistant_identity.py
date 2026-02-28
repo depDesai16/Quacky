@@ -19,10 +19,12 @@ DEFAULT_ASSISTANT_NAME = "Quacky"
 
 
 def _normalize_phrase(text: str) -> str:
+    """Lowercase and collapse extra whitespace in a phrase."""
     return " ".join(text.strip().lower().split())
 
 
 def _dedupe_keep_order(items: list[str]) -> list[str]:
+    """Remove duplicates while preserving first-seen order."""
     seen: set[str] = set()
     out: list[str] = []
     for item in items:
@@ -33,6 +35,7 @@ def _dedupe_keep_order(items: list[str]) -> list[str]:
 
 
 def get_assistant_name() -> str:
+    """Read assistant name from env, falling back to the default name."""
     if load_dotenv:
         load_dotenv()
     raw = os.getenv("QUACKY_ASSISTANT_NAME", DEFAULT_ASSISTANT_NAME).strip()
@@ -40,6 +43,7 @@ def get_assistant_name() -> str:
 
 
 def get_wake_words(assistant_name: str | None = None) -> list[str]:
+    """Return wake words from env or derive defaults from assistant name."""
     if load_dotenv:
         load_dotenv()
 
@@ -57,4 +61,3 @@ def get_wake_words(assistant_name: str | None = None) -> list[str]:
     if name_lower == "quacky":
         defaults.extend(["hey quaky", "hey ducky"])
     return _dedupe_keep_order(defaults)
-

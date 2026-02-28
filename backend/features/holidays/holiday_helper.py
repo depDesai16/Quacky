@@ -18,13 +18,17 @@ def find_backend_root(start: str) -> str:
         cur = parent
 
 def get_data_file_path() -> str:
+    """Return the shared holidays JSON path under backend/data."""
     backend_dir = find_backend_root(os.path.dirname(__file__))
     return os.path.join(backend_dir, "data", "holidays.json")
 
 DATA_FILE = get_data_file_path()
 
 class HolidayAssistant:
+    """Loads holiday data and provides date/name/upcoming query helpers."""
+
     def __init__(self, filepath=DATA_FILE):
+        """Initialize holiday cache from disk and precompute lookup-friendly names."""
         self.holidays = []
         self.holiday_names = set()
         try:

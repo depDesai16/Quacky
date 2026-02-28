@@ -4,6 +4,8 @@ import urllib.request
 
 
 class ElevenLabsTTS:
+    """Thin client for ElevenLabs text-to-speech HTTP API."""
+
     def __init__(
         self,
         api_key: str,
@@ -12,6 +14,7 @@ class ElevenLabsTTS:
         output_format: str = "mp3_44100_128",
         timeout_seconds: int = 30,
     ):
+        """Store ElevenLabs request configuration for later synthesis calls."""
         self.api_key = api_key
         self.voice_id = voice_id
         self.model_id = model_id
@@ -19,6 +22,7 @@ class ElevenLabsTTS:
         self.timeout_seconds = timeout_seconds
 
     def synthesize(self, text: str) -> bytes:
+        """Synthesize speech audio bytes for the given text."""
         if not text or not text.strip():
             raise ValueError("text is required for synthesis")
 

@@ -9,7 +9,10 @@ import time
 from typing import Optional, Callable
 
 class SpeechToText:
+    """Cross-platform speech recognizer wrapper for one-shot and continuous capture."""
+
     def __init__(self):
+        """Initialize recognizer, microphone, and listening state."""
         self.recognizer = sr.Recognizer()
         try:
             self.microphone = sr.Microphone()

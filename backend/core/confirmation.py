@@ -7,9 +7,11 @@ YES = {"yes","y","yeah","yep","ok","okay","confirm","sure","go ahead","do it","p
 NO  = {"no","n","nope","nah","cancel","stop","don't","do not","nevermind","never mind"}
 
 def is_yes(text: str) -> bool:
+    """Return True when the user reply is an affirmative confirmation token."""
     return (text or "").strip().lower() in YES
 
 def is_no(text: str) -> bool:
+    """Return True when the user reply is a negative/cancel token."""
     return (text or "").strip().lower() in NO
 
 

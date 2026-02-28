@@ -10,9 +10,11 @@ BASE_URL = "https://api.weatherapi.com/v1"
 MAX_FORECAST_DAYS = 7
 
 class WeatherAPIError(Exception):
+    """Raised when WeatherAPI config, network calls, or responses are invalid."""
     pass
 
 def _get_key() -> str:
+    """Read the WeatherAPI key from environment or raise a descriptive error."""
     key = os.getenv("WEATHERAPI_KEY")
     if not key:
         raise WeatherAPIError("Missing WEATHERAPI_KEY in .env")
@@ -77,12 +79,15 @@ def get_forecast(query: str = "", days: int = 3) -> dict:
     return _request("forecast.json", params)
 
 def get_current_weather_auto_ip() -> dict:
+    """Return current conditions using IP-based location detection."""
     return get_current_weather("auto:ip")
 
 def get_forecast_auto_ip(days: int = 3) -> dict:
+    """Return N-day forecast using IP-based location detection."""
     return get_forecast("auto:ip", days=days)
 
 def _build_place_label(loc: dict) -> str:
+    """Build a readable place label from WeatherAPI location fields."""
     name = (loc.get("name") or "").strip()
     region = (loc.get("region") or "").strip()
     country = (loc.get("country") or "").strip()
@@ -90,6 +95,7 @@ def _build_place_label(loc: dict) -> str:
 
 
 def format_current(data: dict) -> str:
+    """Format current-conditions payload into a compact sentence."""
     loc = data.get("location", {})
     cur = data.get("current", {})
 
@@ -215,4 +221,5 @@ def get_weekend_forecast(query: str = "") -> str:
     return "\n".join(lines)
 
 def get_weekend_forecast_auto_ip() -> str:
+    """Return weekend forecast text for the user's detected location."""
     return get_weekend_forecast("")

@@ -19,7 +19,10 @@ sys.path.insert(0, parent_dir)
 from assistant_identity import get_assistant_name, get_wake_words
 
 class QuackySpeechToText:
+    """Wake-word driven speech-to-text engine for Quacky voice interaction."""
+
     def __init__(self, mic_index=None, assistant_name: Optional[str] = None, wake_words: Optional[list[str]] = None):
+        """Set up recognizer, microphone, wake words, and interrupt detection."""
         self.recognizer = sr.Recognizer()
         self.recognizer.energy_threshold = 300
         self.recognizer.dynamic_energy_threshold = True
@@ -215,6 +218,7 @@ def process_command(command: str):
     pass
 
 def main():
+    """Run interactive microphone selection and start wake-word listening loop."""
     assistant_name = get_assistant_name()
     wake_words = get_wake_words(assistant_name)
 

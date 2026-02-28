@@ -20,6 +20,7 @@ def style_direct_output(chat, user_message: str, tool_result: str) -> str:
 
 
 def ask_quacky_confirmation(chat, user_message: str, action_summary: str) -> str:
+    """Generate a short yes/no confirmation prompt in Quacky's style."""
     prompt = (
         "Ask the user to confirm the calendar action below in Quacky's voice using the system instructions.\n"
         "Be short, playful, and clear.\n"

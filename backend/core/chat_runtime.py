@@ -21,7 +21,10 @@ from backend.core.session_memory import SessionMemoryStore
 
 
 class ChatRuntime:
+    """Coordinates chat sessions, intent routing, tool execution, and memory persistence."""
+
     def __init__(self, api_key: str, model_name: str):
+        """Initialize Gemini client, in-memory chat map, and persistent memory store."""
         self.client = genai.Client(api_key=api_key)
         self.model_name = model_name
         self.chats: dict[str, Any] = {}
@@ -29,6 +32,7 @@ class ChatRuntime:
         self.memory_store = SessionMemoryStore()
 
     def create_chat(self, system_instruction: str | None = None, model: str | None = None) -> str:
+        """Create a new chat session and initialize memory for its chat id."""
         merged_system = merge_system_instruction(system_instruction)
         chat = self.client.chats.create(
             model=model or self.model_name,
@@ -44,6 +48,7 @@ class ChatRuntime:
         return chat_id
 
     def get_history(self, chat_id: str) -> list[dict]:
+        """Return normalized role/text history for a chat id."""
         chat = self._get_chat(chat_id)
         history = []
         for msg in chat.get_history():
@@ -52,6 +57,7 @@ class ChatRuntime:
         return history
 
     def reset(self, chat_id: str) -> None:
+        """Delete runtime and persisted memory state for a chat id."""
         if chat_id not in self.chats:
             raise KeyError("chat not found")
         del self.chats[chat_id]
@@ -59,10 +65,12 @@ class ChatRuntime:
         self.memory_store.delete_session(chat_id)
 
     def handle_message(self, chat_id: str, message: str) -> str:
+        """Route one user message through intent handling and return final assistant text."""
         chat = self._get_chat(chat_id)
         mem = self.memory.setdefault(chat_id, self.memory_store.get_session(chat_id))
 
         def _persist_and_return(text: str) -> str:
+            """Persist current memory snapshot and return response text."""
             self.memory_store.save_session(chat_id, mem)
             return text
 
@@ -112,6 +120,7 @@ class ChatRuntime:
         return _persist_and_return(chat.send_message(augmented).text)
 
     def _get_chat(self, chat_id: str):
+        """Return chat instance for id or raise when chat does not exist."""
         if not chat_id or chat_id not in self.chats:
             raise KeyError("chat not found")
         return self.chats[chat_id]

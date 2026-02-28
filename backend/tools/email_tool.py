@@ -1,3 +1,7 @@
+"""
+Email tool wrapper for Quacky.
+"""
+
 from backend.features.send_email.send_email import send_email as send_email_feature
 
 

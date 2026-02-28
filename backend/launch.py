@@ -5,6 +5,7 @@ import time
 
 
 def _wait_for_server(url: str, timeout: float = 5.0) -> None:
+    """Poll the health endpoint until the server is ready or timeout expires."""
     import urllib.error
     import urllib.request
 
@@ -20,6 +21,7 @@ def _wait_for_server(url: str, timeout: float = 5.0) -> None:
 
 
 def main() -> int:
+    """Start server subprocess, run CLI, and ensure server is terminated on exit."""
     base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
     server_cmd = [sys.executable, os.path.join(os.path.dirname(__file__), "server.py")]
 
