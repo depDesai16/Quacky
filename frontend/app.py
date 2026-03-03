@@ -203,7 +203,6 @@ if __name__ == "__main__":
     def _handle_exit_signal(_sig, _frame):
         app.quit()
 
-    # Keep Python signal checks responsive while Qt event loop is running.
     sig_timer = QTimer()
     sig_timer.setInterval(250)
     sig_timer.timeout.connect(lambda: None)
