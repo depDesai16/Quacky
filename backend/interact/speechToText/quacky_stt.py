@@ -65,6 +65,10 @@ class QuackySpeechToText:
 
         self._cmd_queue: "queue.Queue[Optional[str]]" = queue.Queue()
         self._stop_event = threading.Event()
+        self._capture_enabled = threading.Event()
+        self._lifecycle_lock = threading.RLock()
+        self._listen_timeout_seconds = 0.35
+        self._phrase_time_limit_seconds = 12
 
         self._state = State.INACTIVE
         self._state_lock = threading.Lock()
@@ -134,40 +138,81 @@ class QuackySpeechToText:
 
     def start(self) -> None:
         """Start STT producer + AI worker threads."""
-        if self.is_listening:
-            return
+        with self._lifecycle_lock:
+            if self.is_listening:
+                self._capture_enabled.set()
+                if not self.require_wake_word:
+                    self._activate()
+                elif self._get_state() == State.SHUTTING_DOWN:
+                    self._set_state(State.INACTIVE)
+                return
 
-        self.is_listening = True
-        self._stop_event.clear()
-        self._set_active(False)
-        self._set_state(State.INACTIVE)
+            self.is_listening = True
+            self._stop_event.clear()
+            self._capture_enabled.set()
+            self._set_active(False)
+            self._set_state(State.INACTIVE)
 
-        self._worker_thread = threading.Thread(target=self._ai_worker, daemon=True)
-        self._stt_thread = threading.Thread(target=self._stt_loop, daemon=True)
+            self._worker_thread = threading.Thread(target=self._ai_worker, daemon=True)
+            self._stt_thread = threading.Thread(target=self._stt_loop, daemon=True)
 
-        self._worker_thread.start()
-        self._stt_thread.start()
+            self._worker_thread.start()
+            self._stt_thread.start()
+
+    def set_capture_enabled(self, enabled: bool) -> None:
+        """
+        Fast mic toggle without tearing down worker threads.
+        enabled=True  -> capture resumes immediately.
+        enabled=False -> capture pauses immediately and state resets to INACTIVE.
+        """
+        with self._lifecycle_lock:
+            if enabled and not self.is_listening:
+                self.start()
+                return
+
+            if not self.is_listening:
+                return
+
+            if enabled:
+                self._capture_enabled.set()
+                if not self.require_wake_word:
+                    self._activate()
+                elif self._get_state() == State.SHUTTING_DOWN:
+                    self._set_state(State.INACTIVE)
+            else:
+                self._capture_enabled.clear()
+                self._set_active(False)
+                if self._get_state() != State.SHUTTING_DOWN:
+                    self._set_state(State.INACTIVE)
 
     def shutdown(self) -> None:
         """Gracefully stop threads and exit loops."""
-        if not self.is_listening:
-            return
+        with self._lifecycle_lock:
+            if not self.is_listening:
+                return
 
-        self._set_state(State.SHUTTING_DOWN)
-        self._log_info("Shutting down...")
+            self._set_state(State.SHUTTING_DOWN)
+            self._log_info("Shutting down...")
 
-        self.is_listening = False
-        self._stop_event.set()
+            self._capture_enabled.clear()
+            self._stop_event.set()
+            self._cmd_queue.put(None)
 
-        self._cmd_queue.put(None)
+            stt_thread = self._stt_thread
+            worker_thread = self._worker_thread
 
-        if self._stt_thread and self._stt_thread.is_alive():
-            self._stt_thread.join(timeout=2)
-        if self._worker_thread and self._worker_thread.is_alive():
-            self._worker_thread.join(timeout=2)
+        current = threading.current_thread()
+        if stt_thread and stt_thread.is_alive() and stt_thread is not current:
+            stt_thread.join(timeout=2)
+        if worker_thread and worker_thread.is_alive() and worker_thread is not current:
+            worker_thread.join(timeout=2)
 
-        self._set_active(False)
-        self._set_state(State.INACTIVE)
+        with self._lifecycle_lock:
+            self.is_listening = False
+            self._stt_thread = None
+            self._worker_thread = None
+            self._set_active(False)
+            self._set_state(State.INACTIVE)
 
     def test_microphone(self) -> bool:
         """Quick mic check: capture a short sample and run recognition."""
@@ -241,49 +286,55 @@ class QuackySpeechToText:
     def _stt_loop(self) -> None:
         """Producer: listens and enqueues commands."""
         while not self._stop_event.is_set():
+            if not self._capture_enabled.is_set():
+                time.sleep(0.03)
+                continue
             try:
-                if self.pause_listening_while_ai_busy:
-                    st = self._get_state()
-                    if st in (State.THINKING, State.RESPONDING):
-                        time.sleep(0.05)
-                        continue
+                with self.microphone as source:
+                    while (
+                        not self._stop_event.is_set()
+                        and self._capture_enabled.is_set()
+                    ):
+                        if self.pause_listening_while_ai_busy:
+                            st = self._get_state()
+                            if st in (State.THINKING, State.RESPONDING):
+                                time.sleep(0.05)
+                                continue
 
-                self._maybe_deactivate_on_idle()
+                        self._maybe_deactivate_on_idle()
 
-                text = self._listen_for_phrase()
-                if not text:
-                    continue
-
-                self._log_heard(text)
-
-                if "quit" in text.lower():
-                    self.shutdown()
-                    break
-
-                st = self._get_state()
-
-                if st == State.INACTIVE:
-                    if self.require_wake_word:
-                        extracted = self._extract_command_from_phrase(text)
-                        if extracted is None:
+                        text = self._listen_for_phrase(source)
+                        if not text:
                             continue
 
-                        self._activate()
+                        self._log_heard(text)
 
-                        cmd = extracted.strip()
-                        if cmd:
-                            self._enqueue_command(cmd)
+                        if "quit" in text.lower():
+                            self.shutdown()
+                            break
+
+                        st = self._get_state()
+
+                        if st == State.INACTIVE:
+                            if self.require_wake_word:
+                                extracted = self._extract_command_from_phrase(text)
+                                if extracted is None:
+                                    continue
+
+                                self._activate()
+
+                                cmd = extracted.strip()
+                                if cmd:
+                                    self._enqueue_command(cmd)
+                                else:
+                                    self._log_info("Activated. Listening...")
+                            else:
+                                self._activate()
+                                self._enqueue_command(text)
+                        elif st == State.LISTENING:
+                            self._enqueue_command(text)
                         else:
-                            self._log_info("Activated. Listening...")
-                    else:
-                        self._activate()
-                        self._enqueue_command(text)
-
-                elif st == State.LISTENING:
-                    self._enqueue_command(text)
-
-                else:
-                    pass
+                            pass
 
             except Exception as e:
                 if not self._stop_event.is_set():
@@ -370,11 +421,16 @@ class QuackySpeechToText:
         self._log_command(cmd)
         self._cmd_queue.put(cmd)
 
-    def _listen_for_phrase(self) -> Optional[str]:
+    def _listen_for_phrase(self, source) -> Optional[str]:
         """Listen for a complete phrase."""
         try:
-            with self.microphone as source:
-                audio = self.recognizer.listen(source, timeout=1, phrase_time_limit=15)
+            if not self._capture_enabled.is_set() or self._stop_event.is_set():
+                return None
+            audio = self.recognizer.listen(
+                source,
+                timeout=self._listen_timeout_seconds,
+                phrase_time_limit=self._phrase_time_limit_seconds,
+            )
             return self.recognizer.recognize_google(audio)
         except sr.UnknownValueError:
             return None
