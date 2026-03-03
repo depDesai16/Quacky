@@ -42,11 +42,17 @@ class State(Enum):
 
 
 class QuackySpeechToText:
-    def __init__(self, mic_index=None, idle_timeout_seconds: int = 15):
+    def __init__(
+        self,
+        mic_index=None,
+        idle_timeout_seconds: int = 15,
+        require_wake_word: bool = True,
+    ):
         self.recognizer = sr.Recognizer()
         self.microphone: Optional[sr.Microphone] = None
 
         self.wake_word = "hey quacky"
+        self.require_wake_word = require_wake_word
         self.callback: Optional[Callable[[str], Any]] = None
 
         self.response_handler: Optional[Callable[[Any], None]] = None
@@ -257,17 +263,21 @@ class QuackySpeechToText:
                 st = self._get_state()
 
                 if st == State.INACTIVE:
-                    extracted = self._extract_command_from_phrase(text)
-                    if extracted is None:
-                        continue
+                    if self.require_wake_word:
+                        extracted = self._extract_command_from_phrase(text)
+                        if extracted is None:
+                            continue
 
-                    self._activate()
+                        self._activate()
 
-                    cmd = extracted.strip()
-                    if cmd:
-                        self._enqueue_command(cmd)
+                        cmd = extracted.strip()
+                        if cmd:
+                            self._enqueue_command(cmd)
+                        else:
+                            self._log_info("Activated. Listening...")
                     else:
-                        self._log_info("Activated. Listening...")
+                        self._activate()
+                        self._enqueue_command(text)
 
                 elif st == State.LISTENING:
                     self._enqueue_command(text)
@@ -330,7 +340,14 @@ class QuackySpeechToText:
         self._set_active(False)
         self._last_command_time = None
         self._set_state(State.INACTIVE)
-        self._log_info(f"Idle for {self.idle_timeout_seconds}s. Deactivated. Say '{self.wake_word}' again.")
+        if self.require_wake_word:
+            self._log_info(
+                f"Idle for {self.idle_timeout_seconds}s. Deactivated. Say '{self.wake_word}' again."
+            )
+        else:
+            self._log_info(
+                f"Idle for {self.idle_timeout_seconds}s. Deactivated. Speak to reactivate."
+            )
 
     def _maybe_deactivate_on_idle(self) -> None:
         if not self._is_active():

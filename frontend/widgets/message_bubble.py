@@ -348,14 +348,8 @@ class AssistantBubble(QFrame):
         t = self._tokens
         self.setStyleSheet(
             "QFrame {"
-            " background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 " + t.get("asst.bg.top", t["asst.bg"]) + ","
-            " stop:1 " + t.get("asst.bg.bottom", t["asst.bg"]) + ");"
-            " border: 1px solid " + t["asst.border"] + ";"
-            " border-top-left-radius: 4px;"
-            " border-top-right-radius: 14px;"
-            " border-bottom-right-radius: 14px;"
-            " border-bottom-left-radius: 14px;"
+            " background: transparent;"
+            " border: none;"
             "}"
         )
         self._label.setStyleSheet(
@@ -444,14 +438,8 @@ class StreamingAssistantBubble(QFrame):
         t = self._tokens
         self.setStyleSheet(
             "QFrame {"
-            " background: qlineargradient(x1:0, y1:0, x2:0, y2:1,"
-            " stop:0 " + t.get("asst.bg.top", t["asst.bg"]) + ","
-            " stop:1 " + t.get("asst.bg.bottom", t["asst.bg"]) + ");"
-            " border: 1px solid " + t["asst.border"] + ";"
-            " border-top-left-radius: 4px;"
-            " border-top-right-radius: 14px;"
-            " border-bottom-right-radius: 14px;"
-            " border-bottom-left-radius: 14px;"
+            " background: transparent;"
+            " border: none;"
             "}"
         )
         self._label.setStyleSheet(

@@ -280,7 +280,7 @@ class QuackyWindow(QWidget):
 
         if self._stt is None:
             try:
-                self._stt = QuackySpeechToText()
+                self._stt = QuackySpeechToText(require_wake_word=False)
             except Exception as exc:
                 self._append_system(f"⚠ Microphone init failed: {exc}")
                 self.mic_btn.setChecked(False)
@@ -294,7 +294,7 @@ class QuackyWindow(QWidget):
 
         self._stt.start()
         self._append_system(
-            '🎙 Voice input active — say <b>"Hey Quacky"</b> to begin.'
+            "Voice input active - speak your command."
         )
 
     def _stop_stt(self):
