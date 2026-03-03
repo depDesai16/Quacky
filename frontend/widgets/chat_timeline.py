@@ -20,6 +20,7 @@ import time
 
 from PyQt6.QtGui     import QColor
 from PyQt6.QtCore    import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
+                              QEvent,
                               QAbstractAnimation)
 from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QSizePolicy, QFrame,
@@ -37,7 +38,6 @@ AVATAR_W       = 28
 AVATAR_GAP     = 8
 COL_MIN_W      = 320
 COL_MAX_W      = 920
-COL_CHROME_W   = 20
 BOTTOM_SAFE_PX = 18
 MSG_COL_SIDE_PAD = 10
 MSG_GROUP_GAP = 14
@@ -219,6 +219,7 @@ class ChatTimeline(QScrollArea):
 
         self._pill = _NewMessagesPill(self._tokens, self.viewport())
         self._pill.clicked.connect(self._on_pill_clicked)
+        self.viewport().installEventFilter(self)
 
         sb = self.verticalScrollBar()
         sb.valueChanged.connect(self._on_scroll_value)
@@ -235,6 +236,7 @@ class ChatTimeline(QScrollArea):
 
 
     def add_user_message(self, text: str):
+        self._refresh_column_width_if_ready()
         self._hide_empty()
         ts   = time.time()
         cont = self._is_continuation("user", ts)
@@ -245,6 +247,7 @@ class ChatTimeline(QScrollArea):
         self._after_insert()
 
     def add_assistant_message(self, text: str):
+        self._refresh_column_width_if_ready()
         self._hide_empty()
         self.hide_thinking()
         ts   = time.time()
@@ -289,6 +292,7 @@ class ChatTimeline(QScrollArea):
 
 
     def append_stream_chunk(self, chunk: str):
+        self._refresh_column_width_if_ready()
         self._hide_empty()
         if self._streaming_bubble is None:
             self.hide_thinking()
@@ -454,7 +458,7 @@ class ChatTimeline(QScrollArea):
             return self._current_col_w
         max_allowed = min(COL_MAX_W, viewport_width)
         min_allowed = min(COL_MIN_W, max_allowed)
-        usable = viewport_width - COL_CHROME_W
+        usable = viewport_width
         return max(min(usable, max_allowed), min_allowed)
 
     def _bubble_max_user(self) -> int:
@@ -468,8 +472,32 @@ class ChatTimeline(QScrollArea):
         super().resizeEvent(event)
         QTimer.singleShot(0, self._apply_column_width)
 
+    def eventFilter(self, obj, event):
+        if obj is self.viewport() and event.type() in (
+            QEvent.Type.Resize,
+            QEvent.Type.Show,
+            QEvent.Type.LayoutRequest,
+        ):
+            QTimer.singleShot(0, self._apply_column_width)
+        return super().eventFilter(obj, event)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        QTimer.singleShot(0, self._apply_column_width)
+        QTimer.singleShot(30, self._apply_column_width)
+
+    def _refresh_column_width_if_ready(self):
+        vpw = self.viewport().width()
+        if vpw <= 0:
+            return
+        self._apply_column_width()
+
     def _apply_column_width(self):
         col_w = self._col_width_from_viewport(self.viewport().width())
+        if col_w == self._current_col_w and self._msg_col.width() == col_w:
+            if self._pill.isVisible():
+                self._pill._reposition()
+            return
         self._current_col_w = col_w
         self._msg_col.setFixedWidth(col_w)
         self._container.updateGeometry()

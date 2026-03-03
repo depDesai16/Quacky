@@ -12,11 +12,11 @@ StatusChip states: idle | thinking | responding | error
 import sys
 from PyQt6.QtCore  import (Qt, QPropertyAnimation, QEasingCurve,
                             pyqtProperty, QRectF, QTimer, pyqtSignal)
-from PyQt6.QtGui   import QPainter, QColor, QBrush, QFont
+from PyQt6.QtGui   import QPainter, QColor, QBrush, QFont, QFontMetrics
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QLabel,
                               QPushButton, QSizePolicy)
 
-from theme import ThemeManager, FONT_STACK
+from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 
 
 
@@ -92,8 +92,14 @@ class StatusChip(QWidget):
     def _label(self) -> str:
         return self.STATES.get(self._state, "Idle")
 
+    def _status_font(self) -> QFont:
+        font = QFont(FONT_FAMILY_UI)
+        font.setPixelSize(11)
+        font.setWeight(QFont.Weight.Medium)
+        return font
+
     def _update_width(self):
-        fm = self.fontMetrics()
+        fm = QFontMetrics(self._status_font())
         tw = fm.horizontalAdvance(self._label())
         self.setFixedWidth(tw + 7 + 5 + 12 + 6)                        
 
@@ -115,9 +121,7 @@ class StatusChip(QWidget):
         p.drawEllipse(QRectF(dot_x, dot_y, 7, 7))
 
         p.setPen(QColor(self._tokens["text.secondary"]))
-        font = QFont(FONT_STACK)
-        font.setPixelSize(11)
-        font.setWeight(QFont.Weight.Medium)
+        font = self._status_font()
         p.setFont(font)
         text_x = int(dot_x + 7 + 5)
         p.drawText(text_x, 0, w - text_x - 6, h,

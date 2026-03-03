@@ -4,6 +4,8 @@ All colors are defined here; nothing else in the codebase should
 hardcode a color value.
 """
 
+import sys
+
 from PyQt6.QtCore import QSettings
 
 
@@ -127,8 +129,21 @@ LIGHT_TOKENS: dict = {
     "shadow.key_alpha":     18,
 }
 
-FONT_STACK = "'Segoe UI Variable', 'Segoe UI', 'Inter', 'SF Pro Text', sans-serif"
-FONT_MONO  = "'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace"
+if sys.platform == "darwin":
+    FONT_FAMILY_UI = "SF Pro Text"
+    FONT_STACK = "'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Arial', sans-serif"
+    FONT_FAMILY_MONO = "SF Mono"
+    FONT_MONO = "'SF Mono', 'Menlo', 'Monaco', 'DejaVu Sans Mono', monospace"
+elif sys.platform.startswith("linux"):
+    FONT_FAMILY_UI = "Noto Sans"
+    FONT_STACK = "'Noto Sans', 'Inter', 'Ubuntu', 'Cantarell', 'DejaVu Sans', sans-serif"
+    FONT_FAMILY_MONO = "DejaVu Sans Mono"
+    FONT_MONO = "'JetBrains Mono', 'Noto Sans Mono', 'DejaVu Sans Mono', monospace"
+else:
+    FONT_FAMILY_UI = "Segoe UI"
+    FONT_STACK = "'Segoe UI Variable', 'Segoe UI', 'Inter', 'Arial', sans-serif"
+    FONT_FAMILY_MONO = "Cascadia Code"
+    FONT_MONO = "'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace"
 
 
 
