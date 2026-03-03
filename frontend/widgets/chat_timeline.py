@@ -7,21 +7,26 @@ Layout:
          └── _msg_col  (centered message column, width from viewport)
               └── QVBoxLayout  [rows…][stretch]
 
-Column width is recomputed after every resize and scrollbar visibility change,
-then all existing bubbles are reflowed via set_max_width().
+Cross-platform alignment fix:
+  Every message row (outer QWidget) gets setFixedWidth(_row_width()).
+  This is the single source of truth for layout width — Qt cannot
+  override it based on platform font metrics, DPI, or scrollbar style.
 
-  User row:      [stretch] [bubble ≤ bubble_max]
-  Assistant row: [avatar=28] [gap=8] [bubble ≤ bubble_max] [stretch]
+  _row_width() = _current_col_w - 2 * MSG_COL_SIDE_PAD
 
-bubble_max = min(int(col_w * 0.78), 520)
+  Bubbles inside rows use setFixedWidth (see message_bubble.py).
+  On window resize, _relayout_rows() updates every tracked row width
+  alongside the existing bubble relayout.
+
+  User row:      [stretch] [bubble fixed_w]   → right-aligned, consistent
+  Assistant row: [bubble fixed_w] [stretch]   → left-aligned, consistent
 """
 
 import time
 
 from PyQt6.QtGui     import QColor
 from PyQt6.QtCore    import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
-                              QEvent,
-                              QAbstractAnimation)
+                              QEvent, QAbstractAnimation)
 from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
                               QLabel, QPushButton, QSizePolicy, QFrame,
                               QGraphicsDropShadowEffect)
@@ -32,32 +37,32 @@ from .message_bubble  import (UserBubble, AssistantBubble, SystemMessage,
 from .thinking_bubble import ThinkingBubble
 from .empty_state     import EmptyState
 
-GROUP_SEC      = 60
-NEAR_BOTTOM_PX = 40
-AVATAR_W       = 28
-AVATAR_GAP     = 8
-COL_MIN_W      = 320
-COL_MAX_W      = 920
-BOTTOM_SAFE_PX = 18
-MSG_COL_SIDE_PAD = 10
-MSG_GROUP_GAP = 14
-MSG_CONT_GAP = 4
-ROW_LABEL_GAP = 4
-USER_BUBBLE_MAX_RATIO = 0.78
-USER_BUBBLE_MAX_CAP = 520
-ASST_BUBBLE_MAX_RATIO = 0.88
-ASST_BUBBLE_MAX_CAP = 660
-ROW_APPEAR_MS = 180
-SCROLL_MIN_MS = 140
-SCROLL_MAX_MS = 320
-SCROLL_DIST_FACTOR = 0.50
+GROUP_SEC           = 60
+NEAR_BOTTOM_THRESHOLD_PX = 24
+AVATAR_W            = 28
+AVATAR_GAP          = 8
+COL_MIN_W           = 320
+COL_MAX_W           = 920
+BOTTOM_SAFE_PX      = 18
+MSG_COL_SIDE_PAD    = 10
+MSG_GROUP_GAP       = 14
+MSG_CONT_GAP        = 4
+ROW_LABEL_GAP       = 4
+USER_BUBBLE_MAX_RATIO  = 0.78
+USER_BUBBLE_MAX_CAP    = 520
+ASST_BUBBLE_MAX_RATIO  = 0.88
+ASST_BUBBLE_MAX_CAP    = 660
+ROW_APPEAR_MS       = 180
+SCROLL_MIN_MS       = 140
+SCROLL_MAX_MS       = 320
+SCROLL_DIST_FACTOR  = 0.50
 
 
 
 class _NewMessagesPill(QPushButton):
     """
     Centered scroll-to-bottom indicator.
-    Transparent by default; fills only on highlighted interaction states.
+    Transparent by default; fills only on interaction.
     """
     def __init__(self, tokens: dict, parent: QWidget):
         super().__init__("↓  New messages", parent)
@@ -163,22 +168,25 @@ class ChatTimeline(QScrollArea):
 
     def __init__(self, draw_icon_fn, parent=None):
         super().__init__(parent)
-        self._tokens           = ThemeManager.tokens()
-        self._icon_fn          = draw_icon_fn
-        self._messages         = []
-        self._thinking_row     = None
-        self._empty_widget     = None
-        self._streaming_bubble = None
-        self._streaming_row    = None
-        self._user_scrolled_up = False
-        self._all_bubbles      = []
-        self._theme_widgets    = []
-        self._sender_labels    = []
-        self._stretch_added    = False
-        self._current_col_w    = COL_MIN_W                                 
-        self._scroll_anim      = None
+        self._tokens               = ThemeManager.tokens()
+        self._icon_fn              = draw_icon_fn
+        self._messages             = []
+        self._thinking_row         = None
+        self._empty_widget         = None
+        self._streaming_bubble     = None
+        self._streaming_row        = None
+        self._user_scrolled_up     = False
+        self._all_bubbles          = []
+        self._theme_widgets        = []
+        self._sender_labels        = []
+        self._stretch_added        = False
+        self._current_col_w        = COL_MIN_W
+        self._scroll_anim          = None
         self._user_dragging_scroll = False
-        self._last_scroll_value = 0
+        self._user_wheeling        = False
+        self._last_scroll_value    = 0
+        self._row_widgets          = []
+        self._bottom_clearance     = BOTTOM_SAFE_PX
 
         self._msg_col = QWidget()
         self._msg_col.setSizePolicy(
@@ -190,11 +198,11 @@ class ChatTimeline(QScrollArea):
 
         self._msg_layout = QVBoxLayout(self._msg_col)
         self._msg_layout.setContentsMargins(
-            MSG_COL_SIDE_PAD, 18, MSG_COL_SIDE_PAD, BOTTOM_SAFE_PX
+            MSG_COL_SIDE_PAD, 18, MSG_COL_SIDE_PAD, self._bottom_clearance
         )
         self._msg_layout.setSpacing(0)
 
-        self._empty_widget = EmptyState(self._tokens)
+        self._empty_widget = EmptyState(self._tokens, icon_fn=self._icon_fn)
         self._msg_layout.addWidget(self._empty_widget)
 
         self._container = QWidget()
@@ -223,9 +231,7 @@ class ChatTimeline(QScrollArea):
 
         sb = self.verticalScrollBar()
         sb.valueChanged.connect(self._on_scroll_value)
-        sb.rangeChanged.connect(
-            self._on_scroll_range_changed
-        )
+        sb.rangeChanged.connect(self._on_scroll_range_changed)
         sb.sliderPressed.connect(self._on_scroll_slider_pressed)
         sb.sliderReleased.connect(self._on_scroll_slider_released)
         self._last_scroll_value = sb.value()
@@ -234,6 +240,8 @@ class ChatTimeline(QScrollArea):
         ThemeManager.subscribe(self.apply_theme)
         QTimer.singleShot(0, self._apply_column_width)
 
+
+    # ------------------------------------------------------------------ public
 
     def add_user_message(self, text: str):
         self._refresh_column_width_if_ready()
@@ -264,12 +272,12 @@ class ChatTimeline(QScrollArea):
         self._insert(row, gap=6)
         self._after_insert()
 
-
     def show_thinking(self):
         if self._thinking_row is not None:
             return
         row = QWidget()
         row.setStyleSheet("background: transparent;")
+        self._track_row_widget(row)
         rl  = QHBoxLayout(row)
         rl.setContentsMargins(0, 4, 0, 4)
         rl.setSpacing(0)
@@ -287,9 +295,10 @@ class ChatTimeline(QScrollArea):
         idx = self._msg_layout.indexOf(self._thinking_row)
         if idx >= 0:
             self._msg_layout.removeWidget(self._thinking_row)
+        if self._thinking_row in self._row_widgets:
+            self._row_widgets.remove(self._thinking_row)
         self._thinking_row.deleteLater()
         self._thinking_row = None
-
 
     def append_stream_chunk(self, chunk: str):
         self._refresh_column_width_if_ready()
@@ -319,7 +328,6 @@ class ChatTimeline(QScrollArea):
             self._streaming_row    = None
             self._after_insert()
 
-
     def apply_theme(self, tokens: dict):
         self._tokens = tokens
         self._pill.apply_theme(tokens)
@@ -329,6 +337,25 @@ class ChatTimeline(QScrollArea):
         self._apply_sender_label_theme()
         self._apply_row_widget_theme()
 
+    def scroll_to_bottom(self):
+        QTimer.singleShot(16, self._smooth_scroll_to_bottom)
+
+    def set_bottom_clearance(self, px: int):
+        bottom = max(BOTTOM_SAFE_PX, int(px))
+        if bottom == self._bottom_clearance:
+            return
+        self._bottom_clearance = bottom
+        left, top, right, _ = self._msg_layout.getContentsMargins()
+        self._msg_layout.setContentsMargins(left, top, right, bottom)
+        self._msg_col.updateGeometry()
+        self._container.updateGeometry()
+        QTimer.singleShot(0, self._ensure_bottom_visible_after_layout)
+
+    def set_new_message_pill_clearance(self, px: int):
+        self._pill.set_bottom_clearance(px)
+
+
+    # ----------------------------------------------------------------- builders
 
     def _hide_empty(self):
         if self._empty_widget is None:
@@ -340,10 +367,12 @@ class ChatTimeline(QScrollArea):
             self._msg_layout.addStretch()
             self._stretch_added = True
 
-
     def _build_user_row(self, text: str, is_continuation: bool) -> QWidget:
         outer = QWidget()
         outer.setStyleSheet("background: transparent;")
+        outer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._track_row_widget(outer)
+
         ol = QVBoxLayout(outer)
         ol.setContentsMargins(0, 0, 0, 0)
         ol.setSpacing(ROW_LABEL_GAP)
@@ -381,6 +410,9 @@ class ChatTimeline(QScrollArea):
                                 is_continuation: bool) -> QWidget:
         outer = QWidget()
         outer.setStyleSheet("background: transparent;")
+        outer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self._track_row_widget(outer)
+
         ol = QVBoxLayout(outer)
         ol.setContentsMargins(0, 0, 0, 0)
         ol.setSpacing(ROW_LABEL_GAP)
@@ -405,6 +437,26 @@ class ChatTimeline(QScrollArea):
         return outer
 
 
+    # ----------------------------------------------------------------- layout helpers
+
+    def _bubble_max_user(self) -> int:
+        usable = max(1, self._current_col_w - 2 * MSG_COL_SIDE_PAD)
+        return min(int(usable * USER_BUBBLE_MAX_RATIO), USER_BUBBLE_MAX_CAP)
+
+    def _bubble_max_asst(self) -> int:
+        usable = max(1, self._current_col_w - 2 * MSG_COL_SIDE_PAD)
+        return min(int(usable * ASST_BUBBLE_MAX_RATIO), ASST_BUBBLE_MAX_CAP)
+
+    def _row_width(self) -> int:
+        return max(1, self._current_col_w - 2 * MSG_COL_SIDE_PAD)
+
+    def _col_width_from_viewport(self, viewport_width: int) -> int:
+        if viewport_width <= 0:
+            return self._current_col_w
+        max_allowed = min(COL_MAX_W, viewport_width)
+        min_allowed = min(COL_MIN_W, max_allowed)
+        return max(min(viewport_width, max_allowed), min_allowed)
+
     def _insert(self, widget: QWidget, gap: int = 0):
         if self._stretch_added:
             idx = self._msg_layout.count() - 1
@@ -426,6 +478,10 @@ class ChatTimeline(QScrollArea):
 
     def _track_theme_widget(self, widget: QWidget):
         self._theme_widgets.append(widget)
+
+    def _track_row_widget(self, row: QWidget):
+        row.setFixedWidth(self._row_width())
+        self._row_widgets.append(row)
 
     def _apply_sender_label_theme(self):
         dead = []
@@ -449,28 +505,24 @@ class ChatTimeline(QScrollArea):
         for d in dead:
             self._theme_widgets.remove(d)
 
-    def _col_width_from_viewport(self, viewport_width: int) -> int:
-        """
-        Compute message column width from the actual viewport width.
-        This keeps message alignment anchored to content space, not window chrome.
-        """
-        if viewport_width <= 0:
-            return self._current_col_w
-        max_allowed = min(COL_MAX_W, viewport_width)
-        min_allowed = min(COL_MIN_W, max_allowed)
-        usable = viewport_width
-        return max(min(usable, max_allowed), min_allowed)
 
-    def _bubble_max_user(self) -> int:
-        return min(int(self._current_col_w * USER_BUBBLE_MAX_RATIO), USER_BUBBLE_MAX_CAP)
-
-    def _bubble_max_asst(self) -> int:
-        return min(int(self._current_col_w * ASST_BUBBLE_MAX_RATIO), ASST_BUBBLE_MAX_CAP)
-
+    # ----------------------------------------------------------------- resize / scroll
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         QTimer.singleShot(0, self._apply_column_width)
+
+    def wheelEvent(self, event):
+        # Track wheel-originated movement so _on_scroll_value can distinguish
+        # user intent from passive geometry/layout scrollbar updates.
+        self._user_wheeling = True
+        try:
+            super().wheelEvent(event)
+        finally:
+            QTimer.singleShot(0, self._clear_user_wheeling)
+
+    def _clear_user_wheeling(self):
+        self._user_wheeling = False
 
     def eventFilter(self, obj, event):
         if obj is self.viewport() and event.type() in (
@@ -494,22 +546,26 @@ class ChatTimeline(QScrollArea):
 
     def _apply_column_width(self):
         col_w = self._col_width_from_viewport(self.viewport().width())
-        if col_w == self._current_col_w and self._msg_col.width() == col_w:
-            if self._pill.isVisible():
-                self._pill._reposition()
-            return
-        self._current_col_w = col_w
-        self._msg_col.setFixedWidth(col_w)
-        self._container.updateGeometry()
+        width_changed = not (
+            col_w == self._current_col_w and self._msg_col.width() == col_w
+        )
+        if width_changed:
+            self._current_col_w = col_w
+            self._msg_col.setFixedWidth(col_w)
+            self._container.updateGeometry()
+            self._relayout_rows()
+            self._relayout_bubbles()
 
         if self._pill.isVisible():
             self._pill._reposition()
 
-        self._relayout_bubbles()
         self._ensure_bottom_visible_after_layout()
 
     def _on_scroll_range_changed(self, _min_value: int, _max_value: int):
         QTimer.singleShot(0, self._apply_column_width)
+        if not self._user_scrolled_up and not self._user_dragging_scroll:
+            QTimer.singleShot(0, self._snap_to_bottom_if_needed)
+            QTimer.singleShot(60, self._snap_to_bottom_if_needed)
 
     def _relayout_bubbles(self):
         bmax_user = self._bubble_max_user()
@@ -525,6 +581,18 @@ class ChatTimeline(QScrollArea):
                 dead.append(b)
         for d in dead:
             self._all_bubbles.remove(d)
+
+    def _relayout_rows(self):
+        row_w = self._row_width()
+        dead = []
+        for row in self._row_widgets:
+            try:
+                row.setFixedWidth(row_w)
+                row.updateGeometry()
+            except RuntimeError:
+                dead.append(row)
+        for d in dead:
+            self._row_widgets.remove(d)
 
     def _ensure_bottom_visible_after_layout(self):
         if self._user_scrolled_up or self._user_dragging_scroll:
@@ -542,16 +610,13 @@ class ChatTimeline(QScrollArea):
             return
         self._smooth_scroll_to_bottom()
 
-    def scroll_to_bottom(self):
-        QTimer.singleShot(16, self._smooth_scroll_to_bottom)
-
     def _smooth_scroll_to_bottom(self):
         if self._user_dragging_scroll:
             return
         sb = self.verticalScrollBar()
-        target = sb.maximum()
+        target  = sb.maximum()
         current = sb.value()
-        dist = target - current
+        dist    = target - current
         if dist <= 0:
             return
         if dist < 6:
@@ -577,7 +642,7 @@ class ChatTimeline(QScrollArea):
     def _ensure_scroll_anim(self):
         if self._scroll_anim is not None:
             return
-        sb = self.verticalScrollBar()
+        sb   = self.verticalScrollBar()
         anim = QPropertyAnimation(sb, b"value", self)
         anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._scroll_anim = anim
@@ -592,12 +657,12 @@ class ChatTimeline(QScrollArea):
         if self._scroll_anim is not None and self._is_scroll_animating():
             self._scroll_anim.stop()
 
-
     def _after_insert(self):
         QTimer.singleShot(30, self._do_scroll_check)
+        # Rich-text layout can finalize a bit later on some platforms.
+        QTimer.singleShot(140, self._do_scroll_check)
 
     def _do_scroll_check(self):
-        sb = self.verticalScrollBar()
         self._container.updateGeometry()
         if self._user_dragging_scroll:
             return
@@ -616,8 +681,9 @@ class ChatTimeline(QScrollArea):
         sb = self.verticalScrollBar()
         scrolling_up = value < self._last_scroll_value
         self._last_scroll_value = value
+        manual_scroll = self._user_dragging_scroll or self._user_wheeling or sb.isSliderDown()
 
-        if scrolling_up and sb.maximum() > 0:
+        if scrolling_up and manual_scroll and sb.maximum() > 0:
             self._user_scrolled_up = True
             self._stop_scroll_animation()
             if not self._pill.isVisible():
@@ -631,7 +697,12 @@ class ChatTimeline(QScrollArea):
                 self._user_scrolled_up = False
                 if self._pill.isVisible():
                     self._pill.hide_pill()
-        elif sb.maximum() > 0:
+            return
+
+        # Do not mark scrolled-up on passive geometry changes.
+        # Content growth after rendering can raise max() and briefly move us
+        # away from bottom without any user intent.
+        if manual_scroll and sb.maximum() > 0:
             self._user_scrolled_up = True
 
     def _on_pill_clicked(self):
@@ -640,15 +711,7 @@ class ChatTimeline(QScrollArea):
         self._smooth_scroll_to_bottom()
 
     def _near_bottom_threshold(self, sb) -> int:
-        """
-        For tiny scroll ranges, a fixed threshold can mark every position as
-        "near bottom", which fights user scrolling and causes layout jitter.
-        """
-        max_scroll = sb.maximum()
-        if max_scroll <= 0:
-            return 0
-        dynamic = int(max_scroll * 0.18)
-        return max(3, min(NEAR_BOTTOM_PX, dynamic))
+        return 0 if sb.maximum() <= 0 else NEAR_BOTTOM_THRESHOLD_PX
 
     def _on_scroll_slider_pressed(self):
         self._user_dragging_scroll = True
@@ -659,6 +722,8 @@ class ChatTimeline(QScrollArea):
         self._last_scroll_value = self.verticalScrollBar().value()
         self._on_scroll_value(self.verticalScrollBar().value())
 
+
+    # ----------------------------------------------------------------- style
 
     def _sender_css(self) -> str:
         t = self._tokens
@@ -671,12 +736,17 @@ class ChatTimeline(QScrollArea):
         self.setStyleSheet(f"""
             QScrollArea {{ background: transparent; border: none; }}
             QScrollBar:vertical {{
-                background: {t['scrollbar.track']};
-                width: 5px; border-radius: 3px; margin: 0;
+                background: transparent;
+                width: 9px;
+                margin: 0px 1px 0px 0px;
+                border: none;
             }}
             QScrollBar::handle:vertical {{
                 background: {t['scrollbar.thumb']};
-                border-radius: 3px; min-height: 30px;
+                border: none;
+                border-radius: 5px;
+                min-height: 28px;
+                margin: 0px 1px 0px 1px;
             }}
             QScrollBar::handle:vertical:hover {{
                 background: {t['scrollbar.hover']};
@@ -684,7 +754,12 @@ class ChatTimeline(QScrollArea):
             QScrollBar::add-line:vertical,
             QScrollBar::sub-line:vertical {{ height: 0; }}
             QScrollBar::add-page:vertical,
-            QScrollBar::sub-page:vertical {{ background: transparent; }}
+            QScrollBar::sub-page:vertical {{
+                background: {t['scrollbar.track']};
+                border: none;
+                border-radius: 5px;
+                margin: 0px 1px 0px 1px;
+            }}
         """)
         self._msg_col.setStyleSheet("background: transparent;")
 

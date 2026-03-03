@@ -33,7 +33,7 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
-                              QPropertyAnimation, QEasingCurve, QEvent)
+                              QPropertyAnimation, QEasingCurve, QEvent, QTimer)
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel,
                               QGraphicsOpacityEffect)
@@ -174,8 +174,23 @@ class QuackyWindow(QWidget):
         ThemeManager.load()
         self._restore_geometry()
 
-        self.model_window = ModelWindow()
-        self.model_window.move(1040, 88)
+        self.model_window = None
+        try:
+            self.model_window = ModelWindow()
+            # Position relative to available screen geometry rather than
+            # hardcoded pixel coordinates that break on different resolutions.
+            _screen = QApplication.primaryScreen()
+            if _screen is not None:
+                _sg = _screen.availableGeometry()
+                self.model_window.move(
+                    _sg.x() + _sg.width() - self.model_window.width() - 20,
+                    _sg.y() + 88,
+                )
+            else:
+                self.model_window.move(1040, 88)
+        except Exception:
+            # Keep chat UI usable even if OpenGL/model window isn't available.
+            self.model_window = None
 
         self._theme_fade_overlay = None
         self._theme_fade_anim = None
@@ -237,6 +252,8 @@ class QuackyWindow(QWidget):
 
 
     def set_model_visible(self, visible: bool):
+        if self.model_window is None:
+            return
         self.model_window.show() if visible else self.model_window.hide()
 
     def set_speechtospeech_enabled(self, enabled: bool):
@@ -375,14 +392,17 @@ class QuackyWindow(QWidget):
             bool(self.composer.input_field.toPlainText().strip())
         )
         self._update_toast_anchor()
+        QTimer.singleShot(0, self._update_toast_anchor)
 
     def _update_toast_anchor(self):
         if not hasattr(self, 'toast'):
             return
         clearance = self.composer.height() + 8
         self.toast.set_bottom_clearance(clearance)
-        pill_clearance = clearance + 46                                
-        self.timeline._pill.set_bottom_clearance(pill_clearance)
+        timeline_clearance = max(28, int(self.composer.height() * 0.45))
+        self.timeline.set_bottom_clearance(timeline_clearance)
+        pill_clearance = clearance + 46
+        self.timeline.set_new_message_pill_clearance(pill_clearance)
 
 
     def _on_theme_changed(self, tokens: dict):

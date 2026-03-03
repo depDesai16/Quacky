@@ -186,7 +186,7 @@ class HeaderBar(QWidget):
         self._min_btn.clicked.connect(self.minimize_clicked)
         layout.addWidget(self._min_btn)
 
-        self._close_btn = self._make_control_btn("✕", is_close=True)
+        self._close_btn = self._make_control_btn("x", is_close=True)
         self._close_btn.clicked.connect(self.close_clicked)
         layout.addWidget(self._close_btn)
 
@@ -226,13 +226,16 @@ class HeaderBar(QWidget):
         hover_bg = ("rgba(224,85,85,0.20)" if is_close
                     else t["accent.subtleBg"])
         hover_color = ("#E05555" if is_close else t["accent.primary"])
+        font_size = "14px" if is_close else "12px"
+        font_weight = "700" if is_close else "500"
         btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
                 color: {t['text.muted']};
                 border: none;
                 border-radius: 6px;
-                font-size: 12px;
+                font-size: {font_size};
+                font-weight: {font_weight};
                 font-family: {FONT_STACK};
             }}
             QPushButton:hover {{

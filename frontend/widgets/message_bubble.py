@@ -1,5 +1,16 @@
 """
 widgets/message_bubble.py
+
+Cross-platform alignment fix:
+  Bubbles use setMaximumWidth (caps width) + Preferred size policy (shrinks
+  to content). This lets "Hello" be small and long messages wrap consistently.
+  The inner QLabel also uses setMaximumWidth so text wrapping is capped at the
+  same pixel value on every platform.
+
+  The single source of truth for bubble width lives in chat_timeline.py
+  (_bubble_max_user / _bubble_max_asst), which subtracts column side padding
+  before applying the ratio cap — this is what keeps alignment consistent
+  across Windows, macOS, and Linux.
 """
 
 import html
@@ -25,6 +36,16 @@ def animate_in_widget(widget: QWidget, duration_ms: int = _APPEAR_MS):
     anim.setStartValue(0.0)
     anim.setEndValue(1.0)
     anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+    def _cleanup():
+        try:
+            if widget.graphicsEffect() is effect:
+                widget.setGraphicsEffect(None)
+            widget._appear_effect = None
+            widget._appear_anim = None
+            effect.deleteLater()
+        except RuntimeError:
+            pass
+    anim.finished.connect(_cleanup)
     anim.start()
     widget._appear_effect = effect
     widget._appear_anim   = anim
@@ -54,10 +75,6 @@ def _is_structured_md_line(line: str) -> bool:
 
 
 def _normalize_assistant_text(text: str) -> str:
-    """
-    Make plain prose wrap naturally by collapsing single hard line breaks,
-    while preserving markdown structures and fenced code blocks.
-    """
     if not text or "\n" not in text:
         return text
 
@@ -78,21 +95,17 @@ def _normalize_assistant_text(text: str) -> str:
             out.append(line)
             in_code = not in_code
             continue
-
         if in_code:
             out.append(line)
             continue
-
         if stripped == "":
             flush_paragraph()
             out.append("")
             continue
-
         if _is_structured_md_line(line):
             flush_paragraph()
             out.append(line)
             continue
-
         paragraph_buf.append(line)
 
     flush_paragraph()
@@ -109,19 +122,16 @@ def _normalize_assistant_text(text: str) -> str:
     return "\n".join(compact)
 
 
-def _reading_metrics(text: str) -> tuple[float, float, int]:
-    """
-    Slightly tighten typography for long assistant responses so dense outputs
-    remain readable without looking oversized.
-    """
+def _reading_metrics(text: str) -> tuple[int, float, int]:
+    """Integer font sizes only — fractional px renders differently per platform."""
     n = len(text)
     if n >= 1100:
-        return (13.8, 1.70, 5)
+        return (13, 1.70, 5)
     if n >= 650:
-        return (14.0, 1.68, 6)
+        return (14, 1.68, 6)
     if n >= 320:
-        return (14.25, 1.65, 6)
-    return (14.5, 1.62, 7)
+        return (14, 1.65, 6)
+    return (14, 1.62, 7)
 
 
 def render_markdown(text: str, tokens: dict) -> str:
@@ -168,10 +178,7 @@ def _mini_render(text: str, tokens: dict) -> str:
     for line in lines:
         if line.strip().startswith("```"):
             if in_code:
-                out.append(
-                    f'<pre style="{ps}">'
-                    f'{html.escape(chr(10).join(code_buf))}</pre>'
-                )
+                out.append(f'<pre style="{ps}">{html.escape(chr(10).join(code_buf))}</pre>')
                 code_buf = []
                 in_code  = False
             else:
@@ -200,14 +207,10 @@ def _mini_render(text: str, tokens: dict) -> str:
         if line.strip() == "":
             out.append("<br>")
             continue
-        out.append(
-            f'<p style="margin:0 0 2px;">{_inline(html.escape(line), cs)}</p>'
-        )
+        out.append(f'<p style="margin:0 0 2px;">{_inline(html.escape(line), cs)}</p>')
 
     if in_code and code_buf:
-        out.append(
-            f'<pre style="{ps}">{html.escape(chr(10).join(code_buf))}</pre>'
-        )
+        out.append(f'<pre style="{ps}">{html.escape(chr(10).join(code_buf))}</pre>')
     return "".join(out)
 
 
@@ -218,14 +221,17 @@ def _inline(text: str, cs: str) -> str:
     text = re.sub(r'_(.+?)_',       r'<i>\1</i>', text)
     text = re.sub(r'`(.+?)`',
                   lambda m: f'<code style="{cs}">{m.group(1)}</code>', text)
-    text = re.sub(
-        r'\[(.+?)\]\((https?://[^\)]+)\)', r'<a href="\2">\1</a>', text
-    )
+    text = re.sub(r'\[(.+?)\]\((https?://[^\)]+)\)', r'<a href="\2">\1</a>', text)
     return text
 
 
 
 def _make_label(max_w: int = _DEFAULT_MAX_W) -> QLabel:
+    """
+    Word-wrapping RichText label.
+    Uses setMaximumWidth so text wraps at a consistent cap but the label
+    can still be narrower for short content — bubbles shrink to fit.
+    """
     lbl = QLabel()
     lbl.setWordWrap(True)
     lbl.setMaximumWidth(max_w)
@@ -242,8 +248,9 @@ def _make_label(max_w: int = _DEFAULT_MAX_W) -> QLabel:
 
 class _BubbleBase(QFrame):
     """
-    set_max_width(px) — called by ChatTimeline on every resize.
-    The bubble never exceeds this width; it shrinks to content below it.
+    Base for UserBubble.
+    setMaximumWidth caps the bubble; Preferred policy lets it shrink to content.
+    Both frame and label are capped to the same value so there's no mismatch.
     """
 
     def __init__(self, tokens: dict, parent=None):
@@ -252,18 +259,23 @@ class _BubbleBase(QFrame):
         self._max_w  = _DEFAULT_MAX_W
 
         self._label = _make_label(self._max_w)
+
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(14, 10, 14, 10)
+        # Extra bottom pixel avoids edge clipping from font/paint rounding on
+        # some platforms for the newest user bubble.
+        lay.setContentsMargins(14, 10, 14, 11)
         lay.setSpacing(0)
         lay.addWidget(self._label)
 
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.setMaximumWidth(self._max_w)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
     def set_max_width(self, w: int):
         if w == self._max_w:
             return
         self._max_w = w
+        self.setMaximumWidth(w)
         self._label.setMaximumWidth(w)
         self._label.updateGeometry()
         self.updateGeometry()
@@ -309,9 +321,7 @@ class UserBubble(_BubbleBase):
 
 
 class AssistantBubble(QFrame):
-    """
-    Assistant response surface with mirrored chat-bubble corners.
-    """
+    """Assistant response with amber left-bar accent."""
 
     def __init__(self, text: str, tokens: dict, parent=None):
         super().__init__(parent)
@@ -320,7 +330,9 @@ class AssistantBubble(QFrame):
         self._max_w    = _DEFAULT_MAX_W
 
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.setMaximumWidth(self._max_w)
         self.setFrameShape(QFrame.Shape.NoFrame)
+
         self._label = _make_label(self._max_w)
         self._label.setText(render_markdown(text, tokens))
 
@@ -335,6 +347,7 @@ class AssistantBubble(QFrame):
         if w == self._max_w:
             return
         self._max_w = w
+        self.setMaximumWidth(w)
         self._label.setMaximumWidth(w)
         self._label.updateGeometry()
         self.updateGeometry()
@@ -346,16 +359,11 @@ class AssistantBubble(QFrame):
 
     def _apply_style(self):
         t = self._tokens
-        self.setStyleSheet(
-            "QFrame {"
-            " background: transparent;"
-            " border: none;"
-            "}"
-        )
+        self.setStyleSheet("QFrame { background: transparent; border: none; }")
         self._label.setStyleSheet(
             "QLabel { background: transparent; border: none;"
-            " font-family: " + FONT_STACK + "; font-size: 14.5px;"
-            " line-height: 1.68; color: " + t["text.primary"] + "; }"
+            " font-family: " + FONT_STACK + "; font-size: 14px;"
+            " color: " + t["text.primary"] + "; }"
         )
 
     def paintEvent(self, event):
@@ -368,28 +376,25 @@ class AssistantBubble(QFrame):
         pen = QPen(c, 2.0)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         p.setPen(pen)
-        x = 9
-        p.drawLine(x, 10, x, max(10, self.height() - 10))
+        p.drawLine(9, 10, 9, max(10, self.height() - 10))
         p.end()
 
 
 
 class StreamingAssistantBubble(QFrame):
-    """
-    In-place updating bubble. Chunks queued; flushed at most every UPDATE_MS.
-    set_max_width() honoured immediately and on every flush.
-    """
+    """In-place updating bubble."""
 
     UPDATE_MS = 60
 
     def __init__(self, tokens: dict, parent=None):
         super().__init__(parent)
-        self._tokens = tokens
-        self._raw   = ""
-        self._queue = []
-        self._max_w = _DEFAULT_MAX_W
+        self._tokens  = tokens
+        self._raw     = ""
+        self._queue   = []
+        self._max_w   = _DEFAULT_MAX_W
 
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
+        self.setMaximumWidth(self._max_w)
         self.setFrameShape(QFrame.Shape.NoFrame)
 
         self._label = _make_label(self._max_w)
@@ -404,7 +409,6 @@ class StreamingAssistantBubble(QFrame):
         self._flush_timer = QTimer(self)
         self._flush_timer.setInterval(self.UPDATE_MS)
         self._flush_timer.timeout.connect(self._flush)
-
 
     def append_chunk(self, chunk: str):
         self._queue.append(chunk)
@@ -425,6 +429,7 @@ class StreamingAssistantBubble(QFrame):
         if w == self._max_w:
             return
         self._max_w = w
+        self.setMaximumWidth(w)
         self._label.setMaximumWidth(w)
         self._label.updateGeometry()
         self.updateGeometry()
@@ -436,16 +441,10 @@ class StreamingAssistantBubble(QFrame):
 
     def _apply_style(self):
         t = self._tokens
-        self.setStyleSheet(
-            "QFrame {"
-            " background: transparent;"
-            " border: none;"
-            "}"
-        )
+        self.setStyleSheet("QFrame { background: transparent; border: none; }")
         self._label.setStyleSheet(
             "QLabel { background: transparent; border: none;"
-            " font-family: " + FONT_STACK + "; font-size: 14.5px;"
-            " line-height: 1.68;"
+            " font-family: " + FONT_STACK + "; font-size: 14px;"
             " color: " + t["text.primary"] + "; }"
         )
 
@@ -459,10 +458,8 @@ class StreamingAssistantBubble(QFrame):
         pen = QPen(c, 2.0)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         p.setPen(pen)
-        x = 9
-        p.drawLine(x, 10, x, max(10, self.height() - 10))
+        p.drawLine(9, 10, 9, max(10, self.height() - 10))
         p.end()
-
 
     def _flush(self):
         if not self._queue:
@@ -489,7 +486,7 @@ class StreamingAssistantBubble(QFrame):
 class SystemMessage(QLabel):
     def __init__(self, html_text: str, tokens: dict, parent=None):
         super().__init__(parent)
-        self._tokens = tokens
+        self._tokens    = tokens
         self._html_text = html_text
         self.setTextFormat(Qt.TextFormat.RichText)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)

@@ -1,9 +1,5 @@
 """
-app.py — Application entrypoint.
-
-Changes from original:
-  Line 1 (import): QuackyGUI → QuackyWindow
-  Everything else is bit-for-bit identical to the original app.py.
+app.py - Application entrypoint.
 """
 
 import os
@@ -15,11 +11,17 @@ import urllib.error
 import urllib.request
 
 FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
-ROOT_DIR     = os.path.dirname(FRONTEND_DIR)
-sys.path.insert(0, ROOT_DIR)
+ROOT_DIR = os.path.dirname(FRONTEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 
 def _configure_platform_env() -> None:
+    # Qt6 handles high-DPI automatically; these vars keep pixel behavior
+    # predictable across platforms before QApplication starts.
+    os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+    os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
+
     if sys.platform.startswith("linux"):
         session_type = (os.getenv("XDG_SESSION_TYPE") or "").lower()
         has_wayland = bool(os.getenv("WAYLAND_DISPLAY")) or session_type == "wayland"
@@ -36,7 +38,6 @@ def _configure_platform_env() -> None:
         os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
     elif sys.platform == "darwin":
-        # Improve consistency for macOS compositing and high-DPI displays.
         os.environ.setdefault("QT_MAC_WANTS_LAYER", "1")
         os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
@@ -45,10 +46,13 @@ _configure_platform_env()
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
+from PyQt6.QtGui import QFont, QFontDatabase
+
 from settings_window import SettingsWindow
-from quacky_window   import QuackyWindow                               
-from draw_icon       import draw_icon
-from backend.client  import QuackyClient
+from quacky_window import QuackyWindow
+from draw_icon import draw_icon
+from theme import FONT_FAMILY_UI
+from backend.client import QuackyClient
 
 
 def _configure_app_identity(app: QApplication) -> None:
@@ -56,16 +60,12 @@ def _configure_app_identity(app: QApplication) -> None:
     app.setApplicationDisplayName("Quacky")
     app.setOrganizationName("Quacky")
     app.setOrganizationDomain("quacky.local")
-    # Wayland WMs commonly match window rules via app_id/desktopFileName.
     app.setDesktopFileName("quacky")
 
 
-
 def _start_server() -> subprocess.Popen:
-    return subprocess.Popen(
-        [sys.executable, "-m", "backend.server"],
-        cwd=ROOT_DIR,
-    )
+    return subprocess.Popen([sys.executable, "-m", "backend.server"], cwd=ROOT_DIR)
+
 
 def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
     deadline = time.time() + timeout
@@ -78,6 +78,7 @@ def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
             time.sleep(0.25)
     return False
 
+
 def _load_system_prompt() -> str | None:
     path = os.path.join(ROOT_DIR, "backend", "system_prompt.txt")
     if os.path.exists(path):
@@ -86,16 +87,17 @@ def _load_system_prompt() -> str | None:
     return None
 
 
-
 def show_main():
     main_win.show()
     main_win.raise_()
     main_win.activateWindow()
 
+
 def show_settings():
     settings_win.show()
     settings_win.raise_()
     settings_win.activateWindow()
+
 
 def on_tray_activated(reason):
     if reason == QSystemTrayIcon.ActivationReason.Trigger:
@@ -104,19 +106,20 @@ def on_tray_activated(reason):
         else:
             show_main()
 
+
 def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     tray = QSystemTrayIcon(draw_icon(), parent=app)
     tray.setToolTip("Quacky")
 
     tray_menu = QMenu()
-    css_path  = os.path.join(FRONTEND_DIR, "css", "tray_menu.css")
-    with open(css_path, "r") as f:
+    css_path = os.path.join(FRONTEND_DIR, "css", "tray_menu.css")
+    with open(css_path, "r", encoding="utf-8") as f:
         tray_menu.setStyleSheet(f.read())
 
-    action_open     = tray_menu.addAction(" ⟳  Open Quacky")
-    action_settings = tray_menu.addAction("⚙  Settings")
+    action_open = tray_menu.addAction("Open Quacky")
+    action_settings = tray_menu.addAction("Settings")
     tray_menu.addSeparator()
-    action_quit     = tray_menu.addAction(" ×   Quit")
+    action_quit = tray_menu.addAction("Quit")
 
     action_open.triggered.connect(show_main)
     action_settings.triggered.connect(show_settings)
@@ -126,15 +129,35 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     return tray
 
 
-
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
+
+    # Use a deterministic widget style for consistent metrics across OSes.
+    app.setStyle("Fusion")
+
+    # Enforce a single UI font family (no fallback chain).
+    available = set(QFontDatabase.families())
+    if FONT_FAMILY_UI not in available:
+        QMessageBox.critical(
+            None,
+            "Quacky",
+            f"Required UI font not found: {FONT_FAMILY_UI}. "
+            "Install that font or bundle it with the app.",
+        )
+        sys.exit(1)
+
+    app_font = QFont(FONT_FAMILY_UI, 10)
+    app_font.setStyleStrategy(
+        QFont.StyleStrategy.PreferAntialias
+        | QFont.StyleStrategy.PreferQuality
+        | QFont.StyleStrategy.NoFontMerging
+    )
+    app.setFont(app_font)
+
     _shutdown_requested = False
-
     base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
-
     server_proc = _start_server()
 
     if not _wait_for_server(base_url):
@@ -142,21 +165,23 @@ if __name__ == "__main__":
         server_proc.terminate()
         sys.exit(1)
 
-    client    = QuackyClient(base_url)
-    system    = _load_system_prompt()
+    client = QuackyClient(base_url)
+    system = _load_system_prompt()
     chat_data = client.start_chat(system=system)
-    chat_id   = chat_data.get("chat_id", "")
+    chat_id = chat_data.get("chat_id", "")
 
     if not chat_id:
         QMessageBox.critical(None, "Quacky", "Could not start chat session.")
         server_proc.terminate()
         sys.exit(1)
 
-    main_win     = QuackyWindow(client=client, chat_id=chat_id)
+    main_win = QuackyWindow(client=client, chat_id=chat_id)
     settings_win = SettingsWindow(model_visible=False, speechtospeech_enabled=False)
 
     settings_win.model_visibility_changed.connect(main_win.set_model_visible)
-    settings_win.speechtospeech_enabled_changed.connect(main_win.set_speechtospeech_enabled)
+    settings_win.speechtospeech_enabled_changed.connect(
+        main_win.set_speechtospeech_enabled
+    )
 
     tray = build_system_tray(app)
     tray.show()
@@ -178,8 +203,7 @@ if __name__ == "__main__":
     def _handle_exit_signal(_sig, _frame):
         app.quit()
 
-    # On POSIX, a running Qt event loop can starve Python's signal checks.
-    # This timer keeps the interpreter responsive to SIGINT/SIGTERM.
+    # Keep Python signal checks responsive while Qt event loop is running.
     sig_timer = QTimer()
     sig_timer.setInterval(250)
     sig_timer.timeout.connect(lambda: None)
@@ -191,5 +215,4 @@ if __name__ == "__main__":
         signal.signal(signal.SIGTERM, _handle_exit_signal)
 
     app.aboutToQuit.connect(_on_quit)
-
     sys.exit(app.exec())

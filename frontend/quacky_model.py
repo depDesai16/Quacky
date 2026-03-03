@@ -41,7 +41,7 @@ class ModelWindow(QWidget):
         tb.addWidget(lbl)
         tb.addStretch()
 
-        close_btn = QPushButton("✕")
+        close_btn = QPushButton("x")
         close_btn.setFixedSize(20, 20)
         close_btn.setStyleSheet("""
             QPushButton {

@@ -1,26 +1,32 @@
 """
-widgets/empty_state.py — EmptyState  (duck personality, no chips)
+widgets/empty_state.py - EmptyState
 
 A minimal, character-driven empty state:
-  - Large duck avatar (animated gentle pulse)
+  - Large avatar with gentle glow pulse
   - One-liner with Quacky personality
-  - Small nudge line — no generic suggestion chips
+  - Small nudge line
 """
 
-from PyQt6.QtCore    import (Qt, pyqtSignal, QPropertyAnimation,
-                              QEasingCurve, QRectF, pyqtProperty)
-from PyQt6.QtGui     import QPainter, QColor, QPainterPath
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QLabel, QSizePolicy,
-                              QGraphicsOpacityEffect)
+from PyQt6.QtCore import (
+    Qt,
+    pyqtSignal,
+    QPropertyAnimation,
+    QEasingCurve,
+    QRectF,
+    pyqtProperty,
+)
+from PyQt6.QtGui import QPainter, QColor, QPainterPath
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 
 from theme import ThemeManager, FONT_STACK
 
 
 class _DuckGlow(QWidget):
     """
-    Paints a soft amber glow behind the duck emoji label.
+    Paints a soft amber glow behind the avatar icon.
     Pulses gently with a QPropertyAnimation on _glow_opacity.
     """
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(80, 80)
@@ -46,8 +52,8 @@ class _DuckGlow(QWidget):
         return self._glow_opacity
 
     @glow_opacity.setter
-    def glow_opacity(self, v):
-        self._glow_opacity = v
+    def glow_opacity(self, value):
+        self._glow_opacity = value
         self.update()
 
     def paintEvent(self, event):
@@ -64,13 +70,14 @@ class _DuckGlow(QWidget):
 
 class EmptyState(QWidget):
     """
-    suggestion_clicked signal kept for API compatibility — never emitted.
+    suggestion_clicked signal kept for API compatibility - never emitted.
     """
+
     suggestion_clicked = pyqtSignal(str)
 
     def __init__(self, tokens: dict, icon_fn=None, parent=None):
         super().__init__(parent)
-        self._tokens  = tokens
+        self._tokens = tokens
         self._icon_fn = icon_fn
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
@@ -79,32 +86,46 @@ class EmptyState(QWidget):
         outer.setSpacing(0)
         outer.setContentsMargins(24, 0, 24, 0)
 
+        from PyQt6.QtWidgets import QGridLayout
+
         avatar_container = QWidget()
         avatar_container.setFixedSize(80, 80)
         avatar_container.setStyleSheet("background: transparent; border: none;")
 
-        glow = _DuckGlow(avatar_container)
-        glow.move(0, 0)
+        stack = QGridLayout(avatar_container)
+        stack.setContentsMargins(0, 0, 0, 0)
+        stack.setSpacing(0)
 
-        duck_lbl = QLabel("🐥", avatar_container)
-        duck_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        duck_lbl.setGeometry(0, 0, 80, 80)
-        duck_lbl.setStyleSheet(
-            "background: transparent; border: none;"
-            " font-size: 38px; padding: 0;"
-        )
+        glow = _DuckGlow()
+        stack.addWidget(glow, 0, 0)
+
+        avatar_lbl = QLabel()
+        avatar_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar_lbl.setStyleSheet("background: transparent; border: none; padding: 0;")
+        if self._icon_fn is not None:
+            try:
+                pm = self._icon_fn().pixmap(44, 44)
+                if not pm.isNull():
+                    avatar_lbl.setPixmap(pm)
+                else:
+                    avatar_lbl.setText("Q")
+            except Exception:
+                avatar_lbl.setText("Q")
+        else:
+            avatar_lbl.setText("Q")
+        stack.addWidget(avatar_lbl, 0, 0)
 
         outer.addWidget(avatar_container, 0, Qt.AlignmentFlag.AlignHCenter)
         outer.addSpacing(20)
 
-        self._heading = QLabel("Quack. What\u2019s on your mind?")
+        self._heading = QLabel("Quack. What's on your mind?")
         self._heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._heading.setWordWrap(True)
         outer.addWidget(self._heading)
         outer.addSpacing(10)
 
         self._subtitle = QLabel(
-            "Type a message below or press \u00a0Ctrl+/\u00a0 to see what I can do."
+            "Type a message below or press Ctrl+/ to see what I can do."
         )
         self._subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._subtitle.setWordWrap(True)

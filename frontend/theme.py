@@ -120,9 +120,9 @@ LIGHT_TOKENS: dict = {
     "selection":        "rgba(192,112,16,0.25)",
     "focusRing":        "rgba(192,112,16,0.60)",
 
-    "scrollbar.track":  "rgba(0,0,0,0.04)",
-    "scrollbar.thumb":  "rgba(0,0,0,0.14)",
-    "scrollbar.hover":  "rgba(0,0,0,0.24)",
+    "scrollbar.track":  "rgba(0,0,0,0.07)",
+    "scrollbar.thumb":  "rgba(0,0,0,0.22)",
+    "scrollbar.hover":  "rgba(0,0,0,0.34)",
 
     "shadow.color":     "#000000",
     "shadow.ambient_alpha": 30,
@@ -130,20 +130,20 @@ LIGHT_TOKENS: dict = {
 }
 
 if sys.platform == "darwin":
-    FONT_FAMILY_UI = "SF Pro Text"
-    FONT_STACK = "'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Arial', sans-serif"
-    FONT_FAMILY_MONO = "SF Mono"
-    FONT_MONO = "'SF Mono', 'Menlo', 'Monaco', 'DejaVu Sans Mono', monospace"
+    FONT_FAMILY_UI = "Helvetica Neue"
+    FONT_STACK = "'Helvetica Neue'"
+    FONT_FAMILY_MONO = "Menlo"
+    FONT_MONO = "'Menlo'"
 elif sys.platform.startswith("linux"):
-    FONT_FAMILY_UI = "Noto Sans"
-    FONT_STACK = "'Noto Sans', 'Inter', 'Ubuntu', 'Cantarell', 'DejaVu Sans', sans-serif"
+    FONT_FAMILY_UI = "DejaVu Sans"
+    FONT_STACK = "'DejaVu Sans'"
     FONT_FAMILY_MONO = "DejaVu Sans Mono"
-    FONT_MONO = "'JetBrains Mono', 'Noto Sans Mono', 'DejaVu Sans Mono', monospace"
+    FONT_MONO = "'DejaVu Sans Mono'"
 else:
     FONT_FAMILY_UI = "Segoe UI"
-    FONT_STACK = "'Segoe UI Variable', 'Segoe UI', 'Inter', 'Arial', sans-serif"
-    FONT_FAMILY_MONO = "Cascadia Code"
-    FONT_MONO = "'Cascadia Code', 'Consolas', 'JetBrains Mono', monospace"
+    FONT_STACK = "'Segoe UI'"
+    FONT_FAMILY_MONO = "Consolas"
+    FONT_MONO = "'Consolas'"
 
 
 
