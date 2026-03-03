@@ -20,21 +20,8 @@ class _AccentLine(QWidget):
         self._line_opacity = 0.58
         self.setFixedSize(280, 2)
 
-        self._blink = QPropertyAnimation(self, b"line_opacity", self)
-        self._blink.setDuration(1000)
-        self._blink.setStartValue(0.18)
-        self._blink.setEndValue(0.92)
-        self._blink.setEasingCurve(QEasingCurve.Type.InOutSine)
-        self._blink.setLoopCount(-1)
-        self._blink.start()
-
-    @pyqtProperty(float)
-    def line_opacity(self):
-        return self._line_opacity
-
-    @line_opacity.setter
-    def line_opacity(self, value):
-        self._line_opacity = value
+    def set_opacity(self, value: float):
+        self._line_opacity = max(0.0, min(1.0, float(value)))
         self.update()
 
     def apply_theme(self, tokens: dict):
@@ -86,6 +73,7 @@ class EmptyState(QWidget):
     def __init__(self, tokens: dict, icon_fn=None, parent=None):
         super().__init__(parent)
         self._tokens = tokens
+        self._line_opacity = 0.58
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
@@ -104,8 +92,8 @@ class EmptyState(QWidget):
         content_col.setContentsMargins(0, 0, 0, 0)
         content_col.setSpacing(0)
 
-        self._accent = _AccentLine(tokens, self._content)
-        content_col.addWidget(self._accent, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._accent_top = _AccentLine(tokens, self._content)
+        content_col.addWidget(self._accent_top, 0, Qt.AlignmentFlag.AlignHCenter)
         content_col.addSpacing(18)
 
         self._heading = QLabel("How can I help?")
@@ -139,12 +127,34 @@ class EmptyState(QWidget):
         hint_wrap = QWidget(self._content)
         hint_wrap.setLayout(hint_row)
         content_col.addWidget(hint_wrap, 0, Qt.AlignmentFlag.AlignHCenter)
+        content_col.addSpacing(14)
+
+        self._accent_bottom = _AccentLine(tokens, self._content)
+        content_col.addWidget(self._accent_bottom, 0, Qt.AlignmentFlag.AlignHCenter)
 
         outer.addWidget(self._content, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._line_blink = QPropertyAnimation(self, b"line_opacity", self)
+        self._line_blink.setDuration(1000)
+        self._line_blink.setStartValue(0.18)
+        self._line_blink.setEndValue(0.92)
+        self._line_blink.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self._line_blink.setLoopCount(-1)
+        self._line_blink.start()
 
         ThemeManager.subscribe(self.apply_theme)
         self.apply_theme(tokens)
         self._update_accent_width()
+
+    @pyqtProperty(float)
+    def line_opacity(self):
+        return self._line_opacity
+
+    @line_opacity.setter
+    def line_opacity(self, value):
+        self._line_opacity = max(0.0, min(1.0, float(value)))
+        self._accent_top.set_opacity(self._line_opacity)
+        self._accent_bottom.set_opacity(self._line_opacity)
 
     def apply_theme(self, tokens: dict):
         self._tokens = tokens
@@ -197,7 +207,10 @@ class EmptyState(QWidget):
             f"}}"
         )
 
-        self._accent.apply_theme(tokens)
+        self._accent_top.apply_theme(tokens)
+        self._accent_bottom.apply_theme(tokens)
+        self._accent_top.set_opacity(self._line_opacity)
+        self._accent_bottom.set_opacity(self._line_opacity)
         self._dot.apply_theme(tokens)
         self._update_accent_width()
 
@@ -212,7 +225,8 @@ class EmptyState(QWidget):
         target = max(heading_w, subtitle_w)
         target = max(220, target)
         target = min(target, self._content.maximumWidth())
-        self._accent.setFixedWidth(target)
+        self._accent_top.setFixedWidth(target)
+        self._accent_bottom.setFixedWidth(target)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)

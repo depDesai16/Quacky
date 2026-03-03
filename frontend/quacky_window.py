@@ -38,7 +38,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel,
                               QGraphicsOpacityEffect)
 from PyQt6.QtGui     import QKeyEvent, QCursor
-from PyQt6.QtCore    import QSettings, QPoint
+from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
 
 from theme          import ThemeManager
 from draw_icon      import draw_icon
@@ -152,6 +152,7 @@ class QuackyWindow(QWidget):
         self._active_worker         = None
         self._stt                   = None
         self._stt_bridge: STTBridge | None = None
+        self._stt_capture_enabled   = False
         self.speechtospeech_enabled = False
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
@@ -260,7 +261,7 @@ class QuackyWindow(QWidget):
         self.speechtospeech_enabled = enabled
 
     def shutdown(self):
-        self._stop_stt()
+        self._stop_stt(full_shutdown=True)
 
 
     def send_message(self):
@@ -285,6 +286,8 @@ class QuackyWindow(QWidget):
 
 
     def on_mic_toggle(self, listening: bool):
+        if listening == self._stt_capture_enabled and self._stt is not None:
+            return
         if listening:
             self.mic_btn.setToolTip("Listening… (click to stop)")
             self._start_stt()
@@ -297,7 +300,7 @@ class QuackyWindow(QWidget):
             from backend.interact.speechToText.quacky_stt import QuackySpeechToText
         except ImportError:
             self._append_system("⚠ quacky_stt not found — voice input unavailable.")
-            self.mic_btn.setChecked(False)
+            self._set_mic_checked(False)
             return
 
         if self._stt is None:
@@ -305,7 +308,7 @@ class QuackyWindow(QWidget):
                 self._stt = QuackySpeechToText(require_wake_word=False)
             except Exception as exc:
                 self._append_system(f"⚠ Microphone init failed: {exc}")
-                self.mic_btn.setChecked(False)
+                self._set_mic_checked(False)
                 return
 
             self._stt_bridge = STTBridge(self._client, self._chat_id)
@@ -314,15 +317,58 @@ class QuackyWindow(QWidget):
             self._stt_bridge.error_occurred.connect(self._on_error)
             self._stt.set_callback(self._stt_bridge.handle_command)
 
-        self._stt.start()
-        self._append_system(
-            "Voice input active - speak your command."
-        )
+        try:
+            if not self._stt.is_listening:
+                self._stt.start()
+            elif hasattr(self._stt, "set_capture_enabled"):
+                self._stt.set_capture_enabled(True)
+        except Exception as exc:
+            self._append_system(f"⚠ Voice input start failed: {exc}")
+            self._stt_capture_enabled = False
+            self._set_mic_checked(False)
+            try:
+                if self._stt and self._stt.is_listening:
+                    self._stt.shutdown()
+            except Exception:
+                pass
+            self._stt = None
+            return
 
-    def _stop_stt(self):
-        if self._stt and self._stt.is_listening:
-            self._stt.shutdown()
-            self._append_system("🔇 Voice input stopped.")
+        self._stt_capture_enabled = True
+
+    def _stop_stt(self, full_shutdown: bool = False):
+        if not self._stt:
+            self._stt_capture_enabled = False
+            return
+
+        was_enabled = self._stt_capture_enabled
+
+        try:
+            if full_shutdown:
+                if self._stt.is_listening:
+                    self._stt.shutdown()
+                self._stt_capture_enabled = False
+                return
+
+            if hasattr(self._stt, "set_capture_enabled"):
+                self._stt.set_capture_enabled(False)
+            elif self._stt.is_listening:
+                self._stt.shutdown()
+        except Exception as exc:
+            self._append_system(f"⚠ Voice input stop fallback: {exc}")
+            try:
+                if self._stt and self._stt.is_listening:
+                    self._stt.shutdown()
+            except Exception:
+                pass
+        finally:
+            self._stt_capture_enabled = False
+
+
+    def _set_mic_checked(self, checked: bool):
+        blocker = QSignalBlocker(self.mic_btn)
+        self.mic_btn.setChecked(checked)
+        del blocker
 
 
     def _on_chunk(self, chunk: str):
