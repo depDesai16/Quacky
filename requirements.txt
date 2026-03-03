@@ -3,6 +3,8 @@ PyAudio==0.2.11
 google-genai
 python-dotenv
 PyQt6
+PyOpenGL
+PyOpenGL-accelerate
 setuptools
 standard-aifc
 msal

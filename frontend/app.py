@@ -17,6 +17,31 @@ FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR     = os.path.dirname(FRONTEND_DIR)
 sys.path.insert(0, ROOT_DIR)
 
+
+def _configure_platform_env() -> None:
+    if sys.platform.startswith("linux"):
+        session_type = (os.getenv("XDG_SESSION_TYPE") or "").lower()
+        has_wayland = bool(os.getenv("WAYLAND_DISPLAY")) or session_type == "wayland"
+
+        if has_wayland:
+            os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
+            os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+            # Wayland compositors vary; software fallback avoids hard failures.
+            os.environ.setdefault("QT_OPENGL", "software")
+        else:
+            os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+            os.environ.setdefault("PYOPENGL_PLATFORM", "x11")
+
+        os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+
+    elif sys.platform == "darwin":
+        # Improve consistency for macOS compositing and high-DPI displays.
+        os.environ.setdefault("QT_MAC_WANTS_LAYER", "1")
+        os.environ.setdefault("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
+
+
+_configure_platform_env()
+
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 from settings_window import SettingsWindow
 from quacky_window   import QuackyWindow                               
