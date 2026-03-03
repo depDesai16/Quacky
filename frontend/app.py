@@ -7,6 +7,7 @@ Changes from original:
 """
 
 import os
+import signal
 import subprocess
 import sys
 import time
@@ -42,6 +43,7 @@ def _configure_platform_env() -> None:
 
 _configure_platform_env()
 
+from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 from settings_window import SettingsWindow
 from quacky_window   import QuackyWindow                               
@@ -129,6 +131,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
+    _shutdown_requested = False
 
     base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
 
@@ -160,6 +163,10 @@ if __name__ == "__main__":
     main_win.show()
 
     def _on_quit():
+        global _shutdown_requested
+        if _shutdown_requested:
+            return
+        _shutdown_requested = True
         main_win.shutdown()
         if server_proc.poll() is None:
             server_proc.terminate()
@@ -167,6 +174,21 @@ if __name__ == "__main__":
                 server_proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 server_proc.kill()
+
+    def _handle_exit_signal(_sig, _frame):
+        app.quit()
+
+    # On POSIX, a running Qt event loop can starve Python's signal checks.
+    # This timer keeps the interpreter responsive to SIGINT/SIGTERM.
+    sig_timer = QTimer()
+    sig_timer.setInterval(250)
+    sig_timer.timeout.connect(lambda: None)
+    sig_timer.start()
+
+    if hasattr(signal, "SIGINT"):
+        signal.signal(signal.SIGINT, _handle_exit_signal)
+    if hasattr(signal, "SIGTERM"):
+        signal.signal(signal.SIGTERM, _handle_exit_signal)
 
     app.aboutToQuit.connect(_on_quit)
 
