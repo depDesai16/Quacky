@@ -68,6 +68,8 @@ class ShortcutsPanel(QWidget):
                          Qt.WindowType.Tool |
                          Qt.WindowType.WindowStaysOnTopHint)
         self._tokens = tokens
+        self.setWindowTitle("Quacky — Shortcuts")
+        self.setObjectName("quacky-shortcuts-panel")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumWidth(360)
 

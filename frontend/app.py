@@ -49,6 +49,15 @@ from draw_icon       import draw_icon
 from backend.client  import QuackyClient
 
 
+def _configure_app_identity(app: QApplication) -> None:
+    app.setApplicationName("Quacky")
+    app.setApplicationDisplayName("Quacky")
+    app.setOrganizationName("Quacky")
+    app.setOrganizationDomain("quacky.local")
+    # Wayland WMs commonly match window rules via app_id/desktopFileName.
+    app.setDesktopFileName("quacky")
+
+
 
 def _start_server() -> subprocess.Popen:
     return subprocess.Popen(
@@ -119,6 +128,7 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
+    _configure_app_identity(app)
 
     base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
 

@@ -80,6 +80,7 @@ class SettingsWindow(QWidget):
     def __init__(self, model_visible: bool, speechtospeech_enabled: bool = False):
         super().__init__()
         self.setWindowTitle("Quacky — Settings")
+        self.setObjectName("quacky-settings-window")
         self.setFixedSize(260, 120)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
 

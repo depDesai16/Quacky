@@ -13,6 +13,8 @@ class ModelWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool
         )
+        self.setWindowTitle("Quacky — Model")
+        self.setObjectName("quacky-model-window")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setFixedSize(300, 324) 
 

@@ -53,6 +53,8 @@ from widgets.icon_buttons  import MicButton, SendButton
 from widgets.toast         import Toast
 
 MAX_WINDOW_W = 1040
+MIN_WINDOW_W = 600
+MIN_WINDOW_H = 660
 
 
 
@@ -161,9 +163,12 @@ class QuackyWindow(QWidget):
             Qt.WindowType.WindowStaysOnTopHint |
             Qt.WindowType.Tool
         )
+        self.setWindowTitle("Quacky")
+        self.setObjectName("quacky-main-window")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setMinimumSize(600, 660)
-        self.setMaximumWidth(MAX_WINDOW_W)
+        self.setMinimumSize(MIN_WINDOW_W, MIN_WINDOW_H)
+        self._screen_hooked = False
+        self._apply_wm_size_hints()
         self.resize(620, 740)
 
         ThemeManager.load()
@@ -598,6 +603,25 @@ class QuackyWindow(QWidget):
         if hasattr(self, 'toast'):
             self._update_toast_anchor()
         self._save_geometry()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        handle = self.windowHandle()
+        if handle is not None and not self._screen_hooked:
+            handle.screenChanged.connect(lambda _screen: self._apply_wm_size_hints())
+            self._screen_hooked = True
+        self._apply_wm_size_hints()
+
+    def _apply_wm_size_hints(self):
+        max_w = MAX_WINDOW_W
+        max_h = 1200
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is not None:
+            geo = screen.availableGeometry()
+            max_w = min(MAX_WINDOW_W, max(MIN_WINDOW_W, geo.width() - 48))
+            max_h = max(MIN_WINDOW_H, int(geo.height() * 0.92))
+        self.setMinimumSize(MIN_WINDOW_W, MIN_WINDOW_H)
+        self.setMaximumSize(max_w, max_h)
 
     def _show_shortcuts_panel(self):
         if hasattr(self, '_shortcuts_panel') and self._shortcuts_panel.isVisible():
