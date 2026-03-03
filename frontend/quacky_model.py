@@ -1,6 +1,6 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
-from cardwidget import CardWidget
+from widgets.card_widget import CardWidget
 from glwidget import GLWidget
 
 class ModelWindow(QWidget):
@@ -14,7 +14,7 @@ class ModelWindow(QWidget):
             Qt.WindowType.Tool
         )
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(300, 324)  # 300 model + 24 title bar
+        self.setFixedSize(300, 324) 
 
         self._build_ui()
 
@@ -28,7 +28,6 @@ class ModelWindow(QWidget):
         card_layout.setContentsMargins(0, 0, 0, 0)
         card_layout.setSpacing(0)
 
-        # ── Mini title bar ────────────────────
         title_bar = QWidget()
         title_bar.setFixedHeight(28)
         title_bar.setStyleSheet("background: transparent;")
@@ -53,8 +52,8 @@ class ModelWindow(QWidget):
         tb.addWidget(close_btn)
         card_layout.addWidget(title_bar)
 
-        # ── GL Widget ─────────────────────────
-        self.gl_widget = GLWidget("model_3d/quacky.obj")
+        import os as _os; _d = _os.path.dirname(_os.path.abspath(__file__))
+        self.gl_widget = GLWidget(_os.path.join(_d, "model_3d", "quacky.obj"))
         gl_container = QWidget()
         gl_container.setStyleSheet("background: transparent;")
         gl_layout = QVBoxLayout(gl_container)
@@ -64,7 +63,6 @@ class ModelWindow(QWidget):
 
         root.addWidget(self.card)
 
-    # Drag support
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._old_pos = event.globalPosition().toPoint()

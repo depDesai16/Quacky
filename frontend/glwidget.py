@@ -12,7 +12,7 @@ class GLWidget(QOpenGLWidget):
         self.obj = ObjLoader(obj_path)
 
         self.timer = QTimer(self)
-        self.timer.setInterval(1000 // self.FPS)  # ~33ms per frame
+        self.timer.setInterval(1000 // self.FPS)                   
         self.timer.timeout.connect(self.update)
         self.timer.start()
 

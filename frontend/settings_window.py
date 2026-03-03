@@ -17,7 +17,6 @@ class ToggleSlider(QWidget):
         self._anim.setDuration(180)
         self._anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
 
-    # pyqtProperty
     def get_knob_x(self):
         return self._knob_x
 
@@ -27,7 +26,6 @@ class ToggleSlider(QWidget):
 
     knob_x = pyqtProperty(float, get_knob_x, set_knob_x)
 
-    # State
     def isChecked(self):
         return self._checked
 
@@ -42,14 +40,12 @@ class ToggleSlider(QWidget):
         self._anim.setEndValue(target)
         self._anim.start()
 
-    # Interaction
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._checked = not self._checked
             self._animate_to(26.0 if self._checked else 4.0)
             self.toggled.emit(self._checked)
 
-    # Drawing
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -57,7 +53,6 @@ class ToggleSlider(QWidget):
         w, h = self.width(), self.height()
         radius = h / 2
 
-        # Track
         if self._checked:
             track_color = QColor("#FFD700")
             track_color.setAlphaF(0.85)
@@ -70,7 +65,6 @@ class ToggleSlider(QWidget):
         p.setPen(QPen(QColor("#3a3a6a"), pen_width))
         p.drawRoundedRect(QRectF(inset, inset, w - pen_width, h - pen_width), radius - inset, radius - inset)
 
-        # Knob
         knob_size = h - 6
         p.setBrush(QBrush(QColor("#e8e8e8")))
         p.setPen(Qt.PenStyle.NoPen)
@@ -89,7 +83,8 @@ class SettingsWindow(QWidget):
         self.setFixedSize(260, 120)
         self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint | Qt.WindowType.Tool)
 
-        with open("css/settings_menu.css", "r") as f:
+        import os as _os; _dir = _os.path.dirname(_os.path.abspath(__file__))
+        with open(_os.path.join(_dir, "css", "settings_menu.css"), "r") as f:
             self.setStyleSheet(f.read())
 
         root = QVBoxLayout(self)

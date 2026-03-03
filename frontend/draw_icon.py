@@ -9,35 +9,29 @@ def draw_icon():
     p = QPainter(px)
     p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    # Head (round, front-facing)
     p.setBrush(QBrush(QColor("#FFD700")))
     p.setPen(QPen(QColor("#CC9900"), 1.5))
     p.drawEllipse(6, 4, 52, 52)
 
-    # Fluffy cheeks
     p.setBrush(QBrush(QColor("#FFBE00")))
     p.setPen(Qt.PenStyle.NoPen)
-    p.drawEllipse(4, 30, 16, 12)   # left cheek
-    p.drawEllipse(44, 30, 16, 12)  # right cheek
+    p.drawEllipse(4, 30, 16, 12)               
+    p.drawEllipse(44, 30, 16, 12)               
 
-    # Eyes: whites
     p.setBrush(QBrush(QColor("#FFFFFF")))
     p.setPen(QPen(QColor("#CCAA00"), 1))
-    p.drawEllipse(13, 16, 16, 18)  # left eye
-    p.drawEllipse(35, 16, 16, 18)  # right eye
+    p.drawEllipse(13, 16, 16, 18)            
+    p.drawEllipse(35, 16, 16, 18)             
 
-    # Eyes: pupils
     p.setBrush(QBrush(QColor("#1a1a2e")))
     p.setPen(Qt.PenStyle.NoPen)
-    p.drawEllipse(18, 21, 8, 9)    # left pupil
-    p.drawEllipse(40, 21, 8, 9)    # right pupil
+    p.drawEllipse(18, 21, 8, 9)                
+    p.drawEllipse(40, 21, 8, 9)                 
 
-    # Eyes: shine
     p.setBrush(QBrush(QColor("#FFFFFF")))
-    p.drawEllipse(20, 22, 3, 3)    # left shine
-    p.drawEllipse(42, 22, 3, 3)    # right shine
+    p.drawEllipse(20, 22, 3, 3)                
+    p.drawEllipse(42, 22, 3, 3)                 
 
-    # Bill (flat oval, centered)
     p.setBrush(QBrush(QColor("#FF8C00")))
     p.setPen(QPen(QColor("#CC6000"), 1.5))
     bill = QPainterPath()
@@ -46,11 +40,9 @@ def draw_icon():
     bill.cubicTo(46, 44, 44, 34, 32, 36)
     p.drawPath(bill)
 
-    # Smile line
     p.setPen(QPen(QColor("#CC6000"), 1.2))
     p.drawLine(22, 40, 42, 40)
 
-    # Tuft on top
     p.setBrush(QBrush(QColor("#FFD700")))
     p.setPen(QPen(QColor("#CC9900"), 1))
     tuft = QPainterPath()

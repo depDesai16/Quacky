@@ -1,5 +1,13 @@
 QWidget {
-    background: #0d0d1a;
-    color: #e8e8e8;
-    font-size: 18px;
+    background: #111120;
+    color: #E8E8F0;
+    font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', sans-serif;
+    font-size: 14px;
+}
+
+QLabel#modelSettingLabel {
+    font-size: 14px;
+    font-weight: 500;
+    color: #E8E8F0;
+    background: transparent;
 }
