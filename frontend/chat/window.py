@@ -140,6 +140,13 @@ class QuackyWindow(QWidget):
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
         self._last_failed_text: str    | None = None
+        
+        # User profile
+        self.current_user = "Guest"
+        
+        # Initialize face recognition manager early (before camera)
+        from camera.face_recognition import FaceRecognitionManager
+        self.face_recognition = FaceRecognitionManager()
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint |
@@ -194,21 +201,38 @@ class QuackyWindow(QWidget):
         self.header = HeaderBar(icon=draw_icon(), parent=self.card)
         self.header.minimize_clicked.connect(self.hide)
         self.header.close_clicked.connect(QApplication.instance().quit)
+        self.header.user_chip_clicked.connect(self._show_user_menu)
         self.header.settings_clicked.connect(self._show_settings)
         self.header.back_clicked.connect(self._show_chat)
         cl.addWidget(self.header)
-
+        
+        # Add tab bar
+        self.tab_bar = self._create_tab_bar()
+        cl.addWidget(self.tab_bar)
+        
+        # Create stacked widget to hold chat, camera, and settings views
+        from PyQt6.QtWidgets import QStackedWidget
+        self.stacked_widget = QStackedWidget()
+        
+        # Chat view (existing timeline)
         self._chat_container = QWidget()
         self._chat_container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         chat_inner = QVBoxLayout(self._chat_container)
         chat_inner.setContentsMargins(0, 0, 0, 0)
         chat_inner.setSpacing(0)
-
-        self.timeline = ChatTimeline(draw_icon_fn=draw_icon,
-                                     parent=self._chat_container)
+        
+        self.timeline = ChatTimeline(draw_icon_fn=draw_icon, parent=self._chat_container)
         self._wire_suggestions()
         chat_inner.addWidget(self.timeline, 1)
-        cl.addWidget(self._chat_container, 1)
+        
+        # Camera view
+        from camera.camera_view import CameraView
+        self.camera_view = CameraView(parent=self.card)
+        
+        # Don't connect automatic user recognition - only use Face ID dialog
+        # self.camera_view.user_recognized.connect(self._on_user_profile_changed)
+        
+        # Settings panel
         self._settings_container = SettingsPanel(
             model_window=self.model_window,
             speechtospeech_enabled=self.speechtospeech_enabled,
@@ -220,8 +244,13 @@ class QuackyWindow(QWidget):
         self._settings_container.speechtospeech_enabled_changed.connect(
             self.set_speechtospeech_enabled
         )
-        self._settings_container.hide()
-        cl.addWidget(self._settings_container, 1)
+        
+        # Add views to stacked widget
+        self.stacked_widget.addWidget(self._chat_container)     # index 0
+        self.stacked_widget.addWidget(self.camera_view)         # index 1
+        self.stacked_widget.addWidget(self._settings_container) # index 2
+        
+        cl.addWidget(self.stacked_widget, 1)
 
         self.mic_btn  = MicButton()
         self.send_btn = SendButton()
@@ -241,6 +270,225 @@ class QuackyWindow(QWidget):
         root.addWidget(self.card)
         self.toast = Toast(self.card)
         self._update_toast_anchor()
+    
+    def _create_tab_bar(self):
+        """Create tab bar for switching between chat and camera"""
+        from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton
+        
+        tab_bar = QWidget()
+        tab_bar.setFixedHeight(44)
+        tab_layout = QHBoxLayout(tab_bar)
+        tab_layout.setContentsMargins(16, 8, 16, 0)
+        tab_layout.setSpacing(8)
+        
+        # Chat tab button
+        self.chat_tab_btn = QPushButton("💬 Chat")
+        self.chat_tab_btn.setCheckable(True)
+        self.chat_tab_btn.setChecked(True)
+        self.chat_tab_btn.clicked.connect(lambda: self._switch_tab(0))
+        
+        # Camera tab button
+        self.camera_tab_btn = QPushButton("📷 Camera")
+        self.camera_tab_btn.setCheckable(True)
+        self.camera_tab_btn.clicked.connect(lambda: self._switch_tab(1))
+        
+        # Style tabs
+        self._style_tab_buttons()
+        
+        tab_layout.addWidget(self.chat_tab_btn)
+        tab_layout.addWidget(self.camera_tab_btn)
+        tab_layout.addStretch()
+        
+        return tab_bar
+    
+    def _style_tab_buttons(self):
+        """Apply theme styling to tab buttons"""
+        t = ThemeManager.tokens()
+        
+        tab_style = f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+                border-bottom: 2px solid transparent;
+                color: {t['text.secondary']};
+                font-size: 14px;
+                font-weight: 500;
+                padding: 8px 16px;
+            }}
+            QPushButton:hover {{
+                color: {t['text.primary']};
+                background: {t['bg.elevated']};
+            }}
+            QPushButton:checked {{
+                color: {t['accent.primary']};
+                border-bottom: 2px solid {t['accent.primary']};
+            }}
+        """
+        
+        self.chat_tab_btn.setStyleSheet(tab_style)
+        self.camera_tab_btn.setStyleSheet(tab_style)
+    
+    def _switch_tab(self, index):
+        """Switch between chat and camera tabs"""
+        self.stacked_widget.setCurrentIndex(index)
+        
+        # Update tab button states
+        self.chat_tab_btn.setChecked(index == 0)
+        self.camera_tab_btn.setChecked(index == 1)
+        
+        # Hide composer when on camera tab
+        if index == 1:
+            self.composer.hide()
+        else:
+            self.composer.show()
+    
+    def _on_user_profile_changed(self, name, confidence):
+        """Handle user profile change from face recognition"""
+        if name != "Unknown" and name != self.current_user:
+            self.current_user = name
+            # Update header to show current user
+            self.header.set_user(name)
+            # Update window title
+            self.setWindowTitle(f"Quacky - {name}")
+            # Show notification in chat
+            self.timeline.add_system_message(
+                f'<span style="color:#00d4ff;">Welcome back, {name}! '
+                f'Profile switched from Guest.</span>'
+            )
+        elif name == "Unknown" and self.current_user != "Guest":
+            self.current_user = "Guest"
+            self.header.set_user("Guest")
+            self.setWindowTitle("Quacky")
+            self.timeline.add_system_message(
+                '<span style="color:#888;">Switched to Guest mode.</span>'
+            )
+    
+    def _show_user_menu(self):
+        """Show user profile menu"""
+        from PyQt6.QtWidgets import QMenu
+        
+        menu = QMenu(self)
+        menu.setStyleSheet(f"""
+            QMenu {{
+                background: {ThemeManager.tokens()['bg.elevated']};
+                border: 1px solid {ThemeManager.tokens()['border.strong']};
+                border-radius: 8px;
+                padding: 4px;
+            }}
+            QMenu::item {{
+                padding: 8px 16px;
+                color: {ThemeManager.tokens()['text.primary']};
+                border-radius: 4px;
+            }}
+            QMenu::item:selected {{
+                background: {ThemeManager.tokens()['accent.subtleBg']};
+                color: {ThemeManager.tokens()['accent.primary']};
+            }}
+        """)
+        
+        # Get registered users count
+        registered_users = self.face_recognition.get_registered_users()
+        user_count = len(registered_users)
+        
+        # Current user indicator
+        current_text = f"Current: {self.current_user}"
+        current_action = menu.addAction(f"👤 {current_text}")
+        current_action.setEnabled(False)  # Just for display
+        
+        menu.addSeparator()
+        
+        # Switch Profile - Face ID style
+        if user_count > 0:
+            switch_action = menu.addAction("🔓 Switch Profile (Face ID)")
+            switch_action.triggered.connect(self._start_face_id_switch)
+        else:
+            no_users_action = menu.addAction("⚠️  No registered users")
+            no_users_action.setEnabled(False)
+        
+        # Register new user
+        register_action = menu.addAction("📸 Register New Face...")
+        register_action.triggered.connect(self._register_new_user)
+        
+        # Guest mode option
+        if self.current_user != "Guest":
+            menu.addSeparator()
+            guest_action = menu.addAction("👤 Switch to Guest")
+            guest_action.triggered.connect(lambda: self._switch_to_user("Guest"))
+        
+        # Show menu below the user chip
+        chip_pos = self.header.user_chip.mapToGlobal(self.header.user_chip.rect().bottomLeft())
+        menu.exec(chip_pos)
+    
+    def _switch_to_user(self, user_name):
+        """Manually switch to a user"""
+        if user_name != self.current_user:
+            self.current_user = user_name
+            self.header.set_user(user_name)
+            if user_name == "Guest":
+                self.setWindowTitle("Quacky")
+                self.timeline.add_system_message(
+                    '<span style="color:#888;">Switched to Guest mode.</span>'
+                )
+            else:
+                self.setWindowTitle(f"Quacky - {user_name}")
+                self.timeline.add_system_message(
+                    f'<span style="color:#00d4ff;">Switched to {user_name}\'s profile.</span>'
+                )
+    
+    def _register_new_user(self):
+        """Show registration dialog"""
+        from PyQt6.QtWidgets import QMessageBox
+        
+        # Switch to camera tab
+        self._switch_tab(1)
+        
+        # Show instructions
+        QMessageBox.information(
+            self,
+            "Register New Face",
+            "To register your face:\n\n"
+            "1. Make sure your face is visible in the camera\n"
+            "2. Enter your name in the text field at the bottom\n"
+            "3. Click the '📸 Register Face' button\n\n"
+            "The camera will recognize you automatically next time!"
+        )
+    
+    def _start_face_id_switch(self):
+        """Start Face ID authentication to switch profiles"""
+        from camera.face_id_dialog import FaceIDDialog
+        
+        # Stop camera tab if it's running
+        was_on_camera = self.stacked_widget.currentIndex() == 1
+        if hasattr(self, 'camera_view') and self.camera_view.camera_thread:
+            self.camera_view.stop_camera()
+            # Give camera time to fully release
+            QTimer.singleShot(200, lambda: self._show_face_id_dialog(was_on_camera))
+        else:
+            self._show_face_id_dialog(was_on_camera)
+    
+    def _show_face_id_dialog(self, was_on_camera):
+        """Show the Face ID dialog after camera is released"""
+        from camera.face_id_dialog import FaceIDDialog
+        
+        # Create and show Face ID dialog
+        dialog = FaceIDDialog(self.face_recognition, self)
+        dialog.user_authenticated.connect(self._on_face_id_success)
+        result = dialog.exec()
+        
+        # Restart camera tab if it was on camera view
+        if was_on_camera:
+            QTimer.singleShot(200, self.camera_view.start_camera)
+    
+    def _on_face_id_success(self, name, confidence):
+        """Handle successful Face ID authentication"""
+        if name != self.current_user:
+            self.current_user = name
+            self.header.set_user(name)
+            self.setWindowTitle(f"Quacky - {name}")
+            self.timeline.add_system_message(
+                f'<span style="color:#00d4ff;">✓ Authenticated as {name} '
+                f'({confidence*100:.0f}% confidence)</span>'
+            )
 
 
     def _show_settings_toast(self, message: str, kind: str):
