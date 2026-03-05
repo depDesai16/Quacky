@@ -55,7 +55,17 @@ def _configure_app_identity(app: QApplication) -> None:
     app.setApplicationDisplayName("Quacky")
     app.setOrganizationName("Quacky")
     app.setOrganizationDomain("quacky.local")
-    app.setDesktopFileName("quacky")
+    # Avoid Linux portal warning if no installed quacky.desktop entry exists.
+    if sys.platform.startswith("linux"):
+        desktop_paths = [
+            os.path.expanduser("~/.local/share/applications/quacky.desktop"),
+            "/usr/local/share/applications/quacky.desktop",
+            "/usr/share/applications/quacky.desktop",
+        ]
+        if any(os.path.exists(path) for path in desktop_paths):
+            app.setDesktopFileName("quacky")
+    else:
+        app.setDesktopFileName("quacky")
 
 
 def _start_server() -> subprocess.Popen:
@@ -149,12 +159,20 @@ if __name__ == "__main__":
 
     _shutdown_requested = False
     base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
-    server_proc = _start_server()
+    server_proc = None
+    owns_server = False
 
-    if not _wait_for_server(base_url):
-        QMessageBox.critical(None, "Quacky", "Backend server failed to start.")
-        server_proc.terminate()
-        sys.exit(1)
+    # Reuse existing backend if already running on the target base URL.
+    if _wait_for_server(base_url, timeout=1.0):
+        pass
+    else:
+        server_proc = _start_server()
+        owns_server = True
+        if not _wait_for_server(base_url):
+            QMessageBox.critical(None, "Quacky", "Backend server failed to start.")
+            if server_proc.poll() is None:
+                server_proc.terminate()
+            sys.exit(1)
 
     client   = QuackyClient(base_url)
     system   = _load_system_prompt()
@@ -163,7 +181,8 @@ if __name__ == "__main__":
 
     if not chat_id:
         QMessageBox.critical(None, "Quacky", "Could not start chat session.")
-        server_proc.terminate()
+        if owns_server and server_proc is not None and server_proc.poll() is None:
+            server_proc.terminate()
         sys.exit(1)
 
     main_win = QuackyWindow(client=client, chat_id=chat_id)
@@ -179,7 +198,7 @@ if __name__ == "__main__":
             return
         _shutdown_requested = True
         main_win.shutdown()
-        if server_proc.poll() is None:
+        if owns_server and server_proc is not None and server_proc.poll() is None:
             server_proc.terminate()
             try:
                 server_proc.wait(timeout=3)
