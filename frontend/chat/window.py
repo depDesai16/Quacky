@@ -251,15 +251,15 @@ class QuackyWindow(QWidget):
     def _show_settings(self):
         """Show settings."""
         self._settings_container.prepare_for_show()
-        self._chat_container.hide()
-        self._settings_container.show()
+        self.stacked_widget.setCurrentIndex(2)  # Settings is index 2
+        self.tab_bar.hide()
         self.composer.hide()
         self.header.enter_settings_mode()
 
     def _show_chat(self):
         """Show chat."""
-        self._settings_container.hide()
-        self._chat_container.show()
+        self.stacked_widget.setCurrentIndex(0)  # Chat is index 0
+        self.tab_bar.show()
         self.composer.show()
         self.header.exit_settings_mode()
         self._update_toast_anchor()
