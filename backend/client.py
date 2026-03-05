@@ -71,3 +71,21 @@ class QuackyClient:
 
     def reset(self, chat_id: str) -> dict:
         return self._post("/chat/reset", {"chat_id": chat_id})
+
+    def get_saved_api_key(self) -> dict:
+        try:
+            return self._get("/settings/api-key")
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def save_api_key(self, api_key: str) -> dict:
+        return self._post("/settings/api-key/save", {"api_key": api_key})
+
+    def remove_api_key(self) -> dict:
+        return self._post("/settings/api-key/remove", {})
+
+    def test_api_key(self, api_key: str | None = None) -> dict:
+        payload = {}
+        if api_key is not None:
+            payload["api_key"] = api_key
+        return self._post("/settings/api-key/test", payload)

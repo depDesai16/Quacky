@@ -1,7 +1,7 @@
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
-from obj_loader import ObjLoader
+from .obj_loader import ObjLoader
 
 _OPENGL_IMPORT_ERROR = None
 try:
@@ -44,6 +44,7 @@ if _OPENGL_IMPORT_ERROR is None:
         FPS = 30
 
         def __init__(self, obj_path):
+            """Initialize the instance state."""
             super().__init__()
             self.obj = ObjLoader(obj_path)
 
@@ -53,6 +54,7 @@ if _OPENGL_IMPORT_ERROR is None:
             self.timer.start()
 
         def initializeGL(self):
+            """Handle initializegl."""
             glEnable(GL_DEPTH_TEST)
             glEnable(GL_LIGHTING)
             glEnable(GL_LIGHT0)
@@ -62,6 +64,7 @@ if _OPENGL_IMPORT_ERROR is None:
             glClearColor(0.05, 0.05, 0.1, 1)
 
         def resizeGL(self, w, h):
+            """Handle resizegl."""
             glViewport(0, 0, w, h)
             glMatrixMode(GL_PROJECTION)
             glLoadIdentity()
@@ -69,6 +72,7 @@ if _OPENGL_IMPORT_ERROR is None:
             glMatrixMode(GL_MODELVIEW)
 
         def paintGL(self):
+            """Handle paintgl."""
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
             glLoadIdentity()
             glTranslatef(0, 0, -5)
@@ -90,6 +94,7 @@ else:
 
     class GLWidget(QWidget):
         def __init__(self, _obj_path):
+            """Initialize the instance state."""
             super().__init__()
             layout = QVBoxLayout(self)
             layout.setContentsMargins(12, 12, 12, 12)
@@ -100,3 +105,4 @@ else:
             msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
             msg.setStyleSheet("color: #d4d9f2; background: transparent;")
             layout.addWidget(msg)
+

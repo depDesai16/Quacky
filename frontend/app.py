@@ -1,6 +1,3 @@
-"""
-app.py - Application entrypoint.
-"""
 
 import os
 import signal
@@ -17,8 +14,7 @@ if ROOT_DIR not in sys.path:
 
 
 def _configure_platform_env() -> None:
-    # Qt6 handles high-DPI automatically; these vars keep pixel behavior
-    # predictable across platforms before QApplication starts.
+    """Handle configure platform env."""
     os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
     os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
 
@@ -29,7 +25,6 @@ def _configure_platform_env() -> None:
         if has_wayland:
             os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
             os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
-            # Wayland compositors vary; software fallback avoids hard failures.
             os.environ.setdefault("QT_OPENGL", "software")
         else:
             os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
@@ -48,14 +43,14 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 from PyQt6.QtGui import QFont, QFontDatabase
 
-from settings_window import SettingsWindow
-from quacky_window import QuackyWindow
+from chat.window import QuackyWindow
 from draw_icon import draw_icon
 from theme import FONT_FAMILY_UI
 from backend.client import QuackyClient
 
 
 def _configure_app_identity(app: QApplication) -> None:
+    """Handle configure app identity."""
     app.setApplicationName("Quacky")
     app.setApplicationDisplayName("Quacky")
     app.setOrganizationName("Quacky")
@@ -64,10 +59,12 @@ def _configure_app_identity(app: QApplication) -> None:
 
 
 def _start_server() -> subprocess.Popen:
+    """Handle start server."""
     return subprocess.Popen([sys.executable, "-m", "backend.server"], cwd=ROOT_DIR)
 
 
 def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
+    """Handle wait for server."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
@@ -80,6 +77,7 @@ def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
 
 
 def _load_system_prompt() -> str | None:
+    """Load system prompt."""
     path = os.path.join(ROOT_DIR, "backend", "system_prompt.txt")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -88,18 +86,20 @@ def _load_system_prompt() -> str | None:
 
 
 def show_main():
+    """Show main."""
     main_win.show()
     main_win.raise_()
     main_win.activateWindow()
 
 
 def show_settings():
-    settings_win.show()
-    settings_win.raise_()
-    settings_win.activateWindow()
+    """Show settings."""
+    show_main()
+    main_win._show_settings()
 
 
 def on_tray_activated(reason):
+    """Handle tray activated callbacks."""
     if reason == QSystemTrayIcon.ActivationReason.Trigger:
         if main_win.isVisible():
             main_win.hide()
@@ -108,6 +108,7 @@ def on_tray_activated(reason):
 
 
 def build_system_tray(app: QApplication) -> QSystemTrayIcon:
+    """Build system tray."""
     tray = QSystemTrayIcon(draw_icon(), parent=app)
     tray.setToolTip("Quacky")
 
@@ -116,7 +117,7 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     with open(css_path, "r", encoding="utf-8") as f:
         tray_menu.setStyleSheet(f.read())
 
-    action_open = tray_menu.addAction("Open Quacky")
+    action_open     = tray_menu.addAction("Open Quacky")
     action_settings = tray_menu.addAction("Settings")
     tray_menu.addSeparator()
     action_quit = tray_menu.addAction("Quit")
@@ -134,10 +135,8 @@ if __name__ == "__main__":
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
 
-    # Use a deterministic widget style for consistent metrics across OSes.
     app.setStyle("Fusion")
 
-    # Enforce a single UI font family (no fallback chain).
     available = set(QFontDatabase.families())
     if FONT_FAMILY_UI not in available:
         QMessageBox.critical(
@@ -165,10 +164,10 @@ if __name__ == "__main__":
         server_proc.terminate()
         sys.exit(1)
 
-    client = QuackyClient(base_url)
-    system = _load_system_prompt()
+    client   = QuackyClient(base_url)
+    system   = _load_system_prompt()
     chat_data = client.start_chat(system=system)
-    chat_id = chat_data.get("chat_id", "")
+    chat_id  = chat_data.get("chat_id", "")
 
     if not chat_id:
         QMessageBox.critical(None, "Quacky", "Could not start chat session.")
@@ -176,18 +175,13 @@ if __name__ == "__main__":
         sys.exit(1)
 
     main_win = QuackyWindow(client=client, chat_id=chat_id)
-    settings_win = SettingsWindow(model_visible=False, speechtospeech_enabled=False)
-
-    settings_win.model_visibility_changed.connect(main_win.set_model_visible)
-    settings_win.speechtospeech_enabled_changed.connect(
-        main_win.set_speechtospeech_enabled
-    )
 
     tray = build_system_tray(app)
     tray.show()
     main_win.show()
 
     def _on_quit():
+        """Handle quit callbacks."""
         global _shutdown_requested
         if _shutdown_requested:
             return
@@ -201,6 +195,7 @@ if __name__ == "__main__":
                 server_proc.kill()
 
     def _handle_exit_signal(_sig, _frame):
+        """Handle handle exit signal."""
         app.quit()
 
     sig_timer = QTimer()

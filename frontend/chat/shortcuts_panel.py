@@ -1,9 +1,3 @@
-"""
-shortcuts_panel.py — ShortcutsPanel
-
-A floating overlay showing all keyboard shortcuts.
-Triggered with Ctrl+/ — press again or Escape to close.
-"""
 
 from PyQt6.QtCore    import Qt, pyqtSignal
 from PyQt6.QtGui     import QPainter, QColor, QPainterPath
@@ -31,17 +25,19 @@ SHORTCUTS = [
 
 
 class _KbdChip(QLabel):
-    """Renders a single key like ⌘K in a pill/kbd style."""
     def __init__(self, text: str, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(text, parent)
         self._tokens = tokens
         self._apply_style()
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self._apply_style()
 
     def _apply_style(self):
+        """Apply style."""
         t = self._tokens
         self.setStyleSheet(f"""
             QLabel {{
@@ -63,6 +59,7 @@ class ShortcutsPanel(QWidget):
     RADIUS = 14
 
     def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent,
                          Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.Tool |
@@ -125,12 +122,14 @@ class ShortcutsPanel(QWidget):
         self.apply_theme(tokens)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         for chip in self._chips:
             chip.apply_theme(tokens)
         self._apply_style()
 
     def _apply_style(self):
+        """Apply style."""
         t = self._tokens
 
         self._title.setStyleSheet(f"""
@@ -171,6 +170,7 @@ class ShortcutsPanel(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        """Handle the paint event."""
         t   = self._tokens
         p   = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -188,10 +188,12 @@ class ShortcutsPanel(QWidget):
         p.end()
 
     def keyPressEvent(self, event):
+        """Handle the keypress event."""
         if event.key() in (Qt.Key.Key_Escape, Qt.Key.Key_Slash):
             self.close()
         super().keyPressEvent(event)
 
     def closeEvent(self, event):
+        """Handle the close event."""
         self.closed.emit()
         super().closeEvent(event)

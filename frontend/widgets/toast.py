@@ -1,14 +1,3 @@
-"""
-widgets/toast.py — Toast
-
-Overlay notification shown at the bottom-centre of its parent widget.
-Slides up + fades in; auto-dismisses after 2500 ms with a fade-out.
-
-Usage:
-    self.toast = Toast(parent_widget)
-    self.toast.show_message("Copied!", kind="success")
-    self.toast.show_message("Something went wrong", kind="error")
-"""
 
 from PyQt6.QtCore    import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui     import QColor
@@ -23,12 +12,9 @@ MARGIN_BOTTOM     = 16
 
 
 class Toast(QLabel):
-    """
-    Positioned by the parent via _reposition().
-    Parent must call toast.reposition() if it resizes.
-    """
 
     def __init__(self, parent):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = ThemeManager.tokens()
         self._bottom_clearance = 0
@@ -50,15 +36,17 @@ class Toast(QLabel):
         ThemeManager.subscribe(self.apply_theme)
 
     def set_bottom_clearance(self, px: int):
+        """Set bottom clearance."""
         self._bottom_clearance = max(0, int(px))
         self._reposition()
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
 
 
     def show_message(self, text: str, kind: str = "success"):
-        """kind: 'success' | 'error' | 'warn'"""
+        """Show message."""
         self._dismiss_timer.stop()
         self._fade_anim.stop()
 
@@ -92,6 +80,7 @@ class Toast(QLabel):
 
 
     def _fade_out(self):
+        """Handle fade out."""
         self._fade_anim.setDuration(FADE_OUT_MS)
         self._fade_anim.setStartValue(1.0)
         self._fade_anim.setEndValue(0.0)
@@ -99,10 +88,12 @@ class Toast(QLabel):
         self._fade_anim.start()
 
     def _on_fade_done(self):
+        """Handle fade done callbacks."""
         self._fade_anim.finished.disconnect(self._on_fade_done)
         self.hide()
 
     def _reposition(self):
+        """Handle reposition."""
         if self.parent() is None:
             return
         pw = self.parent().width()
@@ -115,10 +106,12 @@ class Toast(QLabel):
         self.move(x, y)
 
     def resizeEvent(self, event):
+        """Handle the resize event."""
         super().resizeEvent(event)
         self._reposition()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:
