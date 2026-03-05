@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 from PyQt6.QtGui import QImage, QPixmap, QFont
-from theme import ThemeManager
+from theme import ThemeManager, FONT_FAMILY_UI
 
 
 class FaceIDDialog(QDialog):
@@ -28,10 +28,16 @@ class FaceIDDialog(QDialog):
         self.timer = None
         self.attempts = 0
         self.max_attempts = 10  # Try for ~3 seconds
+        self._face_cascade = cv2.CascadeClassifier(
+            cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+        )
+        if self._face_cascade.empty():
+            self._face_cascade = None
         
         self.setWindowTitle("Face ID Authentication")
         self.setModal(True)
-        self.setFixedSize(400, 500)
+        self.setMinimumSize(400, 500)
+        self.resize(400, 500)
         
         # Frameless with rounded corners
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.FramelessWindowHint)
@@ -49,18 +55,23 @@ class FaceIDDialog(QDialog):
         
         # Title
         self.title_label = QLabel("Face ID")
-        self.title_label.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        title_font = QFont(FONT_FAMILY_UI)
+        title_font.setPointSizeF(20)
+        title_font.setWeight(QFont.Weight.Bold)
+        self.title_label.setFont(title_font)
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         # Status message
         self.status_label = QLabel("Position your face in the frame")
-        self.status_label.setFont(QFont("Segoe UI", 13))
+        status_font = QFont(FONT_FAMILY_UI)
+        status_font.setPointSizeF(13)
+        self.status_label.setFont(status_font)
         self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.status_label.setWordWrap(True)
         
         # Camera preview
         self.camera_label = QLabel()
-        self.camera_label.setFixedSize(350, 350)
+        self.camera_label.setMinimumSize(300, 300)
         self.camera_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.camera_label.setScaledContents(False)
         
@@ -226,11 +237,15 @@ class FaceIDDialog(QDialog):
     def _display_frame(self, frame):
         """Display camera frame with face detection box"""
         # Detect faces to show visual feedback
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        face_cascade = cv2.CascadeClassifier(
-            cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-        )
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(50, 50))
+        faces = []
+        if self._face_cascade is not None:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = self._face_cascade.detectMultiScale(
+                gray,
+                scaleFactor=1.1,
+                minNeighbors=5,
+                minSize=(50, 50),
+            )
         
         # Convert to RGB
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)

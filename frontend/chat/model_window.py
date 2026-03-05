@@ -17,7 +17,8 @@ class ModelWindow(QWidget):
         self.setWindowTitle("Quacky â€” Model")
         self.setObjectName("quacky-model-window")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(300, 324) 
+        self.setMinimumSize(260, 290)
+        self.resize(300, 324)
 
         self._build_ui()
 

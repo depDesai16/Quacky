@@ -2,7 +2,7 @@ from PyQt6.QtCore    import Qt, pyqtSignal, QEvent, QRectF, QTimer, QPoint, QPoi
 from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QColor, QKeyEvent)
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
                               QTextEdit, QSizePolicy, QFrame, QAbstractButton,
-                              QMenu, QStackedWidget)
+                              QMenu, QStackedWidget, QApplication)
 
 from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 
@@ -353,6 +353,13 @@ class _PlusMenuButton(QAbstractButton):
         hint = menu.sizeHint()
         x = global_pos.x()
         y = global_pos.y() - hint.height() - 6
+        screen = QApplication.screenAt(global_pos) or QApplication.primaryScreen()
+        if screen is not None:
+            sg = screen.availableGeometry()
+            x = max(sg.left(), min(x, sg.right() - hint.width() + 1))
+            if y < sg.top():
+                y = global_pos.y() + self.height() + 6
+            y = max(sg.top(), min(y, sg.bottom() - hint.height() + 1))
         menu.exec(QPoint(x, y))
 
     def __del__(self):

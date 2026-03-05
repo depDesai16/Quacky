@@ -33,6 +33,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         super().__init__(parent)
 
         self.model_window = model_window
+        self._client = client
         self.speechtospeech_enabled = bool(speechtospeech_enabled)
         self.toast = _ToastProxy(toast_callback)
         self._settings_controller = SettingsController(client, parent=self)
@@ -198,8 +199,34 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
 
     def set_speechtospeech_enabled(self, enabled: bool):
         """Set speechtospeech enabled."""
-        self.speechtospeech_enabled = bool(enabled)
-        self.speechtospeech_enabled_changed.emit(bool(enabled))
+        requested = bool(enabled)
+        resolved = requested
+
+        if self._client is not None and hasattr(self._client, "set_speech_to_speech_enabled"):
+            try:
+                result = self._client.set_speech_to_speech_enabled(requested)
+            except Exception as exc:
+                self.toast.show_message(f"Failed to update STS setting: {exc}", kind="error")
+                result = {"error": str(exc)}
+
+            if isinstance(result, dict) and "error" in result:
+                self.toast.show_message(
+                    f"Failed to update STS setting: {result['error']}",
+                    kind="error",
+                )
+                resolved = self.speechtospeech_enabled
+            elif isinstance(result, dict) and "enabled" in result:
+                resolved = bool(result.get("enabled"))
+
+        self.speechtospeech_enabled = bool(resolved)
+
+        if hasattr(self, "_toggle_sts") and self._toggle_sts.isChecked() != self.speechtospeech_enabled:
+            from PyQt6.QtCore import QSignalBlocker
+            blocker = QSignalBlocker(self._toggle_sts)
+            self._toggle_sts.setChecked(self.speechtospeech_enabled)
+            del blocker
+
+        self.speechtospeech_enabled_changed.emit(self.speechtospeech_enabled)
 
     def _show_settings(self):
         """Show settings."""

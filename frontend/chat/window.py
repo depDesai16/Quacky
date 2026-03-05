@@ -8,11 +8,13 @@ if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
 from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
-                              QPropertyAnimation, QEasingCurve, QEvent, QTimer)
+                              QPropertyAnimation, QEasingCurve, QEvent, QTimer,
+                              QByteArray, QBuffer, QIODevice, QUrl)
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QGraphicsOpacityEffect)
 from PyQt6.QtGui     import QKeyEvent, QCursor
 from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
+from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 
 from theme          import ThemeManager
 from draw_icon      import draw_icon
@@ -134,7 +136,13 @@ class QuackyWindow(QWidget):
         self._stt                   = None
         self._stt_bridge: STTBridge | None = None
         self._stt_capture_enabled   = False
-        self.speechtospeech_enabled = False
+        self._sts_controller        = None
+        self._sts_audio_player: QMediaPlayer | None = None
+        self._sts_audio_output: QAudioOutput | None = None
+        self._sts_audio_buffer: QBuffer | None = None
+        self._sts_audio_data: QByteArray | None = None
+        self._sts_tts_available     = True
+        self.speechtospeech_enabled = True
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -157,11 +165,13 @@ class QuackyWindow(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(MIN_WINDOW_W, MIN_WINDOW_H)
         self._screen_hooked = False
+        self._resize_tracking_installed = False
         self._apply_wm_size_hints()
         self.resize(620, 740)
 
         ThemeManager.load()
         self._restore_geometry()
+        self._load_speech_to_speech_settings()
 
         self.model_window = None
         try:
@@ -184,6 +194,23 @@ class QuackyWindow(QWidget):
         self._build_ui()
         self._install_resize_cursor_tracking()
         ThemeManager.subscribe(self._on_theme_changed)
+
+    def _load_speech_to_speech_settings(self):
+        """Load server-side STS defaults when available."""
+        if not hasattr(self._client, "get_speech_to_speech_settings"):
+            return
+        try:
+            result = self._client.get_speech_to_speech_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+
+        if "enabled" in result:
+            self.speechtospeech_enabled = bool(result.get("enabled"))
+        if "tts_available" in result:
+            self._sts_tts_available = bool(result.get("tts_available"))
 
 
     def _build_ui(self):
@@ -247,15 +274,28 @@ class QuackyWindow(QWidget):
         self.stacked_widget.addWidget(self.camera_view)         # index 1
         self.stacked_widget.addWidget(self._settings_container) # index 2
 
-        # Speech-to-speech panel (frontend only)
-        from chat.speech_to_speech import SpeechToSpeechPanel
+        # Speech-to-speech panel/runtime (isolated from chat mic pipeline)
+        from chat.speech_to_speech import SpeechToSpeechPanel, SpeechToSpeechController
         self._sts_panel = SpeechToSpeechPanel(parent=self.card)
         self._sts_panel.back_requested.connect(self._hide_sts_panel)
         self._sts_panel.start_requested.connect(self._on_sts_start)
         self._sts_panel.stop_requested.connect(self._on_sts_stop)
+
+        self._sts_controller = SpeechToSpeechController(
+            client=self._client,
+            chat_id=self._chat_id,
+            parent=self,
+        )
+        self._sts_controller.set_enabled(self.speechtospeech_enabled)
+        self._sts_controller.state_changed.connect(self._sts_panel.set_state)
+        self._sts_controller.transcript_line.connect(self._sts_panel.add_transcript_line)
+        self._sts_controller.error_occurred.connect(self._on_sts_error)
+        self._sts_controller.audio_playback_requested.connect(self._play_sts_audio)
+
         self.stacked_widget.addWidget(self._sts_panel)          # index 3
         
         cl.addWidget(self.stacked_widget, 1)
+        self._init_sts_audio_player()
 
         self.mic_btn  = MicButton()
         self.send_btn = SendButton()
@@ -270,6 +310,7 @@ class QuackyWindow(QWidget):
         self.composer.input_field.send_requested.connect(self.send_message)
         self.send_btn.clicked.connect(self.send_message)
         self.sts_btn.clicked.connect(self._show_sts_panel)
+        self._update_sts_button_hint()
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
@@ -484,12 +525,129 @@ class QuackyWindow(QWidget):
 
     def set_speechtospeech_enabled(self, enabled: bool):
         """Set speechtospeech enabled."""
-        self.speechtospeech_enabled = enabled
+        self.speechtospeech_enabled = bool(enabled)
+        self._update_sts_button_hint()
+        if self._sts_controller is not None:
+            self._sts_controller.set_enabled(self.speechtospeech_enabled)
+        if (not self.speechtospeech_enabled and hasattr(self, "stacked_widget")
+                and self.stacked_widget.currentIndex() == 3):
+            self._hide_sts_panel()
+
+    def _update_sts_button_hint(self):
+        """Keep STS button clickable, but communicate current availability."""
+        if not hasattr(self, "sts_btn"):
+            return
+        self.sts_btn.setEnabled(True)
+        if self.speechtospeech_enabled:
+            self.sts_btn.setToolTip("Open speech-to-speech")
+        else:
+            self.sts_btn.setToolTip("Speech-to-speech is off. Click to enable and open.")
+
+    def _ensure_sts_enabled(self) -> bool:
+        """Enable STS in backend/settings if currently disabled."""
+        if self.speechtospeech_enabled:
+            return True
+        if not hasattr(self._client, "set_speech_to_speech_enabled"):
+            self._show_settings_toast(
+                "Speech-to-speech is disabled and cannot be enabled from client.",
+                "error",
+            )
+            return False
+        try:
+            result = self._client.set_speech_to_speech_enabled(True)
+        except Exception as exc:
+            self._show_settings_toast(
+                f"Failed to enable speech-to-speech: {exc}",
+                "error",
+            )
+            return False
+        if isinstance(result, dict) and "error" in result:
+            self._show_settings_toast(
+                f"Failed to enable speech-to-speech: {result['error']}",
+                "error",
+            )
+            return False
+        enabled = bool(result.get("enabled", True)) if isinstance(result, dict) else True
+        if not enabled:
+            self._show_settings_toast(
+                "Speech-to-speech remains disabled on server.",
+                "error",
+            )
+            return False
+        self.set_speechtospeech_enabled(True)
+        return True
+
+    def _init_sts_audio_player(self):
+        """Initialize audio playback for speech-to-speech responses."""
+        self._sts_audio_output = QAudioOutput(self)
+        self._sts_audio_output.setVolume(1.0)
+
+        self._sts_audio_player = QMediaPlayer(self)
+        self._sts_audio_player.setAudioOutput(self._sts_audio_output)
+        self._sts_audio_player.mediaStatusChanged.connect(self._on_sts_audio_status)
+        self._sts_audio_player.errorOccurred.connect(self._on_sts_audio_error)
+
+    def _play_sts_audio(self, audio_bytes: bytes, mime_type: str):
+        """Play backend-generated TTS audio for STS."""
+        if self._sts_audio_player is None:
+            if self._sts_controller is not None:
+                self._sts_controller.notify_audio_playback_finished()
+            return
+        if not audio_bytes:
+            if self._sts_controller is not None:
+                self._sts_controller.notify_audio_playback_finished()
+            return
+
+        try:
+            if self._sts_audio_buffer is not None and self._sts_audio_buffer.isOpen():
+                self._sts_audio_buffer.close()
+
+            self._sts_audio_data = QByteArray(audio_bytes)
+            self._sts_audio_buffer = QBuffer(self)
+            self._sts_audio_buffer.setData(self._sts_audio_data)
+            self._sts_audio_buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+
+            suffix = "mp3" if "mpeg" in (mime_type or "").lower() else "wav"
+            self._sts_audio_player.stop()
+            self._sts_audio_player.setSourceDevice(
+                self._sts_audio_buffer,
+                QUrl(f"speech_to_speech.{suffix}"),
+            )
+            self._sts_audio_player.play()
+        except Exception as exc:
+            self._on_sts_error(f"Audio playback failed: {exc}")
+            if self._sts_controller is not None:
+                self._sts_controller.notify_audio_playback_finished()
+
+    def _on_sts_audio_status(self, status: QMediaPlayer.MediaStatus):
+        """Release STS worker waiters once playback ends/fails."""
+        if status in (
+            QMediaPlayer.MediaStatus.EndOfMedia,
+            QMediaPlayer.MediaStatus.InvalidMedia,
+            QMediaPlayer.MediaStatus.NoMedia,
+        ):
+            if self._sts_audio_buffer is not None and self._sts_audio_buffer.isOpen():
+                self._sts_audio_buffer.close()
+            if self._sts_controller is not None:
+                self._sts_controller.notify_audio_playback_finished()
+
+    def _on_sts_audio_error(self, error: QMediaPlayer.Error, error_string: str):
+        """Surface STS audio playback errors without breaking chat mic flow."""
+        if error == QMediaPlayer.Error.NoError:
+            return
+        msg = error_string or str(error)
+        self._on_sts_error(f"Audio playback error: {msg}")
+        if self._sts_controller is not None:
+            self._sts_controller.notify_audio_playback_finished()
 
     def shutdown(self):
         """Handle shutdown."""
         if hasattr(self, "_settings_container"):
             self._settings_container.shutdown()
+        if self._sts_controller is not None:
+            self._sts_controller.shutdown()
+        if self._sts_audio_player is not None:
+            self._sts_audio_player.stop()
         self._stop_stt(full_shutdown=True)
 
 
@@ -649,19 +807,16 @@ class QuackyWindow(QWidget):
     def _append_user(self, text: str):
         """Handle append user."""
         self.timeline.add_user_message(text)
-        self._install_resize_cursor_tracking()
         self._wire_suggestions()
 
     def _append_quacky(self, text: str):
         """Handle append quacky."""
         self.timeline.hide_thinking()
         self.timeline.add_assistant_message(text)
-        self._install_resize_cursor_tracking()
 
     def _append_system(self, html: str):
         """Handle append system."""
         self.timeline.add_system_message(html)
-        self._install_resize_cursor_tracking()
 
     def _set_input_busy(self, busy: bool):
         """Set input busy."""
@@ -687,7 +842,10 @@ class QuackyWindow(QWidget):
         """Show speech-to-speech panel."""
         self.stacked_widget.setCurrentIndex(3)
         self.composer.hide()
+        self._sts_panel.clear_transcript()
         self._sts_panel.set_state("idle")
+        if self._sts_controller is not None:
+            self._sts_controller.prewarm_async()
 
     def _hide_sts_panel(self):
         """Return from S2S panel to chat."""
@@ -697,19 +855,33 @@ class QuackyWindow(QWidget):
         self._update_toast_anchor()
 
     def _on_sts_start(self):
-        """S2S start button pressed — delegate to existing STT infrastructure."""
+        """Start dedicated speech-to-speech capture/runtime."""
         self._sts_panel.set_state("listening")
-        # Wire to mic/STT if available
-        if hasattr(self, "mic_btn") and not self.mic_btn.isChecked():
-            self.mic_btn.setChecked(True)
-            self.on_mic_toggle(True)
+        if not self._ensure_sts_enabled():
+            self._sts_panel.set_state("idle")
+            return
+        if not self._sts_tts_available:
+            self._show_settings_toast(
+                "TTS is unavailable on server; STS will run in text-response mode.",
+                "warn",
+            )
+        if self._sts_controller is not None:
+            self._sts_controller.start()
 
     def _on_sts_stop(self):
         """S2S stop button pressed."""
-        self._sts_panel.set_state("idle")
-        if hasattr(self, "mic_btn") and self.mic_btn.isChecked():
-            self.mic_btn.setChecked(False)
-            self.on_mic_toggle(False)
+        if self._sts_audio_player is not None:
+            self._sts_audio_player.stop()
+        if self._sts_controller is not None:
+            self._sts_controller.stop()
+        else:
+            self._sts_panel.set_state("idle")
+
+    def _on_sts_error(self, message: str):
+        """Handle STS-specific failures and surface them in the STS panel."""
+        if hasattr(self, "_sts_panel"):
+            self._sts_panel.add_transcript_line(f"Warning: {message}", role="assistant")
+        self._show_settings_toast(message, "error")
 
     def _update_toast_anchor(self):
         """Update toast anchor."""
@@ -732,10 +904,17 @@ class QuackyWindow(QWidget):
     def _install_resize_cursor_tracking(self):
         """Handle install resize cursor tracking."""
         self.setMouseTracking(True)
-        self.installEventFilter(self)
+        if not self._resize_tracking_installed:
+            self.installEventFilter(self)
+            self.setProperty("_resize_tracking_installed", True)
+            self._resize_tracking_installed = True
+
         for w in self.findChildren(QWidget):
+            if bool(w.property("_resize_tracking_installed")):
+                continue
             w.setMouseTracking(True)
             w.installEventFilter(self)
+            w.setProperty("_resize_tracking_installed", True)
 
     def _update_resize_cursor(self):
         """Update resize cursor."""
@@ -753,7 +932,14 @@ class QuackyWindow(QWidget):
         """Handle eventfilter."""
         if isinstance(obj, QWidget) and (obj is self or self.isAncestorOf(obj)):
             et = event.type()
-            if et in (
+            if et == QEvent.Type.ChildAdded:
+                child = event.child() if hasattr(event, "child") else None
+                if isinstance(child, QWidget):
+                    child.setMouseTracking(True)
+                    if not bool(child.property("_resize_tracking_installed")):
+                        child.installEventFilter(self)
+                        child.setProperty("_resize_tracking_installed", True)
+            elif et in (
                 QEvent.Type.MouseMove,
                 QEvent.Type.HoverMove,
                 QEvent.Type.Enter,
@@ -922,12 +1108,19 @@ class QuackyWindow(QWidget):
             x, y, w, h = geo.x(), geo.y(), geo.width(), geo.height()
             min_w = self.minimumWidth()
             min_h = self.minimumHeight()
+            max_w = self.maximumWidth() if self.maximumWidth() > 0 else 16777215
+            max_h = self.maximumHeight() if self.maximumHeight() > 0 else 16777215
 
-            if 'r' in d: w = max(min_w, geo.width()  + dx)
-            if 'b' in d: h = max(min_h, geo.height() + dy)
-            if 'l' in d: w = max(min_w, geo.width()  - dx)
+            if 'r' in d:
+                w = min(max_w, max(min_w, geo.width() + dx))
+            if 'b' in d:
+                h = min(max_h, max(min_h, geo.height() + dy))
+            if 'l' in d:
+                new_w = min(max_w, max(min_w, geo.width() - dx))
+                x = geo.x() + (geo.width() - new_w)
+                w = new_w
             if 't' in d:
-                new_h = max(min_h, geo.height() - dy)
+                new_h = min(max_h, max(min_h, geo.height() - dy))
                 y     = geo.y() + (geo.height() - new_h)
                 h     = new_h
 
@@ -973,6 +1166,7 @@ class QuackyWindow(QWidget):
             max_h = max(MIN_WINDOW_H, int(geo.height() * 0.92))
         self.setMinimumSize(MIN_WINDOW_W, MIN_WINDOW_H)
         self.setMaximumSize(max_w, max_h)
+        self._clamp_geometry_to_screen()
 
     def _show_shortcuts_panel(self):
         """Show shortcuts panel."""
@@ -993,11 +1187,56 @@ class QuackyWindow(QWidget):
 
     def _restore_geometry(self):
         """Handle restore geometry."""
-        s    = QSettings("Quacky", "Window")
-        pos  = s.value("pos",  None)
+        s = QSettings("Quacky", "Window")
+        pos = s.value("pos", None)
         size = s.value("size", None)
-        if pos  is not None: self.move(pos)
-        if size is not None: self.resize(size)
+
+        if size is not None and hasattr(size, "width") and hasattr(size, "height"):
+            try:
+                w = int(size.width())
+                h = int(size.height())
+                w = max(self.minimumWidth(), min(w, self.maximumWidth()))
+                h = max(self.minimumHeight(), min(h, self.maximumHeight()))
+                self.resize(w, h)
+            except Exception:
+                pass
+
+        if pos is not None and hasattr(pos, "x") and hasattr(pos, "y"):
+            try:
+                self.move(pos)
+            except Exception:
+                pass
+
+        self._clamp_geometry_to_screen()
+
+    def _clamp_geometry_to_screen(self):
+        """Keep current geometry fully visible on the active screen."""
+        screen = self.screen() or QApplication.primaryScreen()
+        if screen is None:
+            return
+
+        available = screen.availableGeometry()
+        geo = self.geometry()
+
+        min_w = self.minimumWidth()
+        min_h = self.minimumHeight()
+        max_w = self.maximumWidth() if self.maximumWidth() > 0 else available.width()
+        max_h = self.maximumHeight() if self.maximumHeight() > 0 else available.height()
+        max_w = min(max_w, available.width())
+        max_h = min(max_h, available.height())
+
+        w = min(max(geo.width(), min_w), max_w)
+        h = min(max(geo.height(), min_h), max_h)
+
+        min_x = available.left()
+        min_y = available.top()
+        max_x = available.right() - w + 1
+        max_y = available.bottom() - h + 1
+        x = min(max(geo.x(), min_x), max_x)
+        y = min(max(geo.y(), min_y), max_y)
+
+        if (x, y, w, h) != (geo.x(), geo.y(), geo.width(), geo.height()):
+            self.setGeometry(x, y, w, h)
 
     def _save_geometry(self):
         """Save geometry."""

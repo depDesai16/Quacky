@@ -531,7 +531,7 @@ class CameraView(QWidget):
         scaled  = pixmap.scaled(
             label_w, label_h,
             Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation,
+            Qt.TransformationMode.FastTransformation,
         )
         self._cam_label.setPixmap(scaled)
 
@@ -542,9 +542,7 @@ class CameraView(QWidget):
         self._off_x   = (label_w - sw) // 2
         self._off_y   = (label_h - sh) // 2
 
-        self._overlay.setGeometry(self._cam_label.geometry()
-                                   .adjusted(20, 20, -20, -16)
-                                   if False else self._cam_label.rect())
+        self._overlay.setGeometry(self._cam_label.rect())
         self._overlay.resize(self._cam_label.size())
         self._overlay.update_faces(
             results.get("faces", []),

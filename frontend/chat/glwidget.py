@@ -51,7 +51,15 @@ if _OPENGL_IMPORT_ERROR is None:
             self.timer = QTimer(self)
             self.timer.setInterval(1000 // self.FPS)
             self.timer.timeout.connect(self.update)
-            self.timer.start()
+            self._set_animation_running(False)
+
+        def _set_animation_running(self, running: bool):
+            """Start/stop redraw timer based on visibility."""
+            if running:
+                if not self.timer.isActive():
+                    self.timer.start()
+            else:
+                self.timer.stop()
 
         def initializeGL(self):
             """Handle initializegl."""
@@ -89,6 +97,16 @@ if _OPENGL_IMPORT_ERROR is None:
                         glNormal3fv(self.obj.normals[n_idx])
                     glVertex3fv(self.obj.vertices[v_idx])
                 glEnd()
+
+        def showEvent(self, event):
+            """Resume redraw while visible."""
+            super().showEvent(event)
+            self._set_animation_running(True)
+
+        def hideEvent(self, event):
+            """Pause redraw when hidden."""
+            super().hideEvent(event)
+            self._set_animation_running(False)
 
 else:
 
