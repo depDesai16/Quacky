@@ -1,9 +1,7 @@
-
 import sys
 
 from PyQt6.QtCore import QSettings, Qt
 from PyQt6.QtGui import QGuiApplication, QPalette
-
 
 DARK_TOKENS: dict = {
     "bg.canvas":        "#141414",
