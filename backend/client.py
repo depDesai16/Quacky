@@ -1,6 +1,7 @@
 import json
 import os
 import socket
+import base64
 import urllib.error
 import urllib.request
 
@@ -65,6 +66,33 @@ class QuackyClient:
         if tts is not None:
             payload["tts"] = tts
         return self._post("/chat/message", payload)
+
+    def send_speech_to_speech_message(self, chat_id: str, message: str) -> dict:
+        """
+        Dedicated speech-to-speech call for UI wiring.
+        Always requests TTS generation when available.
+        """
+        return self._post("/chat/speech-to-speech", {"chat_id": chat_id, "message": message})
+
+    def get_speech_to_speech_settings(self) -> dict:
+        return self._get("/settings/speech-to-speech")
+
+    def set_speech_to_speech_enabled(self, enabled: bool) -> dict:
+        return self._post("/settings/speech-to-speech", {"enabled": bool(enabled)})
+
+    @staticmethod
+    def decode_audio_bytes(response: dict) -> bytes | None:
+        """
+        Decode backend `audio_base64` payload into raw bytes for playback.
+        Returns None if the payload has no audio data.
+        """
+        b64 = response.get("audio_base64")
+        if not b64:
+            return None
+        try:
+            return base64.b64decode(b64)
+        except Exception:
+            return None
 
     def history(self, chat_id: str) -> dict:
         return self._get(f"/chat/history?chat_id={chat_id}")
