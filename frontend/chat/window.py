@@ -201,7 +201,8 @@ class QuackyWindow(QWidget):
         self.header = HeaderBar(icon=draw_icon(), parent=self.card)
         self.header.minimize_clicked.connect(self.hide)
         self.header.close_clicked.connect(QApplication.instance().quit)
-        self.header.user_chip_clicked.connect(self._show_user_menu)
+        if hasattr(self.header, "user_chip_clicked"):
+            self.header.user_chip_clicked.connect(self._show_user_menu)
         self.header.settings_clicked.connect(self._show_settings)
         self.header.back_clicked.connect(self._show_chat)
         cl.addWidget(self.header)
@@ -347,7 +348,8 @@ class QuackyWindow(QWidget):
         if name != "Unknown" and name != self.current_user:
             self.current_user = name
             # Update header to show current user
-            self.header.set_user(name)
+            if hasattr(self.header, "set_user"):
+                self.header.set_user(name)
             # Update window title
             self.setWindowTitle(f"Quacky - {name}")
             # Show notification in chat
@@ -357,7 +359,8 @@ class QuackyWindow(QWidget):
             )
         elif name == "Unknown" and self.current_user != "Guest":
             self.current_user = "Guest"
-            self.header.set_user("Guest")
+            if hasattr(self.header, "set_user"):
+                self.header.set_user("Guest")
             self.setWindowTitle("Quacky")
             self.timeline.add_system_message(
                 '<span style="color:#888;">Switched to Guest mode.</span>'
@@ -416,14 +419,20 @@ class QuackyWindow(QWidget):
             guest_action.triggered.connect(lambda: self._switch_to_user("Guest"))
         
         # Show menu below the user chip
-        chip_pos = self.header.user_chip.mapToGlobal(self.header.user_chip.rect().bottomLeft())
+        if hasattr(self.header, "user_chip"):
+            chip_pos = self.header.user_chip.mapToGlobal(
+                self.header.user_chip.rect().bottomLeft()
+            )
+        else:
+            chip_pos = self.header.mapToGlobal(self.header.rect().bottomLeft())
         menu.exec(chip_pos)
     
     def _switch_to_user(self, user_name):
         """Manually switch to a user"""
         if user_name != self.current_user:
             self.current_user = user_name
-            self.header.set_user(user_name)
+            if hasattr(self.header, "set_user"):
+                self.header.set_user(user_name)
             if user_name == "Guest":
                 self.setWindowTitle("Quacky")
                 self.timeline.add_system_message(
@@ -483,7 +492,8 @@ class QuackyWindow(QWidget):
         """Handle successful Face ID authentication"""
         if name != self.current_user:
             self.current_user = name
-            self.header.set_user(name)
+            if hasattr(self.header, "set_user"):
+                self.header.set_user(name)
             self.setWindowTitle(f"Quacky - {name}")
             self.timeline.add_system_message(
                 f'<span style="color:#00d4ff;">✓ Authenticated as {name} '
@@ -1037,4 +1047,3 @@ class QuackyWindow(QWidget):
             ThemeManager.unsubscribe(self._on_theme_changed)
         except Exception:
             pass
-
