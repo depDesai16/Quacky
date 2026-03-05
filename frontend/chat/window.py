@@ -1,4 +1,3 @@
-
 import os
 import sys
 
@@ -207,10 +206,6 @@ class QuackyWindow(QWidget):
         self.header.back_clicked.connect(self._show_chat)
         cl.addWidget(self.header)
         
-        # Add tab bar
-        self.tab_bar = self._create_tab_bar()
-        cl.addWidget(self.tab_bar)
-        
         # Create stacked widget to hold chat, camera, and settings views
         from PyQt6.QtWidgets import QStackedWidget
         self.stacked_widget = QStackedWidget()
@@ -229,6 +224,7 @@ class QuackyWindow(QWidget):
         # Camera view
         from camera.camera_view import CameraView
         self.camera_view = CameraView(parent=self.card)
+        self.camera_view.back_requested.connect(self._toggle_camera_view)
         
         # Don't connect automatic user recognition - only use Face ID dialog
         # self.camera_view.user_recognized.connect(self._on_user_profile_changed)
@@ -262,7 +258,8 @@ class QuackyWindow(QWidget):
         )
         self.composer.input_field.send_requested.connect(self.send_message)
         self.send_btn.clicked.connect(self.send_message)
-        self.composer.shortcuts_btn.clicked.connect(self._show_shortcuts_panel)
+        self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
+        self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
         self.composer.input_field.textChanged.connect(self._update_toast_anchor)
         self.mic_btn.toggled.connect(self.on_mic_toggle)
@@ -272,76 +269,19 @@ class QuackyWindow(QWidget):
         self.toast = Toast(self.card)
         self._update_toast_anchor()
     
-    def _create_tab_bar(self):
-        """Create tab bar for switching between chat and camera"""
-        from PyQt6.QtWidgets import QWidget, QHBoxLayout, QPushButton
-        
-        tab_bar = QWidget()
-        tab_bar.setFixedHeight(44)
-        tab_layout = QHBoxLayout(tab_bar)
-        tab_layout.setContentsMargins(16, 8, 16, 0)
-        tab_layout.setSpacing(8)
-        
-        # Chat tab button
-        self.chat_tab_btn = QPushButton("💬 Chat")
-        self.chat_tab_btn.setCheckable(True)
-        self.chat_tab_btn.setChecked(True)
-        self.chat_tab_btn.clicked.connect(lambda: self._switch_tab(0))
-        
-        # Camera tab button
-        self.camera_tab_btn = QPushButton("📷 Camera")
-        self.camera_tab_btn.setCheckable(True)
-        self.camera_tab_btn.clicked.connect(lambda: self._switch_tab(1))
-        
-        # Style tabs
-        self._style_tab_buttons()
-        
-        tab_layout.addWidget(self.chat_tab_btn)
-        tab_layout.addWidget(self.camera_tab_btn)
-        tab_layout.addStretch()
-        
-        return tab_bar
-    
-    def _style_tab_buttons(self):
-        """Apply theme styling to tab buttons"""
-        t = ThemeManager.tokens()
-        
-        tab_style = f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
-                border-bottom: 2px solid transparent;
-                color: {t['text.secondary']};
-                font-size: 14px;
-                font-weight: 500;
-                padding: 8px 16px;
-            }}
-            QPushButton:hover {{
-                color: {t['text.primary']};
-                background: {t['bg.elevated']};
-            }}
-            QPushButton:checked {{
-                color: {t['accent.primary']};
-                border-bottom: 2px solid {t['accent.primary']};
-            }}
-        """
-        
-        self.chat_tab_btn.setStyleSheet(tab_style)
-        self.camera_tab_btn.setStyleSheet(tab_style)
-    
-    def _switch_tab(self, index):
-        """Switch between chat and camera tabs"""
-        self.stacked_widget.setCurrentIndex(index)
-        
-        # Update tab button states
-        self.chat_tab_btn.setChecked(index == 0)
-        self.camera_tab_btn.setChecked(index == 1)
-        
-        # Hide composer when on camera tab
-        if index == 1:
-            self.composer.hide()
-        else:
+    def _toggle_camera_view(self):
+        """Toggle the camera panel on/off."""
+        is_camera = self.stacked_widget.currentIndex() == 1
+        if is_camera:
+            # Return to chat
+            self.stacked_widget.setCurrentIndex(0)
             self.composer.show()
+            self.composer.plus_btn.set_camera_active(False)
+        else:
+            # Show camera
+            self.stacked_widget.setCurrentIndex(1)
+            self.composer.hide()
+            self.composer.plus_btn.set_camera_active(True)
     
     def _on_user_profile_changed(self, name, confidence):
         """Handle user profile change from face recognition"""
@@ -448,29 +388,18 @@ class QuackyWindow(QWidget):
         """Show registration dialog"""
         from PyQt6.QtWidgets import QMessageBox
         
-        # Switch to camera tab
-        self._switch_tab(1)
-        
-        # Show instructions
-        QMessageBox.information(
-            self,
-            "Register New Face",
-            "To register your face:\n\n"
-            "1. Make sure your face is visible in the camera\n"
-            "2. Enter your name in the text field at the bottom\n"
-            "3. Click the '📸 Register Face' button\n\n"
-            "The camera will recognize you automatically next time!"
-        )
+        # Switch to camera view
+        if self.stacked_widget.currentIndex() != 1:
+            self._toggle_camera_view()
     
     def _start_face_id_switch(self):
         """Start Face ID authentication to switch profiles"""
         from camera.face_id_dialog import FaceIDDialog
         
-        # Stop camera tab if it's running
+        # Stop camera if it's running
         was_on_camera = self.stacked_widget.currentIndex() == 1
-        if hasattr(self, 'camera_view') and self.camera_view.camera_thread:
+        if was_on_camera and hasattr(self, 'camera_view') and self.camera_view.camera_thread:
             self.camera_view.stop_camera()
-            # Give camera time to fully release
             QTimer.singleShot(200, lambda: self._show_face_id_dialog(was_on_camera))
         else:
             self._show_face_id_dialog(was_on_camera)
@@ -510,15 +439,15 @@ class QuackyWindow(QWidget):
         """Show settings."""
         self._settings_container.prepare_for_show()
         self.stacked_widget.setCurrentIndex(2)  # Settings is index 2
-        self.tab_bar.hide()
         self.composer.hide()
+        self.composer.plus_btn.set_camera_active(False)
         self.header.enter_settings_mode()
 
     def _show_chat(self):
         """Show chat."""
         self.stacked_widget.setCurrentIndex(0)  # Chat is index 0
-        self.tab_bar.show()
         self.composer.show()
+        self.composer.plus_btn.set_camera_active(False)
         self.header.exit_settings_mode()
         self._update_toast_anchor()
 
