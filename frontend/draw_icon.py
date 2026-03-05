@@ -2,6 +2,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPainterPath, QBrush, QPen
 
 def draw_icon():
+    """Handle draw icon."""
     size = 60
     px = QPixmap(size, size)
     px.fill(Qt.GlobalColor.transparent)

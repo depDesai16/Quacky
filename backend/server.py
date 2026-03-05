@@ -5,6 +5,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend.config import get_settings
 from backend.core.chat_runtime import ChatRuntime
+from backend.core.settings_service import (
+    get_api_key as get_saved_api_key,
+    save_api_key,
+    remove_api_key,
+    test_api_key,
+)
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
@@ -60,6 +66,11 @@ class QuackyHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             _json_response(self, 200, {"status": "ok"})
+            return
+
+        if self.path == "/settings/api-key":
+            key = get_saved_api_key()
+            _json_response(self, 200, {"api_key": key, "has_key": bool(key)})
             return
 
         if self.path.startswith("/chat/history"):
@@ -149,6 +160,27 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 _json_response(self, 404, {"error": "chat not found"})
             return
 
+        if self.path == "/settings/api-key/save":
+            data = _read_json(self)
+            key = str(data.get("api_key", "")).strip()
+            if not key:
+                _json_response(self, 400, {"error": "api_key is required"})
+                return
+            save_api_key(key)
+            _json_response(self, 200, {"status": "saved", "has_key": True})
+            return
+
+        if self.path == "/settings/api-key/remove":
+            remove_api_key()
+            _json_response(self, 200, {"status": "removed", "has_key": False})
+            return
+
+        if self.path == "/settings/api-key/test":
+            data = _read_json(self)
+            key = str(data.get("api_key", "")).strip() or get_saved_api_key()
+            ok, message = test_api_key(key)
+            _json_response(self, 200, {"ok": ok, "message": message})
+            return
 
         _json_response(self, 404, {"error": "not found"})
 

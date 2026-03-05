@@ -1,8 +1,3 @@
-"""
-widgets/empty_state.py - EmptyState
-
-Borderless, theme-aware empty state.
-"""
 
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt6.QtGui import QPainter, QColor, QFontMetrics
@@ -12,23 +7,26 @@ from theme import ThemeManager, FONT_STACK
 
 
 class _AccentLine(QWidget):
-    """Subtle animated-looking accent line without relying on font glyphs."""
 
     def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = tokens
         self._line_opacity = 0.58
         self.setFixedSize(280, 2)
 
     def set_opacity(self, value: float):
+        """Set opacity."""
         self._line_opacity = max(0.0, min(1.0, float(value)))
         self.update()
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self.update()
 
     def paintEvent(self, _event):
+        """Handle the paint event."""
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._tokens["accent.primary"])
@@ -40,18 +38,20 @@ class _AccentLine(QWidget):
 
 
 class _Dot(QWidget):
-    """Small readiness status dot."""
 
     def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = tokens
         self.setFixedSize(7, 7)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self.update()
 
     def paintEvent(self, _event):
+        """Handle the paint event."""
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._tokens["accent.primary"])
@@ -63,14 +63,11 @@ class _Dot(QWidget):
 
 
 class EmptyState(QWidget):
-    """
-    Borderless empty-state block for the desktop AI assistant.
-    `suggestion_clicked` is preserved for API compatibility.
-    """
 
     suggestion_clicked = pyqtSignal(str)
 
     def __init__(self, tokens: dict, icon_fn=None, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = tokens
         self._line_opacity = 0.58
@@ -148,15 +145,18 @@ class EmptyState(QWidget):
 
     @pyqtProperty(float)
     def line_opacity(self):
+        """Handle line opacity."""
         return self._line_opacity
 
     @line_opacity.setter
     def line_opacity(self, value):
+        """Handle line opacity."""
         self._line_opacity = max(0.0, min(1.0, float(value)))
         self._accent_top.set_opacity(self._line_opacity)
         self._accent_bottom.set_opacity(self._line_opacity)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         t = tokens
 
@@ -215,11 +215,13 @@ class EmptyState(QWidget):
         self._update_accent_width()
 
     def _label_text_width(self, lbl: QLabel) -> int:
+        """Handle label text width."""
         fm = QFontMetrics(lbl.font())
         lines = lbl.text().splitlines() or [lbl.text()]
         return max(fm.horizontalAdvance(line) for line in lines if line) if lines else 0
 
     def _update_accent_width(self):
+        """Update accent width."""
         heading_w = self._label_text_width(self._heading)
         subtitle_w = self._label_text_width(self._subtitle)
         target = max(heading_w, subtitle_w)
@@ -229,10 +231,12 @@ class EmptyState(QWidget):
         self._accent_bottom.setFixedWidth(target)
 
     def resizeEvent(self, event):
+        """Handle the resize event."""
         super().resizeEvent(event)
         self._update_accent_width()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:

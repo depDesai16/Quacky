@@ -1,0 +1,165 @@
+from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
+
+class _ApiKeyLoadWorker(QThread):
+    loaded = pyqtSignal(str, str)
+
+    def __init__(self, client):
+        """Initialize the instance state."""
+        super().__init__()
+        self._client = client
+
+    def run(self):
+        """Execute the worker task."""
+        if self._client is None:
+            self.loaded.emit("", "Client unavailable for API key load.")
+            return
+        try:
+            result = self._client.get_saved_api_key()
+        except Exception as exc:
+            self.loaded.emit("", str(exc))
+            return
+
+        if isinstance(result, dict) and "error" in result:
+            self.loaded.emit("", str(result.get("error", "Unknown error")))
+            return
+
+        value = ""
+        if isinstance(result, dict):
+            raw = result.get("api_key", "")
+            value = str(raw).strip() if raw is not None else ""
+        self.loaded.emit(value, "")
+
+
+class _ApiKeyTestWorker(QThread):
+    result_ready = pyqtSignal(bool, str)
+
+    def __init__(self, client, api_key: str):
+        """Initialize the instance state."""
+        super().__init__()
+        self._client = client
+        self._api_key = api_key.strip()
+
+    def run(self):
+        """Execute the worker task."""
+        if self._client is None:
+            self.result_ready.emit(False, "Client unavailable for key test.")
+            return
+        try:
+            result = self._client.test_api_key(self._api_key)
+        except Exception as exc:
+            self.result_ready.emit(False, str(exc))
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.result_ready.emit(False, str(result["error"]))
+            return
+        ok = bool(result.get("ok")) if isinstance(result, dict) else False
+        message = (
+            str(result.get("message", "API key test completed."))
+            if isinstance(result, dict)
+            else "API key test completed."
+        )
+        self.result_ready.emit(ok, message)
+
+
+class SettingsController(QObject):
+    saved_api_key_loaded = pyqtSignal(str, str)
+    api_key_test_result = pyqtSignal(bool, str)
+    api_key_test_started = pyqtSignal()
+    api_key_test_finished = pyqtSignal()
+
+    def __init__(self, client, parent=None):
+        """Initialize the instance state."""
+        super().__init__(parent)
+        self._client = client
+        self._load_worker: _ApiKeyLoadWorker | None = None
+        self._test_worker: _ApiKeyTestWorker | None = None
+
+    def refresh_saved_api_key_async(self):
+        """Handle refresh saved api key async."""
+        if self._load_worker is not None:
+            return
+        worker = _ApiKeyLoadWorker(self._client)
+        worker.loaded.connect(self._on_saved_api_key_loaded)
+        worker.finished.connect(self._on_load_finished)
+        self._load_worker = worker
+        worker.start()
+
+    def save_api_key(self, key: str) -> tuple[bool, str]:
+        """Save api key."""
+        if self._client is None:
+            return False, "Client unavailable for save."
+        try:
+            result = self._client.save_api_key(key)
+        except Exception as exc:
+            return False, str(exc)
+        if isinstance(result, dict) and "error" in result:
+            return False, str(result["error"])
+        return True, "API key saved locally via backend."
+
+    def remove_api_key(self) -> tuple[bool, str]:
+        """Remove api key."""
+        if self._client is None:
+            return False, "Client unavailable for remove."
+        try:
+            result = self._client.remove_api_key()
+        except Exception as exc:
+            return False, str(exc)
+        if isinstance(result, dict) and "error" in result:
+            return False, str(result["error"])
+        return True, "Stored API key removed."
+
+    def test_api_key_async(self, key: str) -> bool:
+        """Handle test api key async."""
+        if self._test_worker is not None:
+            return False
+        worker = _ApiKeyTestWorker(self._client, key)
+        worker.result_ready.connect(self.api_key_test_result)
+        worker.finished.connect(self._on_test_finished)
+        self._test_worker = worker
+        self.api_key_test_started.emit()
+        worker.start()
+        return True
+
+    def is_api_key_test_running(self) -> bool:
+        """Return whether is api key test running."""
+        return self._test_worker is not None
+
+    def _on_saved_api_key_loaded(self, key: str, error: str):
+        """Handle saved api key loaded callbacks."""
+        self.saved_api_key_loaded.emit(key, error)
+
+    def _on_load_finished(self):
+        """Handle load finished callbacks."""
+        if self._load_worker is None:
+            return
+        self._load_worker.deleteLater()
+        self._load_worker = None
+
+    def _on_test_finished(self):
+        """Handle test finished callbacks."""
+        if self._test_worker is None:
+            return
+        self._test_worker.deleteLater()
+        self._test_worker = None
+        self.api_key_test_finished.emit()
+
+    def shutdown(self):
+        """Handle shutdown."""
+        if self._load_worker is not None:
+            try:
+                self._load_worker.requestInterruption()
+                self._load_worker.quit()
+                self._load_worker.wait(300)
+            except Exception:
+                pass
+            self._load_worker = None
+
+        if self._test_worker is not None:
+            try:
+                self._test_worker.requestInterruption()
+                self._test_worker.quit()
+                self._test_worker.wait(300)
+            except Exception:
+                pass
+            self._test_worker = None

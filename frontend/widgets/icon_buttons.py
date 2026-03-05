@@ -1,15 +1,3 @@
-"""
-widgets/icon_buttons.py — MicButton (custom paint) + SendButton (custom paint)
-
-Both buttons are 32×32 circle widgets drawn entirely with QPainter.
-No emoji, no text — pure line-art icons with 1.5 px stroke weight.
-
-MicButton states:   idle / hover / pressed / listening / disabled
-SendButton states:  enabled / hover / pressed / disabled
-
-Listening state: soft sine-wave pulsing ring — subtle, not neon.
-HiDPI: all coordinates are floating-point; Qt scales paintEvent automatically.
-"""
 
 from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
                               QRectF, QPointF, pyqtProperty)
@@ -23,12 +11,9 @@ SIZE = 32
 
 
 class _CircleBase(QAbstractButton):
-    """
-    Checkable-capable circle button with full custom paint.
-    Subclasses implement _draw_icon(painter, cx, cy, icon_color).
-    """
 
     def __init__(self, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self.setFixedSize(SIZE, SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -40,14 +25,17 @@ class _CircleBase(QAbstractButton):
         ThemeManager.subscribe(self._on_theme)
 
     def _on_theme(self, tokens: dict):
+        """Handle theme callbacks."""
         self._tokens = tokens
         self.update()
 
 
     def _is_listening(self) -> bool:
+        """Return whether is listening."""
         return self.isCheckable() and self.isChecked()
 
     def _bg_and_border(self):
+        """Handle bg and border."""
         t = self._tokens
         if not self.isEnabled():
             bg = QColor(t['bg.elevated'])
@@ -72,6 +60,7 @@ class _CircleBase(QAbstractButton):
         return bg, bd
 
     def _icon_color(self) -> QColor:
+        """Handle icon color."""
         t = self._tokens
         if not self.isEnabled():
             c = QColor(t['text.muted'])
@@ -85,6 +74,7 @@ class _CircleBase(QAbstractButton):
 
 
     def paintEvent(self, _event):
+        """Handle the paint event."""
         p  = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -101,20 +91,24 @@ class _CircleBase(QAbstractButton):
         p.end()
 
     def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
+        """Handle draw icon."""
         raise NotImplementedError
 
 
     def enterEvent(self, e):
+        """Handle the enter event."""
         self._hovered = True
         self.update()
         super().enterEvent(e)
 
     def leaveEvent(self, e):
+        """Handle the leave event."""
         self._hovered = False
         self.update()
         super().leaveEvent(e)
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self._on_theme)
         except Exception:
@@ -123,20 +117,9 @@ class _CircleBase(QAbstractButton):
 
 
 class MicButton(_CircleBase):
-    """
-    Microphone icon built from QPainterPath primitives.
-
-    Geometry (32×32 canvas, centre = 16, 16):
-      Capsule body : RoundedRect(cx-3.5, cy-8,  7, 11)  r=3.5
-      Stand arc    : Arc of ellipse(cx-6, cy+1, 12,  7)  bottom half (U shape)
-      Vertical post: (cx, cy+8)  → (cx, cy+11)
-      Base bar     : (cx-4, cy+11) → (cx+4, cy+11)
-
-    Listening: animated sine ring expands from button radius outward.
-    Stroke weight: 1.5 px — matches SendButton arrow.
-    """
 
     def __init__(self, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self.setCheckable(True)
         self.setToolTip("Click to start voice input")
@@ -164,16 +147,20 @@ class MicButton(_CircleBase):
 
 
     def _get_ring_alpha(self) -> float:
+        """Return ring alpha."""
         return self._ring_alpha
 
     def _set_ring_alpha(self, v: float):
+        """Set ring alpha."""
         self._ring_alpha = v
         self.update()
 
     def _get_ring_scale(self) -> float:
+        """Return ring scale."""
         return self._ring_scale
 
     def _set_ring_scale(self, v: float):
+        """Set ring scale."""
         self._ring_scale = v
         self.update()
 
@@ -181,6 +168,7 @@ class MicButton(_CircleBase):
     ring_scale = pyqtProperty(float, _get_ring_scale, _set_ring_scale)
 
     def _on_toggled(self, checked: bool):
+        """Handle toggled callbacks."""
         if checked:
             self._anim_alpha.start()
             self._anim_scale.start()
@@ -193,6 +181,7 @@ class MicButton(_CircleBase):
 
 
     def paintEvent(self, event):
+        """Handle the paint event."""
         p  = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -213,6 +202,7 @@ class MicButton(_CircleBase):
         p.end()
 
     def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
+        """Handle draw icon."""
         pen = QPen(color, 1.6, Qt.PenStyle.SolidLine,
                    Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)
@@ -232,17 +222,9 @@ class MicButton(_CircleBase):
 
 
 class SendButton(_CircleBase):
-    """
-    Modern send button — solid accent circle with a clean upward-arrow glyph.
-
-    Disabled : same accent circle at 28% opacity, white arrow at 45% opacity.
-               Reads as "same button, not yet active" — not a different widget.
-    Enabled  : full accent fill, white arrow.
-    Hover    : accent.hover fill.
-    Pressed  : accent.pressed fill.
-    """
 
     def __init__(self, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self.setEnabled(False)
 
@@ -252,6 +234,7 @@ class SendButton(_CircleBase):
     _AMBER_PRESSED = "#C88010"
 
     def _circle_color(self) -> QColor:
+        """Handle circle color."""
         if not self.isEnabled():
             c = QColor(self._AMBER)
             c.setAlphaF(0.28)
@@ -263,6 +246,7 @@ class SendButton(_CircleBase):
         return QColor(self._AMBER)
 
     def _icon_color(self) -> QColor:
+        """Handle icon color."""
         if not self.isEnabled():
             c = QColor('#FFFFFF')
             c.setAlphaF(0.45)
@@ -271,6 +255,7 @@ class SendButton(_CircleBase):
 
 
     def paintEvent(self, _event):
+        """Handle the paint event."""
         p  = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -286,10 +271,7 @@ class SendButton(_CircleBase):
         p.end()
 
     def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
-        """
-        Upward arrow: filled triangle head + rounded-rect stem.
-        Vertically centred with a slight upward bias for optical balance.
-        """
+        """Handle draw icon."""
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(color))
 

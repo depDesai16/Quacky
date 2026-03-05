@@ -1,16 +1,3 @@
-"""
-widgets/composer.py — Composer  (stacked pill redesign)
-
-Layout inside pill:
-  [ComposerInput — full width, top]
-  [MicButton] [ShortcutsButton] [stretch] [SendButton]  ← bottom toolbar row
-
-- Text input sits at the top, full width, no icons crowding it
-- Toolbar row sits below with left-aligned action icons + right-aligned send
-- Pill border painted via QPainter for crisp 1px HiDPI rendering
-- Amber focus ring on the whole pill
-- Char counter right-aligned between toolbar and send button
-"""
 
 from PyQt6.QtCore    import Qt, pyqtSignal, QEvent, QRectF, QTimer
 from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QColor, QKeyEvent)
@@ -22,13 +9,10 @@ from theme import ThemeManager, FONT_STACK
 
 
 class _ShortcutsButton(QAbstractButton):
-    """
-    Keyboard icon button — same size as MicButton (32x32).
-    No hover background — icon itself highlights to accent colour.
-    """
     SIZE = 32
 
     def __init__(self, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self.setFixedSize(self.SIZE, self.SIZE)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -39,16 +23,20 @@ class _ShortcutsButton(QAbstractButton):
         ThemeManager.subscribe(self._on_theme)
 
     def _on_theme(self, tokens):
+        """Handle theme callbacks."""
         self._tokens = tokens
         self.update()
 
     def enterEvent(self, e):
+        """Handle the enter event."""
         self._hovered = True;  self.update()
 
     def leaveEvent(self, e):
+        """Handle the leave event."""
         self._hovered = False; self.update()
 
     def paintEvent(self, event):
+        """Handle the paint event."""
         t  = self._tokens
         p  = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -78,6 +66,7 @@ class _ShortcutsButton(QAbstractButton):
         p.end()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self._on_theme)
         except Exception:
@@ -91,6 +80,7 @@ class ComposerInput(QTextEdit):
     MAX_H = 128
 
     def __init__(self, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = ThemeManager.tokens()
         self.setAcceptRichText(False)
@@ -104,6 +94,7 @@ class ComposerInput(QTextEdit):
         ThemeManager.subscribe(self.apply_theme)
 
     def keyPressEvent(self, event: QKeyEvent):
+        """Handle the keypress event."""
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                 super().keyPressEvent(event)
@@ -113,6 +104,7 @@ class ComposerInput(QTextEdit):
         super().keyPressEvent(event)
 
     def _auto_resize(self):
+        """Handle auto resize."""
         doc = self.document()
         doc.setTextWidth(self.viewport().width() or 300)
         full_h = int(doc.size().height()) + 8
@@ -126,14 +118,17 @@ class ComposerInput(QTextEdit):
         )
 
     def resizeEvent(self, event):
+        """Handle the resize event."""
         super().resizeEvent(event)
         QTimer.singleShot(0, self._auto_resize)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self._apply_style()
 
     def _apply_style(self):
+        """Apply style."""
         t = self._tokens
         self.setStyleSheet(
             "QTextEdit { background: transparent; border: none;"
@@ -144,6 +139,7 @@ class ComposerInput(QTextEdit):
         self.setPlaceholderText("Message Quacky\u2026")
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:
@@ -157,6 +153,7 @@ class _ComposerPill(QWidget):
     CHAR_WARN  = 800
 
     def __init__(self, mic_btn, shortcuts_btn, input_field, send_btn, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens  = ThemeManager.tokens()
         self._focused = False
@@ -192,6 +189,7 @@ class _ComposerPill(QWidget):
         input_field.document().contentsChanged.connect(self._on_text_changed)
 
     def eventFilter(self, obj, event):
+        """Handle eventfilter."""
         if obj is self._input:
             if event.type() == QEvent.Type.FocusIn:
                 self._focused = True;  self.update()
@@ -200,14 +198,17 @@ class _ComposerPill(QWidget):
         return super().eventFilter(obj, event)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self._update_char_label(len(self._input.toPlainText()))
         self.update()
 
     def _on_text_changed(self):
+        """Handle text changed callbacks."""
         self._update_char_label(len(self._input.toPlainText()))
 
     def _update_char_label(self, n: int):
+        """Update char label."""
         t = self._tokens
         remaining = self.CHAR_LIMIT - n
         color = (t["text.secondary"] if n < self.CHAR_WARN
@@ -222,6 +223,7 @@ class _ComposerPill(QWidget):
         )
 
     def paintEvent(self, event):
+        """Handle the paint event."""
         t = self._tokens
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
@@ -240,6 +242,7 @@ class _ComposerPill(QWidget):
         p.end()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:
@@ -248,16 +251,9 @@ class _ComposerPill(QWidget):
 
 
 class Composer(QWidget):
-    """
-    Public API:
-      input_field     — ComposerInput
-      shortcuts_btn   — _ShortcutsButton  (wire .clicked externally)
-      set_busy(bool)
-      clear()
-      text() -> str
-    """
 
     def __init__(self, mic_button, send_button, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens       = ThemeManager.tokens()
         self.input_field   = ComposerInput()
@@ -290,13 +286,16 @@ class Composer(QWidget):
         ThemeManager.subscribe(self.apply_theme)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self._apply_style()
 
     def _apply_style(self):
+        """Apply style."""
         self.setStyleSheet("QWidget { background: transparent; border: none; }")
 
     def set_busy(self, busy: bool):
+        """Set busy."""
         self.input_field.setEnabled(not busy)
         self.input_field.setPlaceholderText(
             "Quacky is thinking\u2026" if busy else "Message Quacky\u2026"
@@ -305,12 +304,15 @@ class Composer(QWidget):
             self.input_field.setFocus()
 
     def clear(self):
+        """Clear temporary state."""
         self.input_field.clear()
 
     def text(self) -> str:
+        """Handle text."""
         return self.input_field.toPlainText()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:
