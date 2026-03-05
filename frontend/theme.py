@@ -144,20 +144,61 @@ LIGHT_TOKENS: dict = {
 }
 
 if sys.platform == "darwin":
-    FONT_FAMILY_UI = "Helvetica Neue"
-    FONT_STACK = "'Helvetica Neue'"
-    FONT_FAMILY_MONO = "Menlo"
-    FONT_MONO = "'Menlo'"
+    _UI_FONT_CANDIDATES = (
+        "SF Pro Text",
+        "Helvetica Neue",
+        "Helvetica",
+        "Arial",
+    )
+    _MONO_FONT_CANDIDATES = (
+        "SF Mono",
+        "Menlo",
+        "Monaco",
+        "Courier New",
+    )
 elif sys.platform.startswith("linux"):
-    FONT_FAMILY_UI = "DejaVu Sans"
-    FONT_STACK = "'DejaVu Sans'"
-    FONT_FAMILY_MONO = "DejaVu Sans Mono"
-    FONT_MONO = "'DejaVu Sans Mono'"
+    _UI_FONT_CANDIDATES = (
+        "Noto Sans",
+        "Ubuntu",
+        "Cantarell",
+        "DejaVu Sans",
+        "Arial",
+    )
+    _MONO_FONT_CANDIDATES = (
+        "JetBrains Mono",
+        "Noto Sans Mono",
+        "Ubuntu Mono",
+        "DejaVu Sans Mono",
+        "Courier New",
+    )
 else:
-    FONT_FAMILY_UI = "Segoe UI"
-    FONT_STACK = "'Segoe UI'"
-    FONT_FAMILY_MONO = "Consolas"
-    FONT_MONO = "'Consolas'"
+    _UI_FONT_CANDIDATES = (
+        "Segoe UI Variable",
+        "Segoe UI",
+        "Arial",
+    )
+    _MONO_FONT_CANDIDATES = (
+        "Cascadia Mono",
+        "Consolas",
+        "Courier New",
+    )
+
+
+def _pick_font_family(candidates: tuple[str, ...], fallback: str) -> str:
+    """Pick preferred font family without requiring an app instance."""
+    return candidates[0] if candidates else fallback
+
+
+def _to_qss_stack(candidates: tuple[str, ...], generic: str) -> str:
+    """Build a Qt stylesheet-friendly fallback stack."""
+    quoted = ", ".join(f"'{font}'" for font in candidates)
+    return f"{quoted}, {generic}"
+
+
+FONT_FAMILY_UI = _pick_font_family(_UI_FONT_CANDIDATES, _UI_FONT_CANDIDATES[0])
+FONT_FAMILY_MONO = _pick_font_family(_MONO_FONT_CANDIDATES, _MONO_FONT_CANDIDATES[0])
+FONT_STACK = _to_qss_stack(_UI_FONT_CANDIDATES, "sans-serif")
+FONT_MONO = _to_qss_stack(_MONO_FONT_CANDIDATES, "monospace")
 
 
 

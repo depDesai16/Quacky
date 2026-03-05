@@ -17,10 +17,10 @@ from PyQt6.QtWidgets import (
     QStyle,
     QPushButton,
 )
-from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath, QFont
+from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath, QFont, QFontMetrics
 from PyQt6.QtCore import QRectF, QPointF
 
-from theme import ThemeManager, FONT_STACK
+from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 from .widgets.toggle_slider import ToggleSlider
 from widgets.card_widget import CardWidget
 
@@ -44,7 +44,9 @@ SETTINGS_METRICS: dict = {
     "control_h": 36,
     "action_btn_h": 34,
     "panel_inset": 1,
+    "tab_h": 44,
 }
+_BASE_SETTINGS_METRICS = SETTINGS_METRICS.copy()
 
 
 
@@ -64,7 +66,7 @@ class _SettingsTabButton(QWidget):
         self._hovered  = False
         self._tokens   = ThemeManager.tokens()
 
-        self.setFixedHeight(44)
+        self.setFixedHeight(SETTINGS_METRICS["tab_h"])
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
@@ -127,7 +129,8 @@ class _SettingsTabButton(QWidget):
                       else QColor(t["text.secondary"]))
         p.setPen(text_color)
         from PyQt6.QtGui import QFont as _QFont
-        font = _QFont(FONT_STACK.strip("'"))
+        app_font = QApplication.font()
+        font = _QFont(app_font.family() or FONT_FAMILY_UI)
         font.setPixelSize(13)
         font.setWeight(_QFont.Weight.DemiBold if self._active
                        else _QFont.Weight.Normal)
@@ -347,7 +350,8 @@ class _ModeComboDelegate(QStyledItemDelegate):
         text = str(index.data(Qt.ItemDataRole.DisplayRole) or "")
         text_rect = row_rect.adjusted(12.0, 0.0, -30.0, 0.0).toRect()
         painter.setPen(QColor(self._tokens["text.primary"]))
-        font = QFont(FONT_STACK.strip("'"))
+        app_font = QApplication.font()
+        font = QFont(app_font.family() or FONT_FAMILY_UI)
         font.setPixelSize(12)
         font.setWeight(QFont.Weight.Medium)
         painter.setFont(font)
@@ -416,7 +420,7 @@ class _ModeComboBox(QComboBox):
         border       = t.get("settings.border.strong",  t["border.strong"])
         text         = t["text.primary"]
         accent       = t["accent.primary"]
-        font         = FONT_STACK.strip("'")
+        font         = FONT_STACK
         h            = SETTINGS_METRICS["control_h"]
 
         self.setStyleSheet(f"""
@@ -587,8 +591,20 @@ class _ApiKeyTestWorker(QThread):
         self.result_ready.emit(ok, message)
 
 class SettingsPanelMixin:
+    def _sync_platform_metrics(self):
+        """Tune settings layout metrics for current font metrics."""
+        app = QApplication.instance()
+        font = app.font() if app is not None else QFont(FONT_FAMILY_UI, 10)
+        text_h = QFontMetrics(font).height()
+        scale = max(0.95, min(1.25, text_h / 14.0))
+
+        for key, value in _BASE_SETTINGS_METRICS.items():
+            SETTINGS_METRICS[key] = max(1, int(round(value * scale)))
+        SETTINGS_METRICS["panel_inset"] = _BASE_SETTINGS_METRICS["panel_inset"]
+
     def _build_settings_page(self) -> QWidget:
         """Build settings page."""
+        self._sync_platform_metrics()
         page = QWidget()
         page.setObjectName("settingsPage")
         page.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -1274,6 +1290,3 @@ class SettingsPanelMixin:
         mode = self._theme_mode_combo.currentData()
         if mode in ("dark", "light", "system"):
             ThemeManager.set_theme(mode)
-
-
-

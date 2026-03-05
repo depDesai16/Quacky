@@ -137,22 +137,14 @@ if __name__ == "__main__":
 
     app.setStyle("Fusion")
 
-    available = set(QFontDatabase.families())
-    if FONT_FAMILY_UI not in available:
-        QMessageBox.critical(
-            None,
-            "Quacky",
-            f"Required UI font not found: {FONT_FAMILY_UI}. "
-            "Install that font or bundle it with the app.",
-        )
-        sys.exit(1)
-
     app_font = QFont(FONT_FAMILY_UI, 10)
     app_font.setStyleStrategy(
         QFont.StyleStrategy.PreferAntialias
         | QFont.StyleStrategy.PreferQuality
-        | QFont.StyleStrategy.NoFontMerging
     )
+    if FONT_FAMILY_UI not in set(QFontDatabase.families()):
+        app_font = QFont()
+        app_font.setPointSize(10)
     app.setFont(app_font)
 
     _shutdown_requested = False

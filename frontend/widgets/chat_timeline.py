@@ -1,7 +1,7 @@
 
 import time
 
-from PyQt6.QtGui     import QColor
+from PyQt6.QtGui     import QColor, QFontMetrics
 from PyQt6.QtCore    import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
                               QEvent, QAbstractAnimation)
 from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
@@ -43,8 +43,7 @@ class _NewMessagesPill(QPushButton):
         self._tokens    = tokens
         self._clearance = 0
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedHeight(34)
-        self.setMinimumWidth(132)
+        self._sync_metrics()
         self.setAutoDefault(False)
         self.hide()
 
@@ -55,15 +54,22 @@ class _NewMessagesPill(QPushButton):
         self.setGraphicsEffect(self._shadow)
         self._apply_style()
 
+    def _sync_metrics(self):
+        """Scale chip geometry from current font metrics."""
+        fm = QFontMetrics(self.font())
+        self.setFixedHeight(max(34, fm.height() + 16))
+        self.setMinimumWidth(max(132, fm.horizontalAdvance(self.text()) + 40))
+
     def _apply_style(self):
         """Apply style."""
         t = self._tokens
+        radius = max(12, self.height() // 2)
         self.setStyleSheet(
             "QPushButton {"
             " background: transparent;"
             " color: " + t["newmsg.idle.fg"] + ";"
             " border: 1px solid " + t["newmsg.idle.border"] + ";"
-            " border-radius: 17px;"
+            " border-radius: " + str(radius) + "px;"
             " font-family: " + FONT_STACK + "; font-size: 12px; font-weight: 700;"
             " letter-spacing: 0.2px; padding: 0 18px;"
             " outline: none;"
@@ -145,6 +151,7 @@ class _NewMessagesPill(QPushButton):
     def apply_theme(self, tokens: dict):
         """Apply theme."""
         self._tokens = tokens
+        self._sync_metrics()
         self._apply_style()
 
 

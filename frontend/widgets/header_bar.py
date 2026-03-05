@@ -13,7 +13,7 @@ from PyQt6.QtCore import (
 from PyQt6.QtGui import (
     QPainter, QColor, QBrush, QFont, QFontMetrics, QPen, QPainterPath,
 )
-from PyQt6.QtWidgets import QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
+from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 
 from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 
@@ -26,6 +26,8 @@ class StatusChip(QWidget):
         "responding": "Responding",
         "error": "Error",
     }
+    _MIN_H = 22
+    _DOT_MIN = 7
 
     def __init__(self, parent=None):
         """Initialize the instance state."""
@@ -33,9 +35,10 @@ class StatusChip(QWidget):
         self._state = "idle"
         self._tokens = ThemeManager.tokens()
         self._dot_alpha = 1.0
+        self._dot_size = self._DOT_MIN
 
-        self.setFixedHeight(22)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._update_geometry()
 
         self._pulse_anim = QPropertyAnimation(self, b"dot_alpha", self)
         self._pulse_anim.setDuration(1100)
@@ -66,7 +69,7 @@ class StatusChip(QWidget):
         else:
             self._pulse_anim.stop()
             self._dot_alpha = 1.0
-        self._update_width()
+        self._update_geometry()
         self.update()
 
     def apply_theme(self, tokens: dict):
@@ -94,16 +97,20 @@ class StatusChip(QWidget):
 
     def _status_font(self) -> QFont:
         """Handle status font."""
-        font = QFont(FONT_FAMILY_UI)
-        font.setPixelSize(11)
+        base = QApplication.font()
+        font = QFont(base.family() or FONT_FAMILY_UI)
+        point_size = base.pointSizeF() if base.pointSizeF() > 0 else 10.0
+        font.setPointSizeF(max(8.5, point_size - 0.2))
         font.setWeight(QFont.Weight.Medium)
         return font
 
-    def _update_width(self):
-        """Update width."""
+    def _update_geometry(self):
+        """Update chip dimensions from current font metrics."""
         fm = QFontMetrics(self._status_font())
+        self.setFixedHeight(max(self._MIN_H, fm.height() + 8))
+        self._dot_size = max(self._DOT_MIN, min(9, self.height() - 12))
         tw = fm.horizontalAdvance(self._label())
-        self.setFixedWidth(tw + 7 + 5 + 12 + 6)
+        self.setFixedWidth(tw + self._dot_size + 18)
 
     def paintEvent(self, event):
         """Handle the paint event."""
@@ -115,13 +122,13 @@ class StatusChip(QWidget):
         p.setPen(Qt.PenStyle.NoPen)
         p.drawRoundedRect(QRectF(0, 0, w, h), r, r)
         dot_x = 6.0
-        dot_y = (h - 7) / 2
+        dot_y = (h - self._dot_size) / 2
         p.setBrush(QBrush(self._dot_color()))
-        p.drawEllipse(QRectF(dot_x, dot_y, 7, 7))
+        p.drawEllipse(QRectF(dot_x, dot_y, self._dot_size, self._dot_size))
         p.setPen(QColor(self._tokens["text.secondary"]))
         font = self._status_font()
         p.setFont(font)
-        text_x = int(dot_x + 7 + 5)
+        text_x = int(dot_x + self._dot_size + 5)
         p.drawText(
             text_x, 0, w - text_x - 6, h,
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
@@ -132,7 +139,7 @@ class StatusChip(QWidget):
     def showEvent(self, event):
         """Handle the show event."""
         super().showEvent(event)
-        self._update_width()
+        self._update_geometry()
 
     def __del__(self):
         """Release resources during object cleanup."""

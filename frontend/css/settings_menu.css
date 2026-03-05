@@ -1,7 +1,7 @@
 QWidget {
     background: #111120;
     color: #E8E8F0;
-    font-family: 'Segoe UI Variable', 'Segoe UI', 'Inter', sans-serif;
+    font-family: 'Segoe UI Variable', 'Segoe UI', 'SF Pro Text', 'Helvetica Neue', 'Noto Sans', 'DejaVu Sans', sans-serif;
     font-size: 14px;
 }
 
