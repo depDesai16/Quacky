@@ -2,6 +2,9 @@
 face_id_dialog.py - Face ID authentication dialog (Apple-style)
 """
 import cv2
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
 from PyQt6.QtGui import QImage, QPixmap, QFont

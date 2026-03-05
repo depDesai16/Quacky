@@ -5,8 +5,11 @@ import cv2
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QHBoxLayout
 from PyQt6.QtGui import QImage, QPixmap, QFont
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from theme import ThemeManager
-from camera_analyzer import CameraAnalyzer
+from .camera_analyzer import CameraAnalyzer
 
 
 class CameraThread(QThread):
@@ -202,7 +205,8 @@ class CameraView(QWidget):
             self.camera_thread.analyzer.emotion_detected.connect(self._on_emotion)
             self.camera_thread.analyzer.gesture_detected.connect(self._on_gesture)
             self.camera_thread.analyzer.attention_changed.connect(self._on_attention)
-            self.camera_thread.analyzer.user_recognized.connect(self._on_user_recognized)
+            # Don't connect automatic user recognition - only use Face ID dialog
+            # self.camera_thread.analyzer.user_recognized.connect(self._on_user_recognized)
             
             self.camera_thread.start()
     

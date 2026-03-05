@@ -163,7 +163,7 @@ class QuackyWindow(QWidget):
         self.current_user = "Guest"
         
         # Initialize face recognition manager early (before camera)
-        from face_recognition import FaceRecognitionManager
+        from camera.face_recognition import FaceRecognitionManager
         self.face_recognition = FaceRecognitionManager()
 
         self.setWindowFlags(
@@ -243,11 +243,11 @@ class QuackyWindow(QWidget):
         chat_layout.addWidget(self.timeline, 1)
         
         # Camera view
-        from camera_view import CameraView
+        from camera.camera_view import CameraView
         self.camera_view = CameraView(parent=self.card)
         
-        # Connect camera user recognition to profile switching
-        self.camera_view.user_recognized.connect(self._on_user_profile_changed)
+        # Don't connect automatic user recognition - only use Face ID dialog
+        # self.camera_view.user_recognized.connect(self._on_user_profile_changed)
         
         # Add views to stacked widget
         self.stacked_widget.addWidget(self.chat_container)  # index 0
@@ -460,7 +460,7 @@ class QuackyWindow(QWidget):
     
     def _start_face_id_switch(self):
         """Start Face ID authentication to switch profiles"""
-        from face_id_dialog import FaceIDDialog
+        from camera.face_id_dialog import FaceIDDialog
         
         # Stop camera tab if it's running
         was_on_camera = self.stacked_widget.currentIndex() == 1
@@ -473,7 +473,7 @@ class QuackyWindow(QWidget):
     
     def _show_face_id_dialog(self, was_on_camera):
         """Show the Face ID dialog after camera is released"""
-        from face_id_dialog import FaceIDDialog
+        from camera.face_id_dialog import FaceIDDialog
         
         # Create and show Face ID dialog
         dialog = FaceIDDialog(self.face_recognition, self)

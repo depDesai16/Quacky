@@ -4,7 +4,7 @@ camera_analyzer.py - Advanced camera analysis with emotion, gesture, and attenti
 import cv2
 import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
-from face_recognition import FaceRecognitionManager
+from .face_recognition import FaceRecognitionManager
 
 try:
     import mediapipe as mp
@@ -116,14 +116,8 @@ class CameraAnalyzer(QObject):
         if self.gesture_cooldown > 0:
             self.gesture_cooldown -= 1
         
-        # Face recognition (every 30 frames = ~1 second)
-        self.recognition_frame_count += 1
-        if len(faces) > 0 and self.recognition_frame_count % 30 == 0:
-            user_name, confidence = self.face_recognition.recognize_user(frame)
-            if user_name != self.last_recognized_user:
-                self.user_recognized.emit(user_name, confidence)
-                self.last_recognized_user = user_name
-            results['user'] = user_name
+        # Face recognition disabled in camera tab - only use Face ID dialog
+        # Recognition happens only when user explicitly clicks "Switch Profile"
         
         return results
     

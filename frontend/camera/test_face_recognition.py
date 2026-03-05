@@ -4,7 +4,9 @@ Run this to test if face recognition is working properly
 """
 import cv2
 import sys
-from face_recognition import FaceRecognitionManager
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from camera.face_recognition import FaceRecognitionManager
 
 def main():
     print("Face Recognition Test")
