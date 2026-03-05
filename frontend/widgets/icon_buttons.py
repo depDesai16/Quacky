@@ -1,4 +1,3 @@
-
 from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
                               QRectF, QPointF, pyqtProperty)
 from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QBrush, QColor)
@@ -285,3 +284,59 @@ class SendButton(_CircleBase):
         stem = QPainterPath()
         stem.addRoundedRect(QRectF(cx - 1.55, cy - 0.8, 3.1, 6.2), 1.55, 1.55)
         p.drawPath(stem)
+
+class SpeechToSpeechButton(_CircleBase):
+    """Waveform icon button shown when the composer input is empty."""
+
+    _AMBER         = "#E8A020"
+    _AMBER_HOVER   = "#F0B040"
+    _AMBER_PRESSED = "#C88010"
+
+    def _circle_color(self) -> QColor:
+        """Handle circle color."""
+        if self.isDown():
+            return QColor(self._AMBER_PRESSED)
+        if self._hovered:
+            return QColor(self._AMBER_HOVER)
+        return QColor(self._AMBER)
+
+    def _icon_color(self) -> QColor:
+        """Handle icon color."""
+        return QColor("#FFFFFF")
+
+    def paintEvent(self, _event):
+        """Handle the paint event."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cx = SIZE / 2.0
+        cy = SIZE / 2.0
+        r  = SIZE / 2.0 - 1.5
+
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(QBrush(self._circle_color()))
+        p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
+
+        self._draw_icon(p, cx, cy, self._icon_color())
+        p.end()
+
+    def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
+        """Draw animated waveform bars icon."""
+        from PyQt6.QtCore import QRectF as _RectF
+        pen = QPen(color, 1.8, Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+
+        # 5 vertical bars of varying height — waveform shape
+        heights = [3.5, 6.0, 9.0, 6.0, 3.5]
+        bar_w   = 1.8
+        spacing = 3.2
+        total_w = len(heights) * bar_w + (len(heights) - 1) * (spacing - bar_w)
+        start_x = cx - total_w / 2.0 + bar_w / 2.0
+
+        for i, h in enumerate(heights):
+            bx = start_x + i * spacing
+            p.drawLine(
+                QPointF(bx, cy - h / 2.0),
+                QPointF(bx, cy + h / 2.0),
+            )

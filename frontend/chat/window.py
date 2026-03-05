@@ -246,18 +246,30 @@ class QuackyWindow(QWidget):
         self.stacked_widget.addWidget(self._chat_container)     # index 0
         self.stacked_widget.addWidget(self.camera_view)         # index 1
         self.stacked_widget.addWidget(self._settings_container) # index 2
+
+        # Speech-to-speech panel (frontend only)
+        from chat.speech_to_speech import SpeechToSpeechPanel
+        self._sts_panel = SpeechToSpeechPanel(parent=self.card)
+        self._sts_panel.back_requested.connect(self._hide_sts_panel)
+        self._sts_panel.start_requested.connect(self._on_sts_start)
+        self._sts_panel.stop_requested.connect(self._on_sts_stop)
+        self.stacked_widget.addWidget(self._sts_panel)          # index 3
         
         cl.addWidget(self.stacked_widget, 1)
 
         self.mic_btn  = MicButton()
         self.send_btn = SendButton()
+        from widgets.icon_buttons import SpeechToSpeechButton
+        self.sts_btn  = SpeechToSpeechButton()
         self.composer = Composer(
             mic_button=self.mic_btn,
             send_button=self.send_btn,
+            sts_button=self.sts_btn,
             parent=self.card,
         )
         self.composer.input_field.send_requested.connect(self.send_message)
         self.send_btn.clicked.connect(self.send_message)
+        self.sts_btn.clicked.connect(self._show_sts_panel)
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
@@ -665,11 +677,39 @@ class QuackyWindow(QWidget):
 
     def _update_send_btn(self):
         """Update send btn."""
-        self.send_btn.setEnabled(
-            bool(self.composer.input_field.toPlainText().strip())
-        )
+        has_text = bool(self.composer.input_field.toPlainText().strip())
+        self.send_btn.setEnabled(has_text)
+        self.composer.set_has_text(has_text)
         self._update_toast_anchor()
         QTimer.singleShot(0, self._update_toast_anchor)
+
+    def _show_sts_panel(self):
+        """Show speech-to-speech panel."""
+        self.stacked_widget.setCurrentIndex(3)
+        self.composer.hide()
+        self._sts_panel.set_state("idle")
+
+    def _hide_sts_panel(self):
+        """Return from S2S panel to chat."""
+        self._on_sts_stop()
+        self.stacked_widget.setCurrentIndex(0)
+        self.composer.show()
+        self._update_toast_anchor()
+
+    def _on_sts_start(self):
+        """S2S start button pressed — delegate to existing STT infrastructure."""
+        self._sts_panel.set_state("listening")
+        # Wire to mic/STT if available
+        if hasattr(self, "mic_btn") and not self.mic_btn.isChecked():
+            self.mic_btn.setChecked(True)
+            self.on_mic_toggle(True)
+
+    def _on_sts_stop(self):
+        """S2S stop button pressed."""
+        self._sts_panel.set_state("idle")
+        if hasattr(self, "mic_btn") and self.mic_btn.isChecked():
+            self.mic_btn.setChecked(False)
+            self.on_mic_toggle(False)
 
     def _update_toast_anchor(self):
         """Update toast anchor."""

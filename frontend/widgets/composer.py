@@ -1,7 +1,8 @@
 from PyQt6.QtCore    import Qt, pyqtSignal, QEvent, QRectF, QTimer, QPoint, QPointF
 from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QColor, QKeyEvent)
 from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                              QTextEdit, QSizePolicy, QFrame, QAbstractButton, QMenu)
+                              QTextEdit, QSizePolicy, QFrame, QAbstractButton,
+                              QMenu, QStackedWidget)
 
 from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 
@@ -119,7 +120,7 @@ class _PlusMenuButton(QAbstractButton):
         arm = 6.0
 
         active = self._hovered or self._camera_active
-        icon_color = QColor(t["accent.primary"] if active else t["text.muted"])
+        icon_color = QColor(t["accent.primary"] if active else t["text.secondary"])
 
         pen = QPen(icon_color, 1.9)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -441,7 +442,7 @@ class _ComposerPill(QWidget):
     CHAR_LIMIT = 2000
     CHAR_WARN  = 800
 
-    def __init__(self, mic_btn, plus_btn, input_field, send_btn, parent=None):
+    def __init__(self, mic_btn, plus_btn, input_field, send_btn, sts_btn, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
         self._tokens  = ThemeManager.tokens()
@@ -469,13 +470,25 @@ class _ComposerPill(QWidget):
         toolbar.addWidget(self._char_label, 0, Qt.AlignmentFlag.AlignVCenter)
 
         toolbar.addSpacing(8)
-        toolbar.addWidget(send_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+        # Stacked button: index 0 = sts, index 1 = send — use fixed SIZE from the button class
+        self._btn_stack = QStackedWidget()
+        self._btn_stack.setFixedSize(32, 32)
+        self._btn_stack.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._btn_stack.addWidget(sts_btn)   # index 0
+        self._btn_stack.addWidget(send_btn)  # index 1
+        self._btn_stack.setCurrentIndex(0)
+        toolbar.addWidget(self._btn_stack, 0, Qt.AlignmentFlag.AlignVCenter)
         col.addLayout(toolbar)
 
         self._update_char_label(0)
         ThemeManager.subscribe(self.apply_theme)
         input_field.installEventFilter(self)
         input_field.document().contentsChanged.connect(self._on_text_changed)
+
+    def set_has_text(self, has_text: bool):
+        """Switch between sts (0) and send (1) button."""
+        self._btn_stack.setCurrentIndex(1 if has_text else 0)
 
     def eventFilter(self, obj, event):
         """Handle eventfilter."""
@@ -541,7 +554,7 @@ class _ComposerPill(QWidget):
 
 class Composer(QWidget):
 
-    def __init__(self, mic_button, send_button, parent=None):
+    def __init__(self, mic_button, send_button, sts_button, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
         self._tokens       = ThemeManager.tokens()
@@ -553,6 +566,7 @@ class Composer(QWidget):
             plus_btn   = self.plus_btn,
             input_field= self.input_field,
             send_btn   = send_button,
+            sts_btn    = sts_button,
         )
 
         lay = QVBoxLayout(self)
@@ -582,6 +596,10 @@ class Composer(QWidget):
     def _apply_style(self):
         """Apply style."""
         self.setStyleSheet("QWidget { background: transparent; border: none; }")
+
+    def set_has_text(self, has_text: bool):
+        """Toggle send vs speech-to-speech button."""
+        self._pill.set_has_text(has_text)
 
     def set_busy(self, busy: bool):
         """Set busy."""
