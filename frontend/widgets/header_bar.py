@@ -199,7 +199,6 @@ class HeaderBar(QWidget):
         self.setStyleSheet(f"""
             QWidget {{
                 background: transparent;
-                border-bottom: 1px solid {t['border.subtle']};
             }}
             QLabel#headerTitle {{
                 font-family: {FONT_STACK};

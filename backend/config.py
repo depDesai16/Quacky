@@ -27,7 +27,7 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 def get_settings() -> Settings:
     if load_dotenv:
-        load_dotenv()
+        load_dotenv("config.env")
 
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
