@@ -1,4 +1,3 @@
-
 import os
 import signal
 import subprocess
@@ -85,50 +84,6 @@ def _load_system_prompt() -> str | None:
     return None
 
 
-def show_main():
-    """Show main."""
-    main_win.show()
-    main_win.raise_()
-    main_win.activateWindow()
-
-
-def show_settings():
-    """Show settings."""
-    show_main()
-    main_win._show_settings()
-
-
-def on_tray_activated(reason):
-    """Handle tray activated callbacks."""
-    if reason == QSystemTrayIcon.ActivationReason.Trigger:
-        if main_win.isVisible():
-            main_win.hide()
-        else:
-            show_main()
-
-
-def build_system_tray(app: QApplication) -> QSystemTrayIcon:
-    """Build system tray."""
-    tray = QSystemTrayIcon(draw_icon(), parent=app)
-    tray.setToolTip("Quacky")
-
-    tray_menu = QMenu()
-    css_path = os.path.join(FRONTEND_DIR, "css", "tray_menu.css")
-    with open(css_path, "r", encoding="utf-8") as f:
-        tray_menu.setStyleSheet(f.read())
-
-    action_open     = tray_menu.addAction("Open Quacky")
-    action_settings = tray_menu.addAction("Settings")
-    tray_menu.addSeparator()
-    action_quit = tray_menu.addAction("Quit")
-
-    action_open.triggered.connect(show_main)
-    action_settings.triggered.connect(show_settings)
-    action_quit.triggered.connect(app.quit)
-    tray.activated.connect(on_tray_activated)
-    tray.setContextMenu(tray_menu)
-    return tray
-
 # Called in app.py
 def run_it():
     app = QApplication(sys.argv)
@@ -156,10 +111,10 @@ def run_it():
         server_proc.terminate()
         sys.exit(1)
 
-    client   = QuackyClient(base_url)
-    system   = _load_system_prompt()
+    client    = QuackyClient(base_url)
+    system    = _load_system_prompt()
     chat_data = client.start_chat(system=system)
-    chat_id  = chat_data.get("chat_id", "")
+    chat_id   = chat_data.get("chat_id", "")
 
     if not chat_id:
         QMessageBox.critical(None, "Quacky", "Could not start chat session.")
@@ -168,13 +123,54 @@ def run_it():
 
     main_win = QuackyWindow(client=client, chat_id=chat_id)
 
+    def show_main():
+        """Show main window."""
+        main_win.show()
+        main_win.raise_()
+        main_win.activateWindow()
+
+    def show_settings():
+        """Show settings."""
+        show_main()
+        main_win._show_settings()
+
+    def on_tray_activated(reason):
+        """Handle tray activated callbacks."""
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:
+            if main_win.isVisible():
+                main_win.hide()
+            else:
+                show_main()
+
+    def build_system_tray(app: QApplication) -> QSystemTrayIcon:
+        """Build system tray."""
+        tray = QSystemTrayIcon(draw_icon(), parent=app)
+        tray.setToolTip("Quacky")
+
+        tray_menu = QMenu()
+        css_path = os.path.join(FRONTEND_DIR, "css", "tray_menu.css")
+        with open(css_path, "r", encoding="utf-8") as f:
+            tray_menu.setStyleSheet(f.read())
+
+        action_open     = tray_menu.addAction("Open Quacky")
+        action_settings = tray_menu.addAction("Settings")
+        tray_menu.addSeparator()
+        action_quit = tray_menu.addAction("Quit")
+
+        action_open.triggered.connect(show_main)
+        action_settings.triggered.connect(show_settings)
+        action_quit.triggered.connect(app.quit)
+        tray.activated.connect(on_tray_activated)
+        tray.setContextMenu(tray_menu)
+        return tray
+
     tray = build_system_tray(app)
     tray.show()
     main_win.show()
 
     def _on_quit():
         """Handle quit callbacks."""
-        global _shutdown_requested
+        nonlocal _shutdown_requested
         if _shutdown_requested:
             return
         _shutdown_requested = True
@@ -187,7 +183,7 @@ def run_it():
                 server_proc.kill()
 
     def _handle_exit_signal(_sig, _frame):
-        """Handle handle exit signal."""
+        """Handle exit signal."""
         app.quit()
 
     sig_timer = QTimer()
