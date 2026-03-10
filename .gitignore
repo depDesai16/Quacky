@@ -2,3 +2,4 @@ __pycache__/
 .env
 .venv/
 backend/data/local_settings.json
+.pkl
