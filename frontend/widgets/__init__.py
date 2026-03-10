@@ -1,4 +1,3 @@
-"""widgets package — all UI component classes for Quacky."""
 
 from .card_widget    import CardWidget
 from .header_bar     import HeaderBar, StatusChip

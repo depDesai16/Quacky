@@ -1,16 +1,3 @@
-"""
-widgets/thinking_bubble.py — ThinkingBubble  (wave edition)
-
-Three dots animate in a smooth rolling wave — each dot moves up then back
-down with a 160 ms stagger between them. Much more polished than the old
-opacity-only pulse.
-
-  • Dot size: 7 px  — slightly smaller for a refined look
-  • Wave height: 6 px vertical travel
-  • Duration: 560 ms per cycle, looping
-  • Stagger: 160 ms between dots
-  • Easing: InOutSine — smooth and natural
-"""
 
 from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
                               pyqtProperty, QRectF, QTimer)
@@ -28,31 +15,32 @@ STAGGER_MS  = 160
 
 
 class _WaveDot(QWidget):
-    """
-    A dot that animates its _offset_y (0 → -WAVE_H → 0).
-    Drawn with QPainter so it can go outside its natural bounds.
-    """
 
     def __init__(self, color: QColor, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._color    = color
         self._offset_y = 0.0
         self.setFixedSize(DOT_SIZE, DOT_SIZE + WAVE_H)
 
     def set_color(self, color: QColor):
+        """Set color."""
         self._color = color
         self.update()
 
     def _get_offset_y(self) -> float:
+        """Return offset y."""
         return self._offset_y
 
     def _set_offset_y(self, v: float):
+        """Set offset y."""
         self._offset_y = v
         self.update()
 
     offset_y = pyqtProperty(float, _get_offset_y, _set_offset_y)
 
     def paintEvent(self, event):
+        """Handle the paint event."""
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._color)
@@ -64,12 +52,9 @@ class _WaveDot(QWidget):
 
 
 class ThinkingBubble(QFrame):
-    """
-    Bubble-shaped container with three wave-animated dots.
-    Matches AssistantBubble visual style (asst.bg / asst.border).
-    """
 
     def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens    = tokens
         self._dot_color = QColor(tokens["accent.primary"])
@@ -92,6 +77,7 @@ class ThinkingBubble(QFrame):
         self._start_animations()
 
     def _start_animations(self):
+        """Handle start animations."""
         for i, dot in enumerate(self._dots):
             anim = QPropertyAnimation(dot, b"offset_y", self)
             anim.setDuration(DURATION_MS)
@@ -105,10 +91,12 @@ class ThinkingBubble(QFrame):
             QTimer.singleShot(i * STAGGER_MS, anim.start)
 
     def stop_animations(self):
+        """Handle stop animations."""
         for a in self._anims:
             a.stop()
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         c = QColor(tokens["accent.primary"])
         c.setAlphaF(0.75)
@@ -118,6 +106,7 @@ class ThinkingBubble(QFrame):
             dot.set_color(QColor(c))
 
     def _apply_style(self):
+        """Apply style."""
         t = self._tokens
         self.setStyleSheet(f"""
             QFrame {{
