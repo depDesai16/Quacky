@@ -129,8 +129,8 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     tray.setContextMenu(tray_menu)
     return tray
 
-
-if __name__ == "__main__":
+# Called in app.py
+def run_it():
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
