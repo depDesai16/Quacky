@@ -10,3 +10,4 @@ standard-aifc
 msal
 pywin32; sys_platform == "win32"
 elevenlabs
+dotenv
