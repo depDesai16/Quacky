@@ -35,6 +35,7 @@ class TimersEventsPanel(QWidget):
         self.setObjectName("quacky-timers-events-panel")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.setMinimumSize(520, 430)
+        self.setAutoFillBackground(False)
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(15000)
@@ -57,12 +58,15 @@ class TimersEventsPanel(QWidget):
         outer.addWidget(self._sub)
 
         self._scroll = QScrollArea()
+        self._scroll.setObjectName("timersEventsScroll")
         self._scroll.setWidgetResizable(True)
         self._scroll.setFrameShape(QFrame.Shape.NoFrame)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self._scroll.viewport().setObjectName("timersEventsViewport")
 
         self._content = QWidget()
+        self._content.setObjectName("timersEventsContent")
         self._content_layout = QVBoxLayout(self._content)
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(14)
@@ -108,14 +112,64 @@ class TimersEventsPanel(QWidget):
         )
         self._timers_body.setStyleSheet(body_style)
         self._events_body.setStyleSheet(body_style)
+
+        self.setStyleSheet(
+            f"""
+            QWidget#quacky-timers-events-panel {{
+                background: transparent;
+            }}
+            QScrollArea#timersEventsScroll {{
+                background: transparent;
+                border: none;
+            }}
+            QWidget#timersEventsViewport,
+            QWidget#timersEventsContent {{
+                background: transparent;
+                border: none;
+            }}
+            QScrollBar:vertical {{
+                background: transparent;
+                width: 9px;
+                margin: 0px 1px 0px 0px;
+                border: none;
+            }}
+            QScrollBar::handle:vertical {{
+                background: {t['scrollbar.thumb']};
+                border: none;
+                border-radius: 5px;
+                min-height: 28px;
+                margin: 0px 1px 0px 1px;
+            }}
+            QScrollBar::handle:vertical:hover {{
+                background: {t['scrollbar.hover']};
+            }}
+            QScrollBar::add-line:vertical,
+            QScrollBar::sub-line:vertical {{
+                height: 0;
+            }}
+            QScrollBar::add-page:vertical,
+            QScrollBar::sub-page:vertical {{
+                background: {t['scrollbar.track']};
+                border: none;
+                border-radius: 5px;
+                margin: 0px 1px 0px 1px;
+            }}
+            """
+        )
+
         self._refresh_btn.setStyleSheet(
             "QPushButton {"
             f"font-family: {FONT_STACK}; font-size: 12px; font-weight: 600;"
-            f"color: {t['text.primary']}; background: {t['bg.elevated']};"
+            f"color: {t['text.primary']}; background: {t['bg.surface']};"
             f"border: 1px solid {t['border.strong']}; border-radius: 8px; padding: 6px 10px;"
             "}"
             "QPushButton:hover {"
+            f"background: {t['accent.subtleBg']};"
             f"border-color: {t['accent.primary']};"
+            "}"
+            "QPushButton:pressed {"
+            f"background: {t['accent.subtleBg']};"
+            f"border-color: {t['accent.pressed']};"
             "}"
         )
         self.update()
