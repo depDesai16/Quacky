@@ -1067,15 +1067,66 @@ class QuackyWindow(QWidget):
         'r':    Qt.CursorShape.SizeHorCursor,
         'drag': Qt.CursorShape.ArrowCursor,
     }
+    _SYSTEM_RESIZE_EDGES = {
+        't':  Qt.Edge.TopEdge,
+        'b':  Qt.Edge.BottomEdge,
+        'l':  Qt.Edge.LeftEdge,
+        'r':  Qt.Edge.RightEdge,
+        'tl': Qt.Edge.TopEdge | Qt.Edge.LeftEdge,
+        'tr': Qt.Edge.TopEdge | Qt.Edge.RightEdge,
+        'bl': Qt.Edge.BottomEdge | Qt.Edge.LeftEdge,
+        'br': Qt.Edge.BottomEdge | Qt.Edge.RightEdge,
+    }
+
+    def _window_handle(self):
+        """Return native window handle if available."""
+        handle = self.windowHandle()
+        if handle is None:
+            self.winId()
+            handle = self.windowHandle()
+        return handle
+
+    def _start_system_move(self) -> bool:
+        """Ask the compositor/window manager to move this frameless window."""
+        handle = self._window_handle()
+        if handle is None or not hasattr(handle, "startSystemMove"):
+            return False
+        try:
+            return bool(handle.startSystemMove())
+        except Exception:
+            return False
+
+    def _start_system_resize(self, region: str) -> bool:
+        """Ask the compositor/window manager to resize this frameless window."""
+        edges = self._SYSTEM_RESIZE_EDGES.get(region)
+        if edges is None:
+            return False
+        handle = self._window_handle()
+        if handle is None or not hasattr(handle, "startSystemResize"):
+            return False
+        try:
+            return bool(handle.startSystemResize(edges))
+        except Exception:
+            return False
 
     def mousePressEvent(self, event):
         """Handle the mousepress event."""
         if event.button() == Qt.MouseButton.LeftButton:
             region = self._hit_region(event.position().toPoint())
             if region == 'drag':
+                if self._start_system_move():
+                    self._drag_pos = None
+                    self._resize_dir = None
+                    event.accept()
+                    return
                 self._drag_pos   = event.globalPosition().toPoint()
                 self._resize_dir = None
             elif region:
+                if self._start_system_resize(region):
+                    self._drag_pos = None
+                    self._resize_dir = None
+                    event.accept()
+                    return
                 self._drag_pos         = event.globalPosition().toPoint()
                 self._resize_dir       = region
                 self._resize_start_geo = self.geometry()
