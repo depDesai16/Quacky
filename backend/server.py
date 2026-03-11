@@ -16,6 +16,8 @@ from backend.core.settings_service import (
     save_timer_confirmation_enabled,
 )
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
+from backend.features.timers import get_active_timers_data
+from backend.core.activity_store import list_calendar_events
 
 settings = get_settings()
 
@@ -141,6 +143,17 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 return
 
             _json_response(self, 200, {"chat_id": chat_id, "history": history})
+            return
+
+        if self.path == "/dashboard/timers-events":
+            _json_response(
+                self,
+                200,
+                {
+                    "timers": get_active_timers_data(),
+                    "events": list_calendar_events(limit=40),
+                },
+            )
             return
 
         _json_response(self, 404, {"error": "not found"})

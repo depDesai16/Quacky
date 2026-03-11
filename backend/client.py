@@ -109,6 +109,9 @@ class QuackyClient:
     def history(self, chat_id: str) -> dict:
         return self._get(f"/chat/history?chat_id={chat_id}")
 
+    def get_timers_events_dashboard(self) -> dict:
+        return self._get("/dashboard/timers-events")
+
     def reset(self, chat_id: str) -> dict:
         return self._post("/chat/reset", {"chat_id": chat_id})
 

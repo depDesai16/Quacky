@@ -6,6 +6,7 @@ from .timer_feature import (
     list_timers,
     cancel_timer,
     drain_due_alerts,
+    get_active_timers_data,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "list_timers",
     "cancel_timer",
     "drain_due_alerts",
+    "get_active_timers_data",
 ]

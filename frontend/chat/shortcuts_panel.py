@@ -9,6 +9,7 @@ from theme import ThemeManager, FONT_STACK
 SHORTCUTS = [
     ("General",  [
         ("Ctrl + /",       "Show / hide this panel"),
+        ("Ctrl + Y",       "Show / hide Timers & Events"),
         ("Ctrl + T",       "Toggle light / dark theme"),
         ("Ctrl + L",       "Focus the message input"),
         ("Escape",         "Clear input or hide window"),

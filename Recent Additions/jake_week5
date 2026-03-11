@@ -1,0 +1,11 @@
+Week 5 Summary
+
+- Improved memory extraction so preference statements are saved more reliably (including natural phrasing like "remember that I prefer...").
+- Tightened task-note capture so tasks are only saved from explicit task/reminder language, reducing preference-to-task misclassification.
+- Added protection against accidental timer/alarm execution when a message is clearly a preference statement.
+- Added a new Settings feature toggle for timer/alarm confirmations (similar to open-app confirmation), with backend persistence and API routes.
+- Extended confirmable action flow to support timer/alarm set and cancel operations with explicit yes/no confirmation when enabled.
+- Added a new Timers & Events dashboard panel in the frontend so users can see active timers/alarms and recently generated calendar actions.
+- Wired the Timers & Events dashboard into Quick Access (+ menu) and added Ctrl+Y as a direct shortcut.
+- Updated the shortcuts/help panel to include the new Ctrl+Y shortcut.
+- Added backend activity logging for calendar create/update/delete actions and exposed dashboard data via a new endpoint.

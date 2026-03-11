@@ -214,6 +214,26 @@ def list_timers() -> str:
     return "\n".join(lines)
 
 
+def get_active_timers_data() -> list[dict]:
+    """Return active timers/alarms in a structured form for UI dashboards."""
+    now = datetime.now()
+    items: list[dict] = []
+    for entry in _MANAGER.list_active():
+        remaining_seconds = max(0, int((entry.trigger_at - now).total_seconds()))
+        items.append(
+            {
+                "timer_id": entry.timer_id,
+                "kind": entry.kind,
+                "label": entry.label,
+                "due_at": entry.trigger_at.isoformat(timespec="seconds"),
+                "created_at": entry.created_at.isoformat(timespec="seconds"),
+                "remaining_seconds": remaining_seconds,
+                "remaining_text": _format_remaining(entry.trigger_at - now),
+            }
+        )
+    return items
+
+
 def cancel_timer(timer_ref: str) -> str:
     """Cancel an existing timer or alarm by id or label text."""
     ref = (timer_ref or "").strip()
