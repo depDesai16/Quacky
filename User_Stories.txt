@@ -22,7 +22,7 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want to enable or disable the assistant’s screen viewing at any time, so that I remain in control of my privacy.
 
-[Not Started] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
+[Done] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
 
 [Not Started] As a user, I want the assistant to learn my preferences over time, so that it becomes more personalized and helpful.
 

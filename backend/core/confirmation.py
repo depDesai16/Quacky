@@ -1,6 +1,12 @@
 # backend/core/confirmation.py
 from backend.personality.__init__ import update_memory
-from backend.tools import add_outlook_event, update_outlook_event_time, delete_outlook_event_by_title
+from backend.tools import (
+    add_outlook_event,
+    update_outlook_event_time,
+    delete_outlook_event_by_title,
+    open_app,
+    send_email,
+)
 from backend.core.response_style import style_direct_output
 
 YES = {"yes","y","yeah","yep","ok","okay","confirm","sure","go ahead","do it","please"}
@@ -13,26 +19,44 @@ def is_no(text: str) -> bool:
     return (text or "").strip().lower() in NO
 
 
-def handle_pending_calendar(chat, memory: dict, chat_id: str, user_reply: str) -> str:
+def _execute_pending_action(pending: dict) -> str:
+    """Execute the pending action once the user confirms."""
+    kind = (pending.get("kind") or "").lower()
+    op = (pending.get("op") or "").lower()
+    args = pending.get("args", {}) or {}
+
+    if kind == "calendar":
+        if op == "create":
+            return add_outlook_event(**args)
+        if op == "update":
+            return update_outlook_event_time(**args)
+        if op == "delete":
+            return delete_outlook_event_by_title(**args)
+        return "Unknown calendar operation."
+
+    if kind == "open_app":
+        return open_app(args.get("app_name", ""))
+
+    if kind == "send_email":
+        return send_email(
+            email_address=args.get("email_address", ""),
+            subject=args.get("subject", ""),
+            body=args.get("body", ""),
+        )
+
+    return "Unknown pending operation."
+
+
+def handle_pending_action(chat, memory: dict, chat_id: str, user_reply: str) -> str:
     """
-    Handles the user's reply when there is a pending calendar action awaiting confirmation.
+    Handles the user's reply when there is a pending action awaiting confirmation.
     """
     pending = (memory.get(chat_id, {}) or {}).get("pending_action") or {}
     original_user_message = pending.get("user_message", "") or ""
 
     if is_yes(user_reply):
-        op = pending.get("op")
-        args = pending.get("args", {})
-
         try:
-            if op == "create":
-                result = add_outlook_event(**args)
-            elif op == "update":
-                result = update_outlook_event_time(**args)
-            elif op == "delete":
-                result = delete_outlook_event_by_title(**args)
-            else:
-                result = "Unknown calendar operation."
+            result = _execute_pending_action(pending)
         except Exception as exc:
             result = f"[Error] {exc}"
 
@@ -44,9 +68,16 @@ def handle_pending_calendar(chat, memory: dict, chat_id: str, user_reply: str) -
         memory[chat_id].pop("pending_action", None)
         update_memory(memory, chat_id, original_user_message or user_reply)
         return chat.send_message(
-            "User declined the pending calendar action. Reply in Quacky's voice, short and friendly."
+            "User declined the pending action. Reply in Quacky's voice, short and friendly."
         ).text
 
     return chat.send_message(
-        "There is a pending calendar action awaiting confirmation. Ask the user to reply yes or no, in Quacky's voice."
+        "There is a pending action awaiting confirmation. Ask the user to reply yes or no, in Quacky's voice."
     ).text
+
+
+def handle_pending_calendar(chat, memory: dict, chat_id: str, user_reply: str) -> str:
+    """
+    Backwards-compatible alias for older call sites.
+    """
+    return handle_pending_action(chat, memory, chat_id, user_reply)

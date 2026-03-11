@@ -12,6 +12,7 @@ Supported intents:
     weather        -> weather lookup
     holiday        -> holiday lookup
     open_app       -> open an application
+    send_email     -> compose/send an email through the email tool
     chat           -> general conversation, falls through to main LLM
 """
 
@@ -59,14 +60,21 @@ AVAILABLE INTENTS
 6. open_app
    Required: app (str - resolved app name OR direct website/domain, e.g. "outlook", "spotify", "vs code", "chrome", "github.com", "https://news.ycombinator.com")
 
-7. clarify
+7. send_email
+   Required: email_address (str), subject (str), body (str)
+   Notes:
+   - Extract recipient email directly if present.
+   - Keep body concise but preserve requested wording.
+   - If any required field is missing and cannot be inferred, use clarify.
+
+8. clarify
    Required: question (str - what to ask the user), reason (str - why clarification is needed)
    Use this when:
    - Calendar title is ambiguous (e.g. "move my meeting to 3pm" - which meeting?)
    - Multiple possible interpretations exist
    - Critical information is missing that cannot be inferred
 
-8. chat
+9. chat
    No fields. Use for casual conversation or anything that does not match above.
 
 RULES
@@ -88,6 +96,10 @@ RULES
   - "open https://news.ycombinator.com" -> {"intent":"open_app","app":"https://news.ycombinator.com"}
   - "go to localhost:3000" -> {"intent":"open_app","app":"localhost:3000"}
   If uncertain but clearly an app-open request, still return open_app with the best app match.
+- For send_email:
+  - Extract "to", "subject", and "body" when explicitly provided.
+  - If the user says "email John" but no address is available, return clarify asking for the recipient email address.
+  - If subject/body is missing, return clarify for exactly the missing field.
 
 EXAMPLES
 
@@ -177,6 +189,15 @@ EXAMPLES
 
 "go to localhost:3000"
 [{"intent": "open_app", "app": "localhost:3000"}]
+
+"email sam@example.com subject Project Update and say I'll send the final deck tonight"
+[{"intent": "send_email", "email_address": "sam@example.com", "subject": "Project Update", "body": "I'll send the final deck tonight"}]
+
+"send an email to alex@company.com with subject Lunch and body Let's do 12:30 tomorrow."
+[{"intent": "send_email", "email_address": "alex@company.com", "subject": "Lunch", "body": "Let's do 12:30 tomorrow."}]
+
+"email jordan about the deadline"
+[{"intent": "clarify", "question": "What email address should I use for Jordan?", "reason": "missing_email_address"}]
 
 "is it going to rain on july 4th and is that a holiday?"
 [{"intent": "weather", "timeframe": "today"}, {"intent": "holiday", "query_type": "check_date", "date": "2026-07-04"}]

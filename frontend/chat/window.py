@@ -143,6 +143,7 @@ class QuackyWindow(QWidget):
         self._sts_audio_data: QByteArray | None = None
         self._sts_tts_available     = True
         self.speechtospeech_enabled = True
+        self.open_app_confirmation_enabled = True
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -172,6 +173,7 @@ class QuackyWindow(QWidget):
         ThemeManager.load()
         self._restore_geometry()
         self._load_speech_to_speech_settings()
+        self._load_open_app_confirmation_settings()
 
         self.model_window = None
         try:
@@ -211,6 +213,20 @@ class QuackyWindow(QWidget):
             self.speechtospeech_enabled = bool(result.get("enabled"))
         if "tts_available" in result:
             self._sts_tts_available = bool(result.get("tts_available"))
+
+    def _load_open_app_confirmation_settings(self):
+        """Load open-app confirmation preference from backend when available."""
+        if not hasattr(self._client, "get_open_app_confirmation_settings"):
+            return
+        try:
+            result = self._client.get_open_app_confirmation_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+        if "enabled" in result:
+            self.open_app_confirmation_enabled = bool(result.get("enabled"))
 
 
     def _build_ui(self):
@@ -260,6 +276,7 @@ class QuackyWindow(QWidget):
         self._settings_container = SettingsPanel(
             model_window=self.model_window,
             speechtospeech_enabled=self.speechtospeech_enabled,
+            open_app_confirmation_enabled=self.open_app_confirmation_enabled,
             toast_callback=self._show_settings_toast,
             client=self._client,
             parent=self.card,

@@ -11,12 +11,15 @@ from backend.core.intent_classifier import classify
 from backend.core.action_router import (
     dispatch_intents,
     extract_calendar_intent,
+    extract_confirmable_intent,
     extract_clarify_intent,
+    validate_confirmable_intent,
     validate_calendar_intent,
+    build_confirmable_action,
     build_calendar_action,
 )
 from backend.core.response_style import ask_quacky_confirmation, style_direct_output
-from backend.core.confirmation import handle_pending_calendar
+from backend.core.confirmation import handle_pending_action
 
 
 class ChatRuntime:
@@ -25,6 +28,11 @@ class ChatRuntime:
         self.model_name = model_name
         self.chats: dict[str, Any] = {}
         self.memory: dict[str, dict] = {}
+        self.open_app_confirmation_enabled = True
+
+    def set_open_app_confirmation_enabled(self, enabled: bool) -> None:
+        """Set whether open-app actions require explicit confirmation."""
+        self.open_app_confirmation_enabled = bool(enabled)
 
     def create_chat(self, system_instruction: str | None = None, model: str | None = None) -> str:
         merged_system = merge_system_instruction(system_instruction)
@@ -60,8 +68,8 @@ class ChatRuntime:
         mem = self.memory.setdefault(chat_id, {})
 
         pending = mem.get("pending_action")
-        if pending and pending.get("kind") == "calendar":
-            return handle_pending_calendar(chat, self.memory, chat_id, message)
+        if pending:
+            return handle_pending_action(chat, self.memory, chat_id, message)
 
         intents = classify(message, self.client, self.model_name)
 
@@ -84,6 +92,35 @@ class ChatRuntime:
                 ).text
             
             action = build_calendar_action(calendar_intent)
+            if action is not None:
+                action["user_message"] = message
+                mem["pending_action"] = action
+                update_memory(self.memory, chat_id, message)
+                return ask_quacky_confirmation(chat, message, action["summary"])
+
+        confirmable_intent = extract_confirmable_intent(intents)
+        if (
+            confirmable_intent is not None
+            and (confirmable_intent.get("intent") or "").lower() == "open_app"
+            and not self.open_app_confirmation_enabled
+        ):
+            confirmable_intent = next(
+                (
+                    intent
+                    for intent in intents
+                    if (intent.get("intent") or "").lower() == "send_email"
+                ),
+                None,
+            )
+        if confirmable_intent is not None:
+            validation_error = validate_confirmable_intent(confirmable_intent)
+            if validation_error:
+                update_memory(self.memory, chat_id, message)
+                return chat.send_message(
+                    f"Explain this validation error in Quacky's voice, friendly but clear: {validation_error}"
+                ).text
+
+            action = build_confirmable_action(confirmable_intent)
             if action is not None:
                 action["user_message"] = message
                 mem["pending_action"] = action

@@ -6,7 +6,7 @@ Receives classified intents from intent_classifier.py and routes
 weather, holiday, and open_app to their handlers.
 """
 
-from backend.tools import get_weather, get_holidays, open_app
+from backend.tools import get_weather, get_holidays, open_app, send_email
 
 
 def dispatch_intents(intents: list[dict]) -> str | None:
@@ -43,6 +43,15 @@ def dispatch_intents(intents: list[dict]) -> str | None:
             if result:
                 results.append(result)
 
+        elif kind == "send_email":
+            result = send_email(
+                email_address=intent.get("email_address", ""),
+                subject=intent.get("subject", ""),
+                body=intent.get("body", ""),
+            )
+            if result:
+                results.append(result)
+
     return "\n\n".join(results) if results else None
 
 
@@ -62,6 +71,17 @@ def extract_clarify_intent(intents: list[dict]) -> dict | None:
     """
     for intent in intents:
         if intent.get("intent", "").lower() == "clarify":
+            return intent
+    return None
+
+
+def extract_confirmable_intent(intents: list[dict]) -> dict | None:
+    """
+    Return the first intent that should require explicit user confirmation.
+    """
+    for intent in intents:
+        kind = intent.get("intent", "").lower()
+        if kind in ("open_app", "send_email"):
             return intent
     return None
 
@@ -107,6 +127,86 @@ def validate_calendar_intent(intent: dict) -> str | None:
             year = int(year_match.group(1))
             if year > datetime.now().year + 2:
                 return f"Event is scheduled for {year}, which is quite far in the future. Is that correct?"
+
+    return None
+
+
+def validate_confirmable_intent(intent: dict) -> str | None:
+    """
+    Validate high-impact non-calendar intents before confirmation.
+    """
+    kind = intent.get("intent", "").lower()
+
+    if kind == "open_app":
+        app = (intent.get("app") or "").strip()
+        if not app:
+            return "App name is required to open an app."
+        if len(app) > 255:
+            return "App name is too long (max 255 characters)."
+        return None
+
+    if kind == "send_email":
+        email_address = (intent.get("email_address") or "").strip()
+        subject = (intent.get("subject") or "").strip()
+        body = (intent.get("body") or "").strip()
+
+        if not email_address:
+            return "Recipient email address is required."
+        if "@" not in email_address or "." not in email_address.split("@")[-1]:
+            return "Recipient email address looks invalid."
+        if not subject:
+            return "Email subject is required."
+        if not body:
+            return "Email body is required."
+        if len(subject) > 255:
+            return "Email subject is too long (max 255 characters)."
+        if len(body) > 10000:
+            return "Email body is too long (max 10000 characters)."
+
+    return None
+
+
+def build_confirmable_action(intent: dict) -> dict | None:
+    """
+    Convert a confirmable non-calendar intent into a pending_action payload.
+    """
+    kind = intent.get("intent", "").lower()
+
+    if kind == "open_app":
+        app = (intent.get("app") or "").strip()
+        if not app:
+            return None
+        return {
+            "kind": "open_app",
+            "op": "open",
+            "args": {"app_name": app},
+            "summary": f"open '{app}'",
+        }
+
+    if kind == "send_email":
+        email_address = (intent.get("email_address") or "").strip()
+        subject = (intent.get("subject") or "").strip()
+        body = (intent.get("body") or "").strip()
+        if not (email_address and subject and body):
+            return None
+
+        body_preview = " ".join(body.split())
+        if len(body_preview) > 120:
+            body_preview = body_preview[:117].rstrip() + "..."
+
+        return {
+            "kind": "send_email",
+            "op": "send",
+            "args": {
+                "email_address": email_address,
+                "subject": subject,
+                "body": body,
+            },
+            "summary": (
+                f"send an email to '{email_address}' "
+                f"with subject '{subject}' and body preview '{body_preview}'"
+            ),
+        }
 
     return None
 

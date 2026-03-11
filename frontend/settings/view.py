@@ -20,11 +20,13 @@ class _ToastProxy:
 class SettingsPanel(SettingsPanelMixin, QWidget):
     model_visibility_changed = pyqtSignal(bool)
     speechtospeech_enabled_changed = pyqtSignal(bool)
+    open_app_confirmation_enabled_changed = pyqtSignal(bool)
 
     def __init__(
         self,
         model_window,
         speechtospeech_enabled: bool,
+        open_app_confirmation_enabled: bool,
         toast_callback,
         client,
         parent=None,
@@ -35,6 +37,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self.model_window = model_window
         self._client = client
         self.speechtospeech_enabled = bool(speechtospeech_enabled)
+        self.open_app_confirmation_enabled = bool(open_app_confirmation_enabled)
         self.toast = _ToastProxy(toast_callback)
         self._settings_controller = SettingsController(client, parent=self)
 
@@ -100,7 +103,34 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
             if not current.strip() and self._saved_api_key:
                 self._api_key_input.setText(self._saved_api_key)
         self._update_api_key_action_state()
+        self._refresh_open_app_confirmation_setting()
         self._settings_controller.refresh_saved_api_key_async()
+
+    def _refresh_open_app_confirmation_setting(self):
+        """Refresh open-app confirmation state from backend for UI sync."""
+        if self._client is None or not hasattr(
+            self._client, "get_open_app_confirmation_settings"
+        ):
+            return
+        try:
+            result = self._client.get_open_app_confirmation_settings()
+        except Exception:
+            return
+        if isinstance(result, dict) and "enabled" in result:
+            self.open_app_confirmation_enabled = bool(result.get("enabled"))
+            if (
+                hasattr(self, "_toggle_open_app_confirm")
+                and self._toggle_open_app_confirm is not None
+                and self._toggle_open_app_confirm.isChecked()
+                != self.open_app_confirmation_enabled
+            ):
+                from PyQt6.QtCore import QSignalBlocker
+
+                blocker = QSignalBlocker(self._toggle_open_app_confirm)
+                self._toggle_open_app_confirm.setChecked(
+                    self.open_app_confirmation_enabled
+                )
+                del blocker
 
     def _on_saved_api_key_loaded(self, saved_key: str, _error: str):
         """Handle saved api key loaded callbacks."""
@@ -228,6 +258,52 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
 
         self.speechtospeech_enabled_changed.emit(self.speechtospeech_enabled)
 
+    def set_open_app_confirmation_enabled(self, enabled: bool):
+        """Set whether opening apps requires confirmation."""
+        requested = bool(enabled)
+        resolved = requested
+
+        if self._client is not None and hasattr(
+            self._client, "set_open_app_confirmation_enabled"
+        ):
+            try:
+                result = self._client.set_open_app_confirmation_enabled(requested)
+            except Exception as exc:
+                self.toast.show_message(
+                    f"Failed to update open-app confirmation: {exc}",
+                    kind="error",
+                )
+                result = {"error": str(exc)}
+
+            if isinstance(result, dict) and "error" in result:
+                self.toast.show_message(
+                    f"Failed to update open-app confirmation: {result['error']}",
+                    kind="error",
+                )
+                resolved = self.open_app_confirmation_enabled
+            elif isinstance(result, dict) and "enabled" in result:
+                resolved = bool(result.get("enabled"))
+
+        self.open_app_confirmation_enabled = bool(resolved)
+
+        if (
+            hasattr(self, "_toggle_open_app_confirm")
+            and self._toggle_open_app_confirm is not None
+            and self._toggle_open_app_confirm.isChecked()
+            != self.open_app_confirmation_enabled
+        ):
+            from PyQt6.QtCore import QSignalBlocker
+
+            blocker = QSignalBlocker(self._toggle_open_app_confirm)
+            self._toggle_open_app_confirm.setChecked(
+                self.open_app_confirmation_enabled
+            )
+            del blocker
+
+        self.open_app_confirmation_enabled_changed.emit(
+            self.open_app_confirmation_enabled
+        )
+
     def _show_settings(self):
         """Show settings."""
         return
@@ -246,4 +322,3 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:
             pass
-

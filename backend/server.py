@@ -10,6 +10,8 @@ from backend.core.settings_service import (
     save_api_key,
     remove_api_key,
     test_api_key,
+    get_open_app_confirmation_enabled,
+    save_open_app_confirmation_enabled,
 )
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
@@ -32,6 +34,10 @@ tts_client = (
     else None
 )
 speech_to_speech_state = {"enabled": bool(settings.tts_default_enabled)}
+open_app_confirmation_state = {
+    "enabled": bool(get_open_app_confirmation_enabled(default=True))
+}
+runtime.set_open_app_confirmation_enabled(open_app_confirmation_state["enabled"])
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -98,6 +104,14 @@ class QuackyHandler(BaseHTTPRequestHandler):
                     "tts_available": bool(tts_client),
                     "default_enabled": bool(settings.tts_default_enabled),
                 },
+            )
+            return
+
+        if self.path == "/settings/open-app-confirmation":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(open_app_confirmation_state["enabled"])},
             )
             return
 
@@ -237,6 +251,19 @@ class QuackyHandler(BaseHTTPRequestHandler):
                     "tts_available": bool(tts_client),
                 },
             )
+            return
+
+        if self.path == "/settings/open-app-confirmation":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=True)
+            open_app_confirmation_state["enabled"] = enabled
+            runtime.set_open_app_confirmation_enabled(enabled)
+            save_open_app_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
             return
 
         _json_response(self, 404, {"error": "not found"})

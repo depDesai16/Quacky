@@ -80,6 +80,12 @@ class QuackyClient:
     def set_speech_to_speech_enabled(self, enabled: bool) -> dict:
         return self._post("/settings/speech-to-speech", {"enabled": bool(enabled)})
 
+    def get_open_app_confirmation_settings(self) -> dict:
+        return self._get("/settings/open-app-confirmation")
+
+    def set_open_app_confirmation_enabled(self, enabled: bool) -> dict:
+        return self._post("/settings/open-app-confirmation", {"enabled": bool(enabled)})
+
     @staticmethod
     def decode_audio_bytes(response: dict) -> bytes | None:
         """

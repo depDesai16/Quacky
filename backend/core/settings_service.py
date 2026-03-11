@@ -51,6 +51,24 @@ def remove_api_key() -> None:
         _write_data(data)
 
 
+def get_open_app_confirmation_enabled(default: bool = True) -> bool:
+    with _LOCK:
+        data = _read_data()
+        raw = data.get("open_app_confirmation_enabled", default)
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(raw)
+
+
+def save_open_app_confirmation_enabled(enabled: bool) -> None:
+    with _LOCK:
+        data = _read_data()
+        data["open_app_confirmation_enabled"] = bool(enabled)
+        _write_data(data)
+
+
 def test_api_key(api_key: str) -> tuple[bool, str]:
     key = api_key.strip()
     if not key:
