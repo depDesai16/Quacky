@@ -144,6 +144,7 @@ class QuackyWindow(QWidget):
         self._sts_tts_available     = True
         self.speechtospeech_enabled = True
         self.open_app_confirmation_enabled = True
+        self.timer_confirmation_enabled = True
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -174,6 +175,7 @@ class QuackyWindow(QWidget):
         self._restore_geometry()
         self._load_speech_to_speech_settings()
         self._load_open_app_confirmation_settings()
+        self._load_timer_confirmation_settings()
 
         self.model_window = None
         try:
@@ -228,6 +230,20 @@ class QuackyWindow(QWidget):
         if "enabled" in result:
             self.open_app_confirmation_enabled = bool(result.get("enabled"))
 
+    def _load_timer_confirmation_settings(self):
+        """Load timer/alarm confirmation preference from backend when available."""
+        if not hasattr(self._client, "get_timer_confirmation_settings"):
+            return
+        try:
+            result = self._client.get_timer_confirmation_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+        if "enabled" in result:
+            self.timer_confirmation_enabled = bool(result.get("enabled"))
+
 
     def _build_ui(self):
         """Build ui."""
@@ -277,6 +293,7 @@ class QuackyWindow(QWidget):
             model_window=self.model_window,
             speechtospeech_enabled=self.speechtospeech_enabled,
             open_app_confirmation_enabled=self.open_app_confirmation_enabled,
+            timer_confirmation_enabled=self.timer_confirmation_enabled,
             toast_callback=self._show_settings_toast,
             client=self._client,
             parent=self.card,

@@ -3,10 +3,21 @@
 Intent dispatcher for Quacky.
 
 Receives classified intents from intent_classifier.py and routes
-weather, holiday, and open_app to their handlers.
+directly handled intents to their tool handlers.
 """
 
-from backend.tools import get_weather, get_holidays, open_app, send_email
+from backend.tools import (
+    get_weather,
+    get_holidays,
+    open_app,
+    send_email,
+    set_timer,
+    set_alarm,
+    list_timers,
+    cancel_timer,
+    list_memory,
+    forget_memory_item,
+)
 
 
 def dispatch_intents(intents: list[dict]) -> str | None:
@@ -52,6 +63,49 @@ def dispatch_intents(intents: list[dict]) -> str | None:
             if result:
                 results.append(result)
 
+        elif kind == "set_timer":
+            try:
+                duration_seconds = int(intent.get("duration_seconds") or 0)
+            except (TypeError, ValueError):
+                duration_seconds = 0
+            result = set_timer(
+                duration_seconds=duration_seconds,
+                label=intent.get("label", ""),
+            )
+            if result:
+                results.append(result)
+
+        elif kind == "set_alarm":
+            result = set_alarm(
+                alarm_time=intent.get("alarm_time", ""),
+                label=intent.get("label", ""),
+            )
+            if result:
+                results.append(result)
+
+        elif kind == "list_timers":
+            result = list_timers()
+            if result:
+                results.append(result)
+
+        elif kind == "cancel_timer":
+            result = cancel_timer(timer_ref=intent.get("timer_ref", ""))
+            if result:
+                results.append(result)
+
+        elif kind == "list_memory":
+            result = list_memory(scope=intent.get("scope", "all"))
+            if result:
+                results.append(result)
+
+        elif kind == "forget_memory_item":
+            result = forget_memory_item(
+                scope=intent.get("scope", ""),
+                value=intent.get("value", ""),
+            )
+            if result:
+                results.append(result)
+
     return "\n\n".join(results) if results else None
 
 
@@ -81,7 +135,7 @@ def extract_confirmable_intent(intents: list[dict]) -> dict | None:
     """
     for intent in intents:
         kind = intent.get("intent", "").lower()
-        if kind in ("open_app", "send_email"):
+        if kind in ("open_app", "send_email", "set_timer", "set_alarm", "cancel_timer", "forget_all_memory"):
             return intent
     return None
 
@@ -163,6 +217,33 @@ def validate_confirmable_intent(intent: dict) -> str | None:
         if len(body) > 10000:
             return "Email body is too long (max 10000 characters)."
 
+    if kind == "set_timer":
+        try:
+            duration = int(intent.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration <= 0:
+            return "Timer duration must be greater than zero seconds."
+
+    if kind == "set_alarm":
+        alarm_time = (intent.get("alarm_time") or "").strip()
+        if not alarm_time:
+            return "Alarm time is required."
+
+    if kind == "cancel_timer":
+        timer_ref = (intent.get("timer_ref") or "").strip()
+        if not timer_ref:
+            return "Timer/alarm reference is required to cancel one."
+
+    if kind == "forget_all_memory":
+        scope = (intent.get("scope") or "all").strip().lower()
+        if scope in {"prefs", "pref", "preference"}:
+            scope = "preferences"
+        elif scope in {"task", "todo", "notes"}:
+            scope = "tasks"
+        if scope not in {"all", "preferences", "tasks"}:
+            return "Memory scope must be all, preferences, or tasks."
+
     return None
 
 
@@ -206,6 +287,67 @@ def build_confirmable_action(intent: dict) -> dict | None:
                 f"send an email to '{email_address}' "
                 f"with subject '{subject}' and body preview '{body_preview}'"
             ),
+        }
+
+    if kind == "set_timer":
+        try:
+            duration = int(intent.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            return None
+        if duration <= 0:
+            return None
+        label = (intent.get("label") or "").strip()
+        label_summary = f" labeled '{label}'" if label else ""
+        return {
+            "kind": "timer",
+            "op": "set_timer",
+            "args": {"duration_seconds": duration, "label": label},
+            "summary": f"set a timer for {duration} seconds{label_summary}",
+        }
+
+    if kind == "set_alarm":
+        alarm_time = (intent.get("alarm_time") or "").strip()
+        if not alarm_time:
+            return None
+        label = (intent.get("label") or "").strip()
+        label_summary = f" labeled '{label}'" if label else ""
+        return {
+            "kind": "timer",
+            "op": "set_alarm",
+            "args": {"alarm_time": alarm_time, "label": label},
+            "summary": f"set an alarm for '{alarm_time}'{label_summary}",
+        }
+
+    if kind == "cancel_timer":
+        timer_ref = (intent.get("timer_ref") or "").strip()
+        if not timer_ref:
+            return None
+        return {
+            "kind": "timer",
+            "op": "cancel",
+            "args": {"timer_ref": timer_ref},
+            "summary": f"cancel timer/alarm '{timer_ref}'",
+        }
+
+    if kind == "forget_all_memory":
+        scope = (intent.get("scope") or "all").strip().lower()
+        if scope in {"prefs", "pref", "preference"}:
+            scope = "preferences"
+        elif scope in {"task", "todo", "notes"}:
+            scope = "tasks"
+        if scope not in {"all", "preferences", "tasks"}:
+            scope = "all"
+
+        scope_summary = {
+            "all": "all remembered preferences and task notes",
+            "preferences": "all remembered preferences",
+            "tasks": "all remembered task notes",
+        }[scope]
+        return {
+            "kind": "memory",
+            "op": "clear_all",
+            "args": {"scope": scope},
+            "summary": f"forget {scope_summary}",
         }
 
     return None

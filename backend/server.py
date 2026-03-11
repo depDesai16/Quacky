@@ -12,6 +12,8 @@ from backend.core.settings_service import (
     test_api_key,
     get_open_app_confirmation_enabled,
     save_open_app_confirmation_enabled,
+    get_timer_confirmation_enabled,
+    save_timer_confirmation_enabled,
 )
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
@@ -38,6 +40,10 @@ open_app_confirmation_state = {
     "enabled": bool(get_open_app_confirmation_enabled(default=True))
 }
 runtime.set_open_app_confirmation_enabled(open_app_confirmation_state["enabled"])
+timer_confirmation_state = {
+    "enabled": bool(get_timer_confirmation_enabled(default=True))
+}
+runtime.set_timer_confirmation_enabled(timer_confirmation_state["enabled"])
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -112,6 +118,14 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 self,
                 200,
                 {"enabled": bool(open_app_confirmation_state["enabled"])},
+            )
+            return
+
+        if self.path == "/settings/timer-confirmation":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(timer_confirmation_state["enabled"])},
             )
             return
 
@@ -263,6 +277,19 @@ class QuackyHandler(BaseHTTPRequestHandler):
             open_app_confirmation_state["enabled"] = enabled
             runtime.set_open_app_confirmation_enabled(enabled)
             save_open_app_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
+        if self.path == "/settings/timer-confirmation":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=True)
+            timer_confirmation_state["enabled"] = enabled
+            runtime.set_timer_confirmation_enabled(enabled)
+            save_timer_confirmation_enabled(enabled)
             _json_response(self, 200, {"enabled": bool(enabled)})
             return
 

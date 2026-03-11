@@ -13,6 +13,13 @@ Supported intents:
     holiday        -> holiday lookup
     open_app       -> open an application
     send_email     -> compose/send an email through the email tool
+    set_timer      -> set an in-house timer
+    set_alarm      -> set an in-house alarm
+    list_timers    -> list active timers/alarms
+    cancel_timer   -> cancel a timer/alarm
+    list_memory    -> list remembered preferences/task notes
+    forget_memory_item -> forget one remembered preference/task note
+    forget_all_memory  -> forget all preferences/tasks (requires confirmation)
     chat           -> general conversation, falls through to main LLM
 """
 
@@ -67,14 +74,50 @@ AVAILABLE INTENTS
    - Keep body concise but preserve requested wording.
    - If any required field is missing and cannot be inferred, use clarify.
 
-8. clarify
+8. set_timer
+   Required: duration_seconds (int)
+   Optional: label (str)
+   Notes:
+   - Convert natural durations to seconds (e.g. "5 minutes" -> 300, "1h 30m" -> 5400).
+   - If duration is missing, use clarify.
+
+9. set_alarm
+   Required: alarm_time (str)
+   Optional: label (str)
+   Notes:
+   - Keep alarm_time in natural language text the timer feature can parse,
+     e.g. "7:30 AM", "tomorrow 8:00", "2026-03-20 09:15".
+   - If time is missing, use clarify.
+
+10. list_timers
+   No fields. Use when user asks to show/list/check active timers or alarms.
+
+11. cancel_timer
+   Required: timer_ref (str)
+   Notes:
+   - timer_ref can be an id (e.g. "TMR-0001") or a label phrase.
+   - If user asks to cancel but gives no reference and has multiple timers, use clarify.
+
+12. list_memory
+   Optional: scope (str) - "all", "preferences", or "tasks". Default "all".
+   Use when user asks to show/list remembered preferences or tasks.
+
+13. forget_memory_item
+   Required: scope (str - "preferences" or "tasks"), value (str)
+   Use for forgetting one specific remembered preference or one task note.
+
+14. forget_all_memory
+   Optional: scope (str) - "all", "preferences", or "tasks". Default "all".
+   Use when user asks to clear/forget everything in memory for a scope.
+
+15. clarify
    Required: question (str - what to ask the user), reason (str - why clarification is needed)
    Use this when:
    - Calendar title is ambiguous (e.g. "move my meeting to 3pm" - which meeting?)
    - Multiple possible interpretations exist
    - Critical information is missing that cannot be inferred
 
-9. chat
+16. chat
    No fields. Use for casual conversation or anything that does not match above.
 
 RULES
@@ -100,6 +143,29 @@ RULES
   - Extract "to", "subject", and "body" when explicitly provided.
   - If the user says "email John" but no address is available, return clarify asking for the recipient email address.
   - If subject/body is missing, return clarify for exactly the missing field.
+- For set_timer:
+  - Convert durations to duration_seconds.
+  - Examples: "90 seconds" -> 90, "10 min" -> 600, "2 hours" -> 7200.
+- For set_alarm:
+  - Keep alarm_time text human-readable. Do not convert to Unix timestamps.
+- For list_timers:
+  - Use when user asks what timers/alarms are active.
+- For cancel_timer:
+  - Extract id/label into timer_ref.
+  - If missing reference, return clarify asking which timer/alarm to cancel.
+- For list_memory:
+  - "what do you remember about me?" -> {"intent":"list_memory","scope":"all"}
+  - "list my preferences" -> {"intent":"list_memory","scope":"preferences"}
+  - "show my remembered tasks" -> {"intent":"list_memory","scope":"tasks"}
+- For forget_memory_item:
+  - Extract scope and exact memory value.
+  - "forget preference concise responses" -> {"intent":"forget_memory_item","scope":"preferences","value":"concise responses"}
+  - "forget task submit report" -> {"intent":"forget_memory_item","scope":"tasks","value":"submit report"}
+- For forget_all_memory:
+  - Use when user asks to clear all memory in a scope.
+  - "forget everything about me" -> {"intent":"forget_all_memory","scope":"all"}
+  - "clear all preferences" -> {"intent":"forget_all_memory","scope":"preferences"}
+  - "clear all tasks" -> {"intent":"forget_all_memory","scope":"tasks"}
 
 EXAMPLES
 
@@ -198,6 +264,48 @@ EXAMPLES
 
 "email jordan about the deadline"
 [{"intent": "clarify", "question": "What email address should I use for Jordan?", "reason": "missing_email_address"}]
+
+"set a timer for 10 minutes"
+[{"intent": "set_timer", "duration_seconds": 600}]
+
+"set a 45 second tea timer"
+[{"intent": "set_timer", "duration_seconds": 45, "label": "tea"}]
+
+"set an alarm for tomorrow at 7:30 am called gym"
+[{"intent": "set_alarm", "alarm_time": "tomorrow 7:30 AM", "label": "gym"}]
+
+"what timers do i have?"
+[{"intent": "list_timers"}]
+
+"cancel timer tmr-0002"
+[{"intent": "cancel_timer", "timer_ref": "TMR-0002"}]
+
+"cancel my tea timer"
+[{"intent": "cancel_timer", "timer_ref": "tea"}]
+
+"what do you remember about me?"
+[{"intent": "list_memory", "scope": "all"}]
+
+"list my preferences"
+[{"intent": "list_memory", "scope": "preferences"}]
+
+"show my remembered tasks"
+[{"intent": "list_memory", "scope": "tasks"}]
+
+"forget preference concise responses and markdown tables"
+[{"intent": "forget_memory_item", "scope": "preferences", "value": "concise responses and markdown tables"}]
+
+"forget task submit the project report by friday"
+[{"intent": "forget_memory_item", "scope": "tasks", "value": "submit the project report by friday"}]
+
+"forget everything you remember about me"
+[{"intent": "forget_all_memory", "scope": "all"}]
+
+"clear all preferences"
+[{"intent": "forget_all_memory", "scope": "preferences"}]
+
+"clear all task notes"
+[{"intent": "forget_all_memory", "scope": "tasks"}]
 
 "is it going to rain on july 4th and is that a holiday?"
 [{"intent": "weather", "timeframe": "today"}, {"intent": "holiday", "query_type": "check_date", "date": "2026-07-04"}]

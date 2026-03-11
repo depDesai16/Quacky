@@ -4,4 +4,5 @@ from .quacky import (
     augment_with_context,
     update_memory,
     merge_system_instruction,
+    is_preference_message,
 )

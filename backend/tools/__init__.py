@@ -11,6 +11,8 @@ from .calendar_tool import (
 )
 from .app_tool import open_app
 from .email_tool import send_email
+from .timer_tool import set_timer, set_alarm, list_timers, cancel_timer
+from .memory_tool import list_memory, forget_memory_item, clear_memory
 
 ALL_TOOLS = [
     get_weather,
@@ -20,6 +22,13 @@ ALL_TOOLS = [
     delete_outlook_event_by_title,
     open_app,
     send_email,
+    set_timer,
+    set_alarm,
+    list_timers,
+    cancel_timer,
+    list_memory,
+    forget_memory_item,
+    clear_memory,
 ]
 
 __all__ = [
@@ -30,5 +39,12 @@ __all__ = [
     "delete_outlook_event_by_title",
     "open_app",
     "send_email",
+    "set_timer",
+    "set_alarm",
+    "list_timers",
+    "cancel_timer",
+    "list_memory",
+    "forget_memory_item",
+    "clear_memory",
     "ALL_TOOLS",
 ]

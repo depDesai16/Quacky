@@ -21,12 +21,14 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
     model_visibility_changed = pyqtSignal(bool)
     speechtospeech_enabled_changed = pyqtSignal(bool)
     open_app_confirmation_enabled_changed = pyqtSignal(bool)
+    timer_confirmation_enabled_changed = pyqtSignal(bool)
 
     def __init__(
         self,
         model_window,
         speechtospeech_enabled: bool,
         open_app_confirmation_enabled: bool,
+        timer_confirmation_enabled: bool,
         toast_callback,
         client,
         parent=None,
@@ -38,6 +40,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._client = client
         self.speechtospeech_enabled = bool(speechtospeech_enabled)
         self.open_app_confirmation_enabled = bool(open_app_confirmation_enabled)
+        self.timer_confirmation_enabled = bool(timer_confirmation_enabled)
         self.toast = _ToastProxy(toast_callback)
         self._settings_controller = SettingsController(client, parent=self)
 
@@ -104,6 +107,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
                 self._api_key_input.setText(self._saved_api_key)
         self._update_api_key_action_state()
         self._refresh_open_app_confirmation_setting()
+        self._refresh_timer_confirmation_setting()
         self._settings_controller.refresh_saved_api_key_async()
 
     def _refresh_open_app_confirmation_setting(self):
@@ -129,6 +133,32 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
                 blocker = QSignalBlocker(self._toggle_open_app_confirm)
                 self._toggle_open_app_confirm.setChecked(
                     self.open_app_confirmation_enabled
+                )
+                del blocker
+
+    def _refresh_timer_confirmation_setting(self):
+        """Refresh timer confirmation state from backend for UI sync."""
+        if self._client is None or not hasattr(
+            self._client, "get_timer_confirmation_settings"
+        ):
+            return
+        try:
+            result = self._client.get_timer_confirmation_settings()
+        except Exception:
+            return
+        if isinstance(result, dict) and "enabled" in result:
+            self.timer_confirmation_enabled = bool(result.get("enabled"))
+            if (
+                hasattr(self, "_toggle_timer_confirm")
+                and self._toggle_timer_confirm is not None
+                and self._toggle_timer_confirm.isChecked()
+                != self.timer_confirmation_enabled
+            ):
+                from PyQt6.QtCore import QSignalBlocker
+
+                blocker = QSignalBlocker(self._toggle_timer_confirm)
+                self._toggle_timer_confirm.setChecked(
+                    self.timer_confirmation_enabled
                 )
                 del blocker
 
@@ -303,6 +333,50 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self.open_app_confirmation_enabled_changed.emit(
             self.open_app_confirmation_enabled
         )
+
+    def set_timer_confirmation_enabled(self, enabled: bool):
+        """Set whether timer/alarm actions require confirmation."""
+        requested = bool(enabled)
+        resolved = requested
+
+        if self._client is not None and hasattr(
+            self._client, "set_timer_confirmation_enabled"
+        ):
+            try:
+                result = self._client.set_timer_confirmation_enabled(requested)
+            except Exception as exc:
+                self.toast.show_message(
+                    f"Failed to update timer confirmation: {exc}",
+                    kind="error",
+                )
+                result = {"error": str(exc)}
+
+            if isinstance(result, dict) and "error" in result:
+                self.toast.show_message(
+                    f"Failed to update timer confirmation: {result['error']}",
+                    kind="error",
+                )
+                resolved = self.timer_confirmation_enabled
+            elif isinstance(result, dict) and "enabled" in result:
+                resolved = bool(result.get("enabled"))
+
+        self.timer_confirmation_enabled = bool(resolved)
+
+        if (
+            hasattr(self, "_toggle_timer_confirm")
+            and self._toggle_timer_confirm is not None
+            and self._toggle_timer_confirm.isChecked()
+            != self.timer_confirmation_enabled
+        ):
+            from PyQt6.QtCore import QSignalBlocker
+
+            blocker = QSignalBlocker(self._toggle_timer_confirm)
+            self._toggle_timer_confirm.setChecked(
+                self.timer_confirmation_enabled
+            )
+            del blocker
+
+        self.timer_confirmation_enabled_changed.emit(self.timer_confirmation_enabled)
 
     def _show_settings(self):
         """Show settings."""
