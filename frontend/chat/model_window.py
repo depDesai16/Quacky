@@ -1,6 +1,6 @@
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QWidget, QVBoxLayout
-from widgets.quackywidget import QuackyWidget
+from widgets.quacky_widget import QuackyBubble
 
 
 class ModelWindow(QWidget):
@@ -15,7 +15,7 @@ class ModelWindow(QWidget):
         )
         self.setObjectName("quacky-model-window")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        self.setFixedSize(QuackyWidget.SIZE, QuackyWidget.SIZE)
+        self.setFixedSize(QuackyBubble.SIZE, QuackyBubble.SIZE)
 
         self._build_ui()
 
@@ -24,7 +24,7 @@ class ModelWindow(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        self.quacky_widget = QuackyWidget()
+        self.quacky_widget = QuackyBubble()
         root.addWidget(self.quacky_widget)
 
     def mousePressEvent(self, event):

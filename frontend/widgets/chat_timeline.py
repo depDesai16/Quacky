@@ -13,6 +13,7 @@ from .message_bubble  import (UserBubble, AssistantBubble, SystemMessage,
                                StreamingAssistantBubble, animate_in_widget)
 from .thinking_bubble import ThinkingBubble
 from .empty_state     import EmptyState
+from widgets.quacky_widget import pop_bubble
 
 GROUP_SEC           = 60
 NEAR_BOTTOM_THRESHOLD_PX = 24
@@ -360,15 +361,36 @@ class ChatTimeline(QScrollArea):
 
 
     def _hide_empty(self):
-        """Hide empty."""
-        if self._empty_widget is None:
+        """Hide empty state with a popping animation."""
+        # Prevent this from being called multiple times while animating
+        if self._empty_widget is None or getattr(self, "_is_hiding_empty", False):
             return
-        self._msg_layout.removeWidget(self._empty_widget)
-        self._empty_widget.deleteLater()
-        self._empty_widget = None
-        if not self._stretch_added:
-            self._msg_layout.addStretch()
-            self._stretch_added = True
+            
+        self._is_hiding_empty = True
+
+        # Trigger the global pop animation
+        pop_bubble()
+
+        # Hide the text and hints immediately so only the popping duck remains
+        for child in self._empty_widget._content.findChildren(QLabel):
+            child.hide()
+        if hasattr(self._empty_widget, '_dot'):
+            self._empty_widget._dot.hide()
+
+        # Wait 900ms for the animation to finish before destroying the widget
+        def finish_removal():
+            if self._empty_widget is not None:
+                self._msg_layout.removeWidget(self._empty_widget)
+                self._empty_widget.deleteLater()
+                self._empty_widget = None
+                
+            if not self._stretch_added:
+                self._msg_layout.addStretch()
+                self._stretch_added = True
+                
+            self._is_hiding_empty = False
+
+        QTimer.singleShot(900, finish_removal)
 
     def _build_user_row(self, text: str, is_continuation: bool) -> QWidget:
         """Build user row."""

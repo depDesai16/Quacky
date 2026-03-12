@@ -43,7 +43,7 @@ from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
 from PyQt6.QtGui import QFont, QFontDatabase
 
 from chat.window import QuackyWindow
-from draw_icon import draw_icon
+from widgets.quacky_widget import get_quacky_icon
 from theme import FONT_FAMILY_UI
 from backend.client import QuackyClient
 
@@ -144,7 +144,7 @@ def run_it():
 
     def build_system_tray(app: QApplication) -> QSystemTrayIcon:
         """Build system tray."""
-        tray = QSystemTrayIcon(draw_icon(), parent=app)
+        tray = QSystemTrayIcon(get_quacky_icon(), parent=app)
         tray.setToolTip("Quacky")
 
         tray_menu = QMenu()
@@ -152,7 +152,7 @@ def run_it():
         with open(css_path, "r", encoding="utf-8") as f:
             tray_menu.setStyleSheet(f.read())
 
-        action_open     = tray_menu.addAction("Open Quacky")
+        action_open = tray_menu.addAction("Open Quacky")
         action_settings = tray_menu.addAction("Settings")
         tray_menu.addSeparator()
         action_quit = tray_menu.addAction("Quit")

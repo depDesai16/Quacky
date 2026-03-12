@@ -1,10 +1,7 @@
-
 import sys
-
-from PyQt6.QtCore    import Qt, QRectF
-from PyQt6.QtGui     import QPainter, QColor, QPen, QPainterPath, QRegion
+from PyQt6.QtCore import Qt, QRectF
+from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QRegion
 from PyQt6.QtWidgets import QWidget, QGraphicsDropShadowEffect
-
 from theme import ThemeManager
 
 

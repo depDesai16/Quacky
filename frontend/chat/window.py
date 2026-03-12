@@ -1,9 +1,9 @@
 import os
 import sys
 
-CHAT_DIR     = os.path.dirname(os.path.abspath(__file__))
+CHAT_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.dirname(CHAT_DIR)
-ROOT_DIR     = os.path.dirname(FRONTEND_DIR)
+ROOT_DIR = os.path.dirname(FRONTEND_DIR)
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
@@ -11,13 +11,13 @@ from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
                               QPropertyAnimation, QEasingCurve, QEvent, QTimer,
                               QByteArray, QBuffer, QIODevice, QUrl)
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                              QHBoxLayout, QLabel, QGraphicsOpacityEffect)
+                              QLabel, QGraphicsOpacityEffect)
 from PyQt6.QtGui     import QKeyEvent, QCursor
 from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 
-from theme          import ThemeManager
-from draw_icon      import draw_icon
+from theme import ThemeManager
+from widgets.quacky_widget import get_quacky_icon
 from .model_window import ModelWindow
 from backend.client import QuackyClient
 
@@ -224,7 +224,7 @@ class QuackyWindow(QWidget):
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
 
-        self.header = HeaderBar(icon=draw_icon(), parent=self.card)
+        self.header = HeaderBar(icon=get_quacky_icon(), parent=self.card)
         self.header.minimize_clicked.connect(self.hide)
         self.header.close_clicked.connect(QApplication.instance().quit)
         if hasattr(self.header, "user_chip_clicked"):
@@ -244,7 +244,7 @@ class QuackyWindow(QWidget):
         chat_inner.setContentsMargins(0, 0, 0, 0)
         chat_inner.setSpacing(0)
         
-        self.timeline = ChatTimeline(draw_icon_fn=draw_icon, parent=self._chat_container)
+        self.timeline = ChatTimeline(draw_icon_fn=get_quacky_icon, parent=self._chat_container)
         self._wire_suggestions()
         chat_inner.addWidget(self.timeline, 1)
         
@@ -321,7 +321,7 @@ class QuackyWindow(QWidget):
         root.addWidget(self.card)
         self.toast = Toast(self.card)
         self._update_toast_anchor()
-    
+
     def _toggle_camera_view(self):
         """Toggle the camera panel on/off."""
         is_camera = self.stacked_widget.currentIndex() == 1
