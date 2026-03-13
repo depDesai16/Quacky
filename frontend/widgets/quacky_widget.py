@@ -5,17 +5,40 @@ from PyQt6.QtWidgets import QWidget
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
 from PyQt6.QtGui import (QPainter, QColor, QBrush, QPen, QPainterPath,
                           QRadialGradient, QIcon, QPixmap, QPainter, QColor)
+from pathlib import Path
+
+# Import Lottie widget
+try:
+    from .lottie_widget import LottieWidget
+    LOTTIE_AVAILABLE = True
+except ImportError:
+    LOTTIE_AVAILABLE = False
+    print("⚠️  Lottie widget not available")
 
 ## Public API
 
 _pop_requested = threading.Event()
 _reset_requested = threading.Event()
+_thinking_requested = threading.Event()
+_stop_thinking_requested = threading.Event()
+_swimming_direction = 0.0  # Angle in radians for duck orientation
 
 def pop_bubble():
     _pop_requested.set()
 
 def reset_bubble():
     _reset_requested.set()
+
+def start_thinking():
+    _thinking_requested.set()
+
+def stop_thinking():
+    _stop_thinking_requested.set()
+
+def set_swimming_direction(angle):
+    """Set the direction the duck is swimming (in radians)"""
+    global _swimming_direction
+    _swimming_direction = angle
 
 def get_quacky_icon() -> QIcon:
         """Renders a tightly cropped QuackyBubble graphic to maximize tray size."""
@@ -40,6 +63,7 @@ class QuackyBubble(QWidget):
     """Drop-in PyQt6 widget for the Quacki glass bubble logo."""
 
     W, H = 380, 440
+    SIZE = 380  # Add SIZE constant for ModelWindow
     BX, BY = 190, 200
     BR = 152
 
@@ -74,6 +98,35 @@ class QuackyBubble(QWidget):
         self._bubble_scale = 1.0
         self._bubble_alpha = 1.0
         self._duck_opacity = 1.0
+        
+        # Thinking animation state
+        self._thinking_bob = 0.0
+        self._thinking_tilt = 0.0
+        
+        # Swimming animation state
+        self._is_swimming = False
+        self._swim_flap_speed = 2.5  # Much faster flapping when swimming
+        self._swim_rotation = 0.0  # Duck body rotation to face direction
+        self._swim_bob_offset = 0.0  # Extra bobbing when swimming
+        self._paddle_phase = 0.0  # Foot paddling animation
+        self._wake_ripples = []  # Water ripples behind duck
+        
+        # Lottie animation overlay
+        self._lottie_widget = None
+        if LOTTIE_AVAILABLE:
+            try:
+                anim_path = Path(__file__).parent.parent / "animations" / "duck_swim.json"
+                if anim_path.exists():
+                    self._lottie_widget = LottieWidget(str(anim_path), self)
+                    self._lottie_widget.setGeometry(0, 0, self.W, self.H)
+                    self._lottie_widget.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+                    self._lottie_widget.hide()  # Hidden by default
+                    print("✓ Lottie animation loaded")
+                else:
+                    print(f"⚠️  Animation file not found: {anim_path}")
+            except Exception as e:
+                print(f"⚠️  Failed to load Lottie animation: {e}")
+                self._lottie_widget = None
 
         self._fragments = self._make_fragments()
 
@@ -110,6 +163,8 @@ class QuackyBubble(QWidget):
 
     def _tick(self):
         dt = 1000 // self.FPS
+        
+        global _swimming_direction
 
         if _reset_requested.is_set():
             _reset_requested.clear()
@@ -117,6 +172,15 @@ class QuackyBubble(QWidget):
             self._bubble_scale = 1.0
             self._bubble_alpha = 1.0
             self._duck_opacity = 1.0
+            self._is_swimming = False
+
+        if _thinking_requested.is_set() and self._state == "idle":
+            _thinking_requested.clear()
+            self._state = "thinking"
+        
+        if _stop_thinking_requested.is_set() and self._state == "thinking":
+            _stop_thinking_requested.clear()
+            self._state = "idle"
 
         if _pop_requested.is_set() and self._state == "idle":
             _pop_requested.clear()
@@ -124,10 +188,57 @@ class QuackyBubble(QWidget):
             self._pop_ms = 0
 
         self._t += dt
-        self._float_ms += dt if self._state == "idle" else 0
+        self._float_ms += dt if self._state in ("idle", "thinking") else 0
 
         self._tick_blink(dt)
         self._tick_gaze(dt)
+        
+        if self._state == "thinking":
+            self._tick_thinking(dt)
+        
+        # Check if swimming (direction changed recently)
+        if _swimming_direction != 0.0:
+            self._is_swimming = True
+            # Smoothly rotate duck to face swimming direction
+            target_rotation = math.degrees(_swimming_direction)
+            self._swim_rotation += (target_rotation - self._swim_rotation) * 0.15
+            
+            # Add swimming bob (up and down motion)
+            self._swim_bob_offset = math.sin(self._t / 200.0 * 2 * math.pi) * 6.0
+            
+            # Paddle animation
+            self._paddle_phase = (self._t / 300.0) % (2 * math.pi)
+            
+            # Add wake ripples
+            if self._t % 200 < 20:  # Every 200ms
+                self._wake_ripples.append({
+                    'x': self.BX,
+                    'y': self.BY,
+                    'age': 0,
+                    'max_age': 1000
+                })
+            
+            # Show Lottie animation when swimming
+            if self._lottie_widget and not self._lottie_widget.isVisible():
+                self._lottie_widget.show()
+                self._lottie_widget.play()
+                print("🦆 Swimming animation started")
+        else:
+            self._is_swimming = False
+            # Return to neutral rotation
+            self._swim_rotation *= 0.92
+            self._swim_bob_offset *= 0.9
+            
+            # Hide Lottie animation when not swimming
+            if self._lottie_widget and self._lottie_widget.isVisible():
+                self._lottie_widget.pause()
+                self._lottie_widget.hide()
+                print("🦆 Swimming animation stopped")
+        
+        # Update wake ripples
+        self._wake_ripples = [r for r in self._wake_ripples if r['age'] < r['max_age']]
+        for ripple in self._wake_ripples:
+            ripple['age'] += dt
 
         if self._state == "popping":
             self._pop_ms += dt
@@ -157,9 +268,26 @@ class QuackyBubble(QWidget):
             self._gaze_start      = self._t
             self._gaze_hold_until = (self._t + self.LOOK_MOVE
                                      + random.randint(self.LOOK_HOLD_LO, self.LOOK_HOLD_HI))
+    
+    def _tick_thinking(self, dt):
+        """Animate thinking state - bob and tilt"""
+        # Bob up and down MORE (1000ms cycle, 20 pixels)
+        self._thinking_bob = math.sin((self._t / 1000.0) * 2 * math.pi) * 20.0
+        
+        # Tilt head left and right MORE (1400ms cycle, 15 degrees)
+        self._thinking_tilt = math.sin((self._t / 1400.0) * 2 * math.pi) * 15.0
 
     def _flap(self):
-        return math.sin((self._t / self.FLAP_PERIOD) * 2 * math.pi) * 16
+        # Faster flapping when swimming
+        speed_multiplier = self._swim_flap_speed if self._is_swimming else 1.0
+        period = self.FLAP_PERIOD / speed_multiplier
+        flap_value = math.sin((self._t / period) * 2 * math.pi) * 16
+        
+        # Much bigger flaps when swimming
+        if self._is_swimming:
+            flap_value *= 3.0  # 3x bigger wing movement
+        
+        return flap_value
 
     def _blink_scale(self):
         if self._blink_t < 0: return 1.0
@@ -201,10 +329,20 @@ class QuackyBubble(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        # Apply thinking animation offset
+        thinking_offset = self._thinking_bob if self._state == "thinking" else 0.0
+        
+        # Apply swimming bob
+        swim_bob = self._swim_bob_offset if self._is_swimming else 0.0
+        
         dy = (math.sin(self._float_ms / 1000.0 * 2 * math.pi / self.FLOAT_FREQ)
-              * self.FLOAT_AMP if self._state == "idle" else 0.0)
-        cy = self.BY + dy
+              * self.FLOAT_AMP if self._state in ("idle", "thinking") else 0.0)
+        cy = self.BY + dy + thinking_offset + swim_bob
         br = self.BR * self._bubble_scale
+
+        # Draw wake ripples behind duck when swimming
+        if self._is_swimming:
+            self._draw_wake_ripples(p)
 
         self._draw_glow(p, self.BX, cy, self.BR)
 
@@ -212,7 +350,35 @@ class QuackyBubble(QWidget):
         self._draw_bubble(p, self.BX, cy, br)
 
         p.setOpacity(self._duck_opacity)
-        self._draw_duck(p, self.BX, cy, self._flap(), self._blink_scale(), self._gaze_x, self._gaze_y)
+        
+        # Apply swimming rotation to entire duck
+        if self._is_swimming or abs(self._swim_rotation) > 0.5:
+            p.save()
+            p.translate(self.BX, cy)
+            p.rotate(self._swim_rotation * 0.4)  # More noticeable tilt
+            p.translate(-self.BX, -cy)
+        
+        # Apply thinking tilt to duck
+        if self._state == "thinking":
+            p.save()
+            p.translate(self.BX, cy)
+            p.rotate(self._thinking_tilt)
+            p.translate(-self.BX, -cy)
+        
+        # Draw duck with enhanced flapping
+        flap_amount = self._flap()
+        
+        self._draw_duck(p, self.BX, cy, flap_amount, self._blink_scale(), self._gaze_x, self._gaze_y, self._is_swimming)
+        
+        # Draw paddling feet when swimming
+        if self._is_swimming:
+            self._draw_paddling_feet(p, self.BX, cy)
+        
+        if self._state == "thinking":
+            p.restore()
+        
+        if self._is_swimming or abs(self._swim_rotation) > 0.5:
+            p.restore()
 
         p.setOpacity(self._bubble_alpha * 0.85)
         self._draw_shine(p, self.BX, cy, br)
@@ -289,7 +455,7 @@ class QuackyBubble(QWidget):
         p.drawArc(rect, -65 * 16, 45 * 16)
 
     @staticmethod
-    def _draw_duck(p, cx, cy, flap=0.0, bs=1.0, gaze_x=0.0, gaze_y=0.0):
+    def _draw_duck(p, cx, cy, flap=0.0, bs=1.0, gaze_x=0.0, gaze_y=0.0, is_swimming=False):
         ox = cx - 4
         oy = cy + 14
 
@@ -317,8 +483,11 @@ class QuackyBubble(QWidget):
         p.setBrush(QBrush(WHITE))
         p.drawEllipse(QRectF(ox - 88, oy - 46, 172, 98))
 
-        # Belly / Wing
-        belly_rock = flap * 0.28
+        # Belly / Wing - much more dramatic flapping
+        # Base multiplier increased from 0.28 to 1.2 for visible wing movement
+        # Even more dramatic when swimming (2.5x)
+        wing_multiplier = 2.5 if is_swimming else 1.2
+        belly_rock = flap * wing_multiplier
         p.save()
         p.translate(ox - 8, oy + 8)
         p.rotate(belly_rock)
@@ -389,6 +558,45 @@ class QuackyBubble(QWidget):
 
 
     ## Pop animation
+
+    def _draw_wake_ripples(self, p):
+        """Draw water ripples behind swimming duck"""
+        p.setPen(Qt.PenStyle.NoPen)
+        for ripple in self._wake_ripples:
+            progress = ripple['age'] / ripple['max_age']
+            radius = 20 + progress * 40
+            alpha = int(80 * (1 - progress))
+            
+            color = QColor(150, 200, 255, alpha)
+            p.setBrush(QBrush(color))
+            p.drawEllipse(QPointF(ripple['x'], ripple['y']), radius, radius * 0.6)
+    
+    def _draw_paddling_feet(self, p, cx, cy):
+        """Draw animated paddling feet under the duck"""
+        # Feet are under the duck body
+        foot_y = cy + 35
+        
+        # Left foot
+        left_offset = math.sin(self._paddle_phase) * 8
+        left_x = cx - 15 + left_offset
+        self._draw_foot(p, left_x, foot_y, left_offset)
+        
+        # Right foot (opposite phase)
+        right_offset = math.sin(self._paddle_phase + math.pi) * 8
+        right_x = cx + 15 + right_offset
+        self._draw_foot(p, right_x, foot_y, right_offset)
+    
+    def _draw_foot(self, p, x, y, offset):
+        """Draw a single webbed foot"""
+        # Foot color
+        foot_color = QColor(255, 180, 40, 180)
+        p.setBrush(QBrush(foot_color))
+        p.setPen(QPen(QColor(220, 140, 20, 150), 1))
+        
+        # Webbed foot shape (simple oval)
+        foot_width = 12 + abs(offset) * 0.5  # Wider when extended
+        foot_height = 8
+        p.drawEllipse(QPointF(x, y), foot_width, foot_height)
 
     def _draw_pop(self, p, cy):
         t = self._pop_ms / 1000.0

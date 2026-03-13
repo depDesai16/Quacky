@@ -7,6 +7,7 @@ from .composer       import Composer
 from .icon_buttons   import MicButton, SendButton
 from .empty_state    import EmptyState
 from .thinking_bubble import ThinkingBubble
+from .mini_thinking_duck import MiniThinkingDuck
 from .toast          import Toast
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "MicButton", "SendButton",
     "EmptyState",
     "ThinkingBubble",
+    "MiniThinkingDuck",
     "Toast",
 ]

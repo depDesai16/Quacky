@@ -14,3 +14,5 @@ dotenv
 mediapipe
 numpy
 markdown
+lottie
+opencv-python

@@ -278,7 +278,10 @@ class ChatTimeline(QScrollArea):
         rl  = QHBoxLayout(row)
         rl.setContentsMargins(0, 4, 0, 4)
         rl.setSpacing(0)
-        thinking = ThinkingBubble(self._tokens)
+        
+        # Get duck icon for mini thinking animation
+        duck_icon = self._icon_fn().pixmap(32, 32) if self._icon_fn else None
+        thinking = ThinkingBubble(self._tokens, duck_icon)
         self._track_theme_widget(thinking)
         rl.addWidget(thinking)
         rl.addStretch(1)

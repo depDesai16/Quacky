@@ -185,7 +185,11 @@ class QuackyWindow(QWidget):
                 )
             else:
                 self.model_window.move(1040, 88)
-        except Exception:
+            # Show the model window by default
+            self.model_window.show()
+            print(f"✓ Model window created and shown at position: {self.model_window.pos()}")
+        except Exception as e:
+            print(f"✗ Failed to create model window: {e}")
             self.model_window = None
 
         self._theme_fade_overlay = None
@@ -827,8 +831,20 @@ class QuackyWindow(QWidget):
         if busy:
             self.header.set_status("thinking")
             self.timeline.show_thinking()
+            # Start thinking animation on the big duck
+            if self.model_window:
+                print("🦆 Starting thinking animation...")
+                if self.model_window and self.model_window.quacky_widget:
+                    self.model_window.quacky_widget.start_thinking()
+            else:
+                print("⚠️  No model window available")
         else:
             self.header.set_status("idle")
+            # Stop thinking animation on the big duck
+            if self.model_window:
+                print("🦆 Stopping thinking animation")
+                if self.model_window and self.model_window.quacky_widget:
+                    self.model_window.quacky_widget.stop_thinking()
 
     def _update_send_btn(self):
         """Update send btn."""
