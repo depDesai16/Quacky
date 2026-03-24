@@ -86,6 +86,12 @@ class QuackyClient:
     def set_open_app_confirmation_enabled(self, enabled: bool) -> dict:
         return self._post("/settings/open-app-confirmation", {"enabled": bool(enabled)})
 
+    def get_timer_confirmation_settings(self) -> dict:
+        return self._get("/settings/timer-confirmation")
+
+    def set_timer_confirmation_enabled(self, enabled: bool) -> dict:
+        return self._post("/settings/timer-confirmation", {"enabled": bool(enabled)})
+
     @staticmethod
     def decode_audio_bytes(response: dict) -> bytes | None:
         """
@@ -102,6 +108,9 @@ class QuackyClient:
 
     def history(self, chat_id: str) -> dict:
         return self._get(f"/chat/history?chat_id={chat_id}")
+
+    def get_timers_events_dashboard(self) -> dict:
+        return self._get("/dashboard/timers-events")
 
     def reset(self, chat_id: str) -> dict:
         return self._post("/chat/reset", {"chat_id": chat_id})

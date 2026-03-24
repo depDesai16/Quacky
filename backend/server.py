@@ -12,8 +12,12 @@ from backend.core.settings_service import (
     test_api_key,
     get_open_app_confirmation_enabled,
     save_open_app_confirmation_enabled,
+    get_timer_confirmation_enabled,
+    save_timer_confirmation_enabled,
 )
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
+from backend.features.timers import get_active_timers_data
+from backend.core.activity_store import list_calendar_events
 
 settings = get_settings()
 
@@ -38,6 +42,10 @@ open_app_confirmation_state = {
     "enabled": bool(get_open_app_confirmation_enabled(default=True))
 }
 runtime.set_open_app_confirmation_enabled(open_app_confirmation_state["enabled"])
+timer_confirmation_state = {
+    "enabled": bool(get_timer_confirmation_enabled(default=True))
+}
+runtime.set_timer_confirmation_enabled(timer_confirmation_state["enabled"])
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -115,6 +123,14 @@ class QuackyHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/settings/timer-confirmation":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(timer_confirmation_state["enabled"])},
+            )
+            return
+
         if self.path.startswith("/chat/history"):
             _, _, query = self.path.partition("?")
             params = dict(pair.split("=", 1) for pair in query.split("&") if "=" in pair)
@@ -127,6 +143,17 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 return
 
             _json_response(self, 200, {"chat_id": chat_id, "history": history})
+            return
+
+        if self.path == "/dashboard/timers-events":
+            _json_response(
+                self,
+                200,
+                {
+                    "timers": get_active_timers_data(),
+                    "events": list_calendar_events(limit=40),
+                },
+            )
             return
 
         _json_response(self, 404, {"error": "not found"})
@@ -263,6 +290,19 @@ class QuackyHandler(BaseHTTPRequestHandler):
             open_app_confirmation_state["enabled"] = enabled
             runtime.set_open_app_confirmation_enabled(enabled)
             save_open_app_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
+        if self.path == "/settings/timer-confirmation":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=True)
+            timer_confirmation_state["enabled"] = enabled
+            runtime.set_timer_confirmation_enabled(enabled)
+            save_timer_confirmation_enabled(enabled)
             _json_response(self, 200, {"enabled": bool(enabled)})
             return
 

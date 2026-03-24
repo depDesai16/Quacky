@@ -699,7 +699,17 @@ class SettingsPanelMixin:
         self._toggle_sts.toggled.connect(self.set_speechtospeech_enabled)
         card.add_row(row2)
 
-        row3, self._toggle_open_app_confirm = self._make_settings_toggle_row(
+        row3, self._toggle_timer_confirm = self._make_settings_toggle_row(
+            "Confirm Timers/Alarms",
+            "Ask for confirmation before setting or canceling timers and alarms.",
+            bool(getattr(self, "timer_confirmation_enabled", True)),
+        )
+        self._toggle_timer_confirm.toggled.connect(
+            self.set_timer_confirmation_enabled
+        )
+        card.add_row(row3)
+
+        row4, self._toggle_open_app_confirm = self._make_settings_toggle_row(
             "Confirm App Opens",
             "Ask for confirmation before opening applications.",
             bool(getattr(self, "open_app_confirmation_enabled", True)),
@@ -707,7 +717,7 @@ class SettingsPanelMixin:
         self._toggle_open_app_confirm.toggled.connect(
             self.set_open_app_confirmation_enabled
         )
-        card.add_row(row3)
+        card.add_row(row4)
 
         lay.addStretch(1)
         return page

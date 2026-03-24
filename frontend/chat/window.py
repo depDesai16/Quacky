@@ -12,7 +12,7 @@ from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
                               QByteArray, QBuffer, QIODevice, QUrl)
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
                               QHBoxLayout, QLabel, QGraphicsOpacityEffect)
-from PyQt6.QtGui     import QKeyEvent, QCursor
+from PyQt6.QtGui     import QKeyEvent, QCursor, QShortcut, QKeySequence
 from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 
@@ -144,6 +144,7 @@ class QuackyWindow(QWidget):
         self._sts_tts_available     = True
         self.speechtospeech_enabled = True
         self.open_app_confirmation_enabled = True
+        self.timer_confirmation_enabled = True
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -174,6 +175,7 @@ class QuackyWindow(QWidget):
         self._restore_geometry()
         self._load_speech_to_speech_settings()
         self._load_open_app_confirmation_settings()
+        self._load_timer_confirmation_settings()
 
         self.model_window = None
         try:
@@ -195,6 +197,8 @@ class QuackyWindow(QWidget):
 
         self._build_ui()
         self._install_resize_cursor_tracking()
+        self._timers_events_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
+        self._timers_events_shortcut.activated.connect(self._toggle_timers_events_panel)
         ThemeManager.subscribe(self._on_theme_changed)
 
     def _load_speech_to_speech_settings(self):
@@ -227,6 +231,20 @@ class QuackyWindow(QWidget):
             return
         if "enabled" in result:
             self.open_app_confirmation_enabled = bool(result.get("enabled"))
+
+    def _load_timer_confirmation_settings(self):
+        """Load timer/alarm confirmation preference from backend when available."""
+        if not hasattr(self._client, "get_timer_confirmation_settings"):
+            return
+        try:
+            result = self._client.get_timer_confirmation_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+        if "enabled" in result:
+            self.timer_confirmation_enabled = bool(result.get("enabled"))
 
 
     def _build_ui(self):
@@ -277,6 +295,7 @@ class QuackyWindow(QWidget):
             model_window=self.model_window,
             speechtospeech_enabled=self.speechtospeech_enabled,
             open_app_confirmation_enabled=self.open_app_confirmation_enabled,
+            timer_confirmation_enabled=self.timer_confirmation_enabled,
             toast_callback=self._show_settings_toast,
             client=self._client,
             parent=self.card,
@@ -329,6 +348,7 @@ class QuackyWindow(QWidget):
         self.sts_btn.clicked.connect(self._show_sts_panel)
         self._update_sts_button_hint()
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
+        self.composer.plus_btn.timers_events_clicked.connect(self._toggle_timers_events_panel)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
         self.composer.input_field.textChanged.connect(self._update_toast_anchor)
@@ -1038,6 +1058,10 @@ class QuackyWindow(QWidget):
             self._show_shortcuts_panel()
             return
 
+        if mod & Qt.KeyboardModifier.ControlModifier and key == Qt.Key.Key_Y:
+            self._toggle_timers_events_panel()
+            return
+
         if key == Qt.Key.Key_Escape:
             if self.composer.text().strip():
                 self.composer.clear()
@@ -1252,6 +1276,41 @@ class QuackyWindow(QWidget):
         panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
         panel.show()
         self._shortcuts_panel = panel
+
+    def _fetch_timers_events_dashboard(self) -> dict:
+        """Fetch dashboard payload for timers/alarms and calendar actions."""
+        if not hasattr(self._client, "get_timers_events_dashboard"):
+            return {"timers": [], "events": []}
+        try:
+            payload = self._client.get_timers_events_dashboard()
+        except Exception:
+            return {"timers": [], "events": []}
+        if isinstance(payload, dict):
+            return payload
+        return {"timers": [], "events": []}
+
+    def _toggle_timers_events_panel(self):
+        """Show/hide timers and calendar events dashboard panel."""
+        if hasattr(self, "_timers_events_panel") and self._timers_events_panel.isVisible():
+            self._timers_events_panel.close()
+            return
+
+        from .timers_events_panel import TimersEventsPanel
+        panel = TimersEventsPanel(
+            ThemeManager.tokens(),
+            fetch_dashboard=self._fetch_timers_events_dashboard,
+            parent=self,
+        )
+        ThemeManager.subscribe(panel.apply_theme)
+        panel.closed.connect(lambda: ThemeManager.unsubscribe(panel.apply_theme))
+        panel.adjustSize()
+        px = (self.width() - panel.width()) // 2
+        py = (self.height() - panel.height()) // 2
+        from PyQt6.QtCore import QPoint as _QP
+
+        panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
+        panel.show()
+        self._timers_events_panel = panel
 
     def _restore_geometry(self):
         """Handle restore geometry."""

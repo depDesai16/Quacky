@@ -68,14 +68,25 @@ class _MenuIcon(QWidget):
             sp.addRoundedRect(QRectF(4.5, 10.5, 9.0, 2.2), 0.5, 0.5)
             p.drawPath(sp)
 
+        elif self._kind == "timers_events":
+            body = QPainterPath()
+            body.addRoundedRect(QRectF(2.2, 3.2, 13.6, 12.6), 1.8, 1.8)
+            p.drawPath(body)
+            p.drawLine(QPointF(2.8, 7.2), QPointF(15.2, 7.2))
+            p.drawLine(QPointF(6.2, 2.2), QPointF(6.2, 4.7))
+            p.drawLine(QPointF(11.8, 2.2), QPointF(11.8, 4.7))
+            p.drawLine(QPointF(4.5, 10.4), QPointF(8.8, 10.4))
+            p.drawLine(QPointF(4.5, 13.0), QPointF(11.8, 13.0))
+
         p.end()
 
 
 class _PlusMenuButton(QAbstractButton):
-    """A + button that opens a dropdown menu for Camera and Shortcuts."""
+    """A + button that opens a dropdown menu for quick actions."""
 
     camera_clicked    = pyqtSignal()
     shortcuts_clicked = pyqtSignal()
+    timers_events_clicked = pyqtSignal()
 
     SIZE = 32
 
@@ -323,6 +334,18 @@ class _PlusMenuButton(QAbstractButton):
 
         menu.addSeparator()
 
+        te_row = self._make_menu_row(
+            "timers_events",
+            "Timers & Events",
+            "Ctrl+Y  for alarms and calendar actions",
+            t,
+        )
+        te_action = QWidgetAction(menu)
+        te_action.setDefaultWidget(te_row)
+        menu.addAction(te_action)
+
+        menu.addSeparator()
+
         # Shortcuts action
         sc_row    = self._make_menu_row("shortcuts", "Shortcuts", "Ctrl+/  to open anytime", t)
         sc_action = QWidgetAction(menu)
@@ -346,6 +369,7 @@ class _PlusMenuButton(QAbstractButton):
             return _handler
 
         cam_row.mousePressEvent = _row_click(cam_action, self.camera_clicked)
+        te_row.mousePressEvent  = _row_click(te_action, self.timers_events_clicked)
         sc_row.mousePressEvent  = _row_click(sc_action,  self.shortcuts_clicked)
 
         # Pop up directly above the button, left-aligned

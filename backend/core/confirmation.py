@@ -6,6 +6,10 @@ from backend.tools import (
     delete_outlook_event_by_title,
     open_app,
     send_email,
+    set_timer,
+    set_alarm,
+    cancel_timer,
+    clear_memory,
 )
 from backend.core.response_style import style_direct_output
 
@@ -43,6 +47,27 @@ def _execute_pending_action(pending: dict) -> str:
             subject=args.get("subject", ""),
             body=args.get("body", ""),
         )
+
+    if kind == "timer":
+        if op == "set_timer":
+            try:
+                duration = int(args.get("duration_seconds") or 0)
+            except (TypeError, ValueError):
+                duration = 0
+            return set_timer(duration_seconds=duration, label=args.get("label", ""))
+        if op == "set_alarm":
+            return set_alarm(
+                alarm_time=args.get("alarm_time", ""),
+                label=args.get("label", ""),
+            )
+        if op == "cancel":
+            return cancel_timer(timer_ref=args.get("timer_ref", ""))
+        return "Unknown timer operation."
+
+    if kind == "memory":
+        if op == "clear_all":
+            return clear_memory(scope=args.get("scope", "all"))
+        return "Unknown memory operation."
 
     return "Unknown pending operation."
 
