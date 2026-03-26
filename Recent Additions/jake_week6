@@ -1,0 +1,12 @@
+Week 6 Summary
+
+- Added a GitHub Actions CI workflow to install dependencies, compile the source tree, and run the automated test suite on pushes and pull requests.
+- Added cross-platform setup and run scripts for macOS/Linux and PowerShell so local onboarding is more consistent.
+- Built a unified `scripts/dev.py` developer entrypoint for setup, environment checks, testing, backend launch, UI launch, and CLI launch.
+- Added a local setup doctor command to verify `.venv`, `.env`, and required API key configuration before running Quacky.
+- Added unit tests for activity logging, timer/alarm behavior, confirmation handling, config loading, client helpers, and dev script behavior.
+- Added `pytest` to project dependencies and configured pytest discovery so the managed `tests/` suite runs consistently.
+- Updated the local launch flow so the full pytest suite runs before launching the backend, desktop UI, or CLI by default, with an explicit skip flag for debugging.
+- Updated CI to use pytest so local and CI test execution follow the same path.
+- Rewrote the README to match the current repo structure, setup flow, test commands, and runtime entrypoints.
+- Added architecture documentation covering the overall system, backend responsibilities and request flow, and frontend boundaries/runtime behavior.
