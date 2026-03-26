@@ -7,7 +7,6 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-
 _LOCK = threading.Lock()
 _FILE = Path(__file__).resolve().parents[1] / "data" / "user_memory.json"
 _MAX_PREFS = 40

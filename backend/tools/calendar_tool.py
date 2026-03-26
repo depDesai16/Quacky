@@ -7,10 +7,9 @@ import re
 from backend.core.activity_store import add_calendar_event
 from backend.features.calendar.calendar_feature import (
     create_outlook_event,
-    update_outlook_event,
     delete_outlook_event,
+    update_outlook_event,
 )
-
 
 _ISO_SPAN_PATTERN = re.compile(
     r"\bfrom\s+(?P<start>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})\s+to\s+"

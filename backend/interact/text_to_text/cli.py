@@ -1,7 +1,7 @@
 import argparse
-import sys
 
 from backend.client import QuackyClient
+
 
 def load_system_prompt():
     with open("backend/system_prompt.txt", "r", encoding="utf-8") as f:

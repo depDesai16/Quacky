@@ -1,6 +1,7 @@
 # backend/core/response_style.py
 from google.genai import errors as genai_errors
 
+
 def style_direct_output(chat, user_message: str, tool_result: str) -> str:
     """
     Rephrase deterministic/tool output using the same chat (and therefore system prompt).

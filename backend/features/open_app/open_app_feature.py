@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Iterable, List
 from urllib.parse import quote_plus
 
-
 APPLIST_PATH = Path(__file__).resolve().parent / "applist.txt"
 
 _WEB_FALLBACK_URLS = {

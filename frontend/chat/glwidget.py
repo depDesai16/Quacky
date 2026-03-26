@@ -1,6 +1,7 @@
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
 from .obj_loader import ObjLoader
 
 _OPENGL_IMPORT_ERROR = None
@@ -16,6 +17,7 @@ try:
         GL_LIGHTING,
         GL_MODELVIEW,
         GL_POLYGON,
+        GL_POSITION,
         GL_PROJECTION,
         glBegin,
         glClear,
@@ -123,4 +125,3 @@ else:
             msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
             msg.setStyleSheet("color: #d4d9f2; background: transparent;")
             layout.addWidget(msg)
-

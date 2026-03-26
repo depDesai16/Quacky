@@ -34,5 +34,8 @@ jobs:
       - name: Compile source tree
         run: python -m compileall backend frontend tests scripts
 
+      - name: Run Ruff
+        run: python -m ruff check scripts tests backend/client.py backend/config.py backend/server.py backend/core backend/features/timers
+
       - name: Run test suite
         run: python -m pytest -q

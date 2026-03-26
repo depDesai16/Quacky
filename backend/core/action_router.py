@@ -7,16 +7,16 @@ directly handled intents to their tool handlers.
 """
 
 from backend.tools import (
-    get_weather,
+    cancel_timer,
+    forget_memory_item,
     get_holidays,
+    get_weather,
+    list_memory,
+    list_timers,
     open_app,
     send_email,
-    set_timer,
     set_alarm,
-    list_timers,
-    cancel_timer,
-    list_memory,
-    forget_memory_item,
+    set_timer,
 )
 
 
@@ -145,8 +145,8 @@ def validate_calendar_intent(intent: dict) -> str | None:
     Validate a calendar intent before execution.
     Returns an error message string if validation fails, None if valid.
     """
-    from datetime import datetime, timedelta
     import re
+    from datetime import datetime
 
     kind = intent.get("intent", "").lower()
 

@@ -1,14 +1,16 @@
 """
 face_id_dialog.py - Face ID authentication dialog (Apple-style)
 """
-import cv2
-import sys
 import os
+import sys
+
+import cv2
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from PyQt6.QtCore import Qt, QTimer, pyqtSignal
-from PyQt6.QtWidgets import QDialog, QVBoxLayout, QLabel, QPushButton
-from PyQt6.QtGui import QImage, QPixmap, QFont
-from theme import ThemeManager, FONT_FAMILY_UI
+from PyQt6.QtGui import QFont, QImage, QPixmap
+from PyQt6.QtWidgets import QDialog, QLabel, QPushButton, QVBoxLayout
+from theme import FONT_FAMILY_UI, ThemeManager
 
 
 class FaceIDDialog(QDialog):
@@ -202,7 +204,7 @@ class FaceIDDialog(QDialog):
             
             # Show debug info
             if name == "Unknown":
-                self.status_label.setText(f"Looking for your face...")
+                self.status_label.setText("Looking for your face...")
             else:
                 self.status_label.setText(f"Found: {name} ({confidence*100:.0f}% match)")
             

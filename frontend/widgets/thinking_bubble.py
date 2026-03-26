@@ -1,10 +1,7 @@
 
-from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
-                              pyqtProperty, QRectF, QTimer)
-from PyQt6.QtGui     import QPainter, QColor, QBrush
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QSizePolicy)
-
-from theme import ThemeManager
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, pyqtProperty
+from PyQt6.QtGui import QBrush, QColor, QPainter
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QWidget
 
 DOT_SIZE    = 7
 DOT_SPACING = 7

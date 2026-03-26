@@ -1,10 +1,19 @@
-from PyQt6.QtCore    import Qt, pyqtSignal, QEvent, QRectF, QTimer, QPoint, QPointF
-from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QColor, QKeyEvent)
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QVBoxLayout, QLabel,
-                              QTextEdit, QSizePolicy, QFrame, QAbstractButton,
-                              QMenu, QStackedWidget, QApplication)
-
-from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QKeyEvent, QPainter, QPainterPath, QPen
+from PyQt6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QSizePolicy,
+    QStackedWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 
 
 class _MenuIcon(QWidget):
@@ -279,7 +288,7 @@ class _PlusMenuButton(QAbstractButton):
 
     def _show_menu(self):
         """Build and display the dropdown menu."""
-        from PyQt6.QtWidgets import QWidgetAction, QVBoxLayout
+        from PyQt6.QtWidgets import QWidgetAction
         t = self._tokens
 
         menu = QMenu(self)

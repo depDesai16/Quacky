@@ -1,7 +1,7 @@
 import platform
 import subprocess
-import webbrowser
 import urllib.parse
+import webbrowser
 
 
 def send_email(email_address: str, subject: str, body: str) -> str:

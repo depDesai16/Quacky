@@ -1,10 +1,8 @@
 
-from PyQt6.QtCore    import Qt, pyqtSignal
-from PyQt6.QtGui     import QPainter, QColor, QPainterPath
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout,
-                              QLabel, QSizePolicy)
-
-from theme import ThemeManager, FONT_STACK
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QColor, QPainter, QPainterPath
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from theme import FONT_STACK
 
 SHORTCUTS = [
     ("General",  [

@@ -5,7 +5,6 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-
 _LOCK = threading.Lock()
 _FILE = Path(__file__).resolve().parents[1] / "data" / "local_settings.json"
 

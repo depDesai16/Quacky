@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-import threading
-
 
 _MAX_TIMER_SECONDS = 7 * 24 * 60 * 60
 

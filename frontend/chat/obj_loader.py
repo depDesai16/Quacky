@@ -1,5 +1,6 @@
 import os
 
+
 class ObjLoader:
     def __init__(self, filename):
         """Initialize the instance state."""

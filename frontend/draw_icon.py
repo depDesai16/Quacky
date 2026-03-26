@@ -1,5 +1,6 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPainterPath, QBrush, QPen
+from PyQt6.QtGui import QBrush, QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+
 
 def draw_icon():
     """Handle draw icon."""

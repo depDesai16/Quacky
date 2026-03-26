@@ -1,11 +1,11 @@
 """
 face_recognition.py - Face recognition and user profile management
 """
+import pickle
+from pathlib import Path
+
 import cv2
 import numpy as np
-import pickle
-import os
-from pathlib import Path
 
 
 class FaceRecognitionManager:

@@ -1,8 +1,9 @@
-import requests
+import argparse
 import json
 import os
-import argparse
 from datetime import datetime
+
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()

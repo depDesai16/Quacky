@@ -1,9 +1,9 @@
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QVBoxLayout, QWidget, QLineEdit
-
-from .ui import SettingsPanelMixin
+from PyQt6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
 from theme import ThemeManager
+
 from .controller import SettingsController
+from .ui import SettingsPanelMixin
 
 
 class _ToastProxy:

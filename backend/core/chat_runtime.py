@@ -5,27 +5,27 @@ from typing import Any
 from google import genai
 from google.genai import types
 
-from backend.personality.__init__ import (
-    merge_system_instruction,
-    augment_with_context,
-    update_memory,
-    is_preference_message,
-)
-from backend.tools import ALL_TOOLS
-from backend.features.timers import drain_due_alerts
-from backend.core.intent_classifier import classify
 from backend.core.action_router import (
+    build_calendar_action,
+    build_confirmable_action,
     dispatch_intents,
     extract_calendar_intent,
-    extract_confirmable_intent,
     extract_clarify_intent,
-    validate_confirmable_intent,
+    extract_confirmable_intent,
     validate_calendar_intent,
-    build_confirmable_action,
-    build_calendar_action,
+    validate_confirmable_intent,
 )
-from backend.core.response_style import ask_quacky_confirmation, style_direct_output
 from backend.core.confirmation import handle_pending_action
+from backend.core.intent_classifier import classify
+from backend.core.response_style import ask_quacky_confirmation, style_direct_output
+from backend.features.timers import drain_due_alerts
+from backend.personality.__init__ import (
+    augment_with_context,
+    is_preference_message,
+    merge_system_instruction,
+    update_memory,
+)
+from backend.tools import ALL_TOOLS
 
 
 class ChatRuntime:

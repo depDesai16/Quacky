@@ -2,18 +2,17 @@ from __future__ import annotations
 
 from typing import Callable
 
-from PyQt6.QtCore import Qt, QTimer, pyqtSignal, QRectF
+from PyQt6.QtCore import QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
     QLabel,
     QPushButton,
-    QHBoxLayout,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
-    QScrollArea,
-    QFrame,
 )
-
 from theme import FONT_STACK
 
 

@@ -1,7 +1,9 @@
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
 from widgets.card_widget import CardWidget
+
 from .glwidget import GLWidget
+
 
 class ModelWindow(QWidget):
     def __init__(self):

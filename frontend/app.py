@@ -39,13 +39,13 @@ def _configure_platform_env() -> None:
 
 _configure_platform_env()
 
-from PyQt6.QtCore import QTimer
-from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMessageBox
-from PyQt6.QtGui import QFont, QFontDatabase
-
 from chat.window import QuackyWindow
 from draw_icon import draw_icon
+from PyQt6.QtCore import QTimer
+from PyQt6.QtGui import QFont, QFontDatabase
+from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 from theme import FONT_FAMILY_UI
+
 from backend.client import QuackyClient
 
 

@@ -2,21 +2,26 @@
 import math
 
 from PyQt6.QtCore import (
-    Qt,
-    QPropertyAnimation,
     QEasingCurve,
-    pyqtProperty,
-    QRectF,
-    QPointF,
     QPoint,
+    QPointF,
+    QPropertyAnimation,
+    QRectF,
+    Qt,
+    pyqtProperty,
     pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QPainter, QColor, QBrush, QFont, QFontMetrics, QPen, QPainterPath,
+    QBrush,
+    QColor,
+    QFont,
+    QFontMetrics,
+    QPainter,
+    QPainterPath,
+    QPen,
 )
-from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
-
-from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
+from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 
 
 class StatusChip(QWidget):

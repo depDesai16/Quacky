@@ -2,11 +2,13 @@
 Cross-platform Speech-to-Text module for Quacky
 Supports Windows, macOS, and Linux
 """
-import speech_recognition as sr
-import threading
 import queue
+import threading
 import time
-from typing import Optional, Callable
+from typing import Callable, Optional
+
+import speech_recognition as sr
+
 
 class SpeechToText:
     def __init__(self):

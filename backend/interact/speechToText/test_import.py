@@ -3,6 +3,7 @@
 Simple test to check if speech_recognition is available
 """
 import sys
+
 print(f"Python executable: {sys.executable}")
 print(f"Python version: {sys.version}")
 print(f"Python path: {sys.path}")

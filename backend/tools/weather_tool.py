@@ -3,14 +3,15 @@ Weather tool wrapper for Quacky.
 """
 from backend.features.weather.weather_feature import (
     MAX_FORECAST_DAYS,
+    format_current,
+    format_forecast_days,
     get_current_weather,
     get_current_weather_auto_ip,
     get_forecast,
     get_forecast_auto_ip,
     get_weekend_forecast,
-    format_current,
-    format_forecast_days,
 )
+
 
 def get_weather(timeframe: str = "today", location: str = "") -> str:
     """

@@ -3,15 +3,22 @@ import argparse
 import os
 import shutil
 import subprocess
-import sys
 from pathlib import Path
-
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 VENV_DIR = ROOT_DIR / ".venv"
 ENV_EXAMPLE = ROOT_DIR / ".env.example"
 ENV_FILE = ROOT_DIR / ".env"
 REQUIREMENTS_FILE = ROOT_DIR / "requirements.txt"
+LINT_TARGETS = [
+    "scripts",
+    "tests",
+    "backend/client.py",
+    "backend/config.py",
+    "backend/server.py",
+    "backend/core",
+    "backend/features/timers",
+]
 
 
 def _venv_python() -> Path:
@@ -35,11 +42,21 @@ def _run_tests(venv_python: Path) -> int:
     return _run([str(venv_python), "-m", "pytest", "-q"], cwd=ROOT_DIR)
 
 
+def _run_lint(venv_python: Path) -> int:
+    return _run([str(venv_python), "-m", "ruff", "check", *LINT_TARGETS], cwd=ROOT_DIR)
+
+
 def _prelaunch_checks(venv_python: Path, skip_tests: bool) -> int:
     if not _has_api_key():
         raise SystemExit("Missing GEMINI_API_KEY or GOOGLE_API_KEY in .env or environment.")
     if skip_tests:
         return 0
+
+    print("Running lint checks before launch...")
+    lint_result = _run_lint(venv_python)
+    if lint_result != 0:
+        print("Lint checks failed. Fix the issues or rerun with --skip-tests.")
+        return lint_result
 
     print("Running test suite before launch...")
     result = _run_tests(venv_python)
@@ -89,6 +106,7 @@ def _print_next_steps() -> None:
     print("Setup complete.")
     if not _has_api_key():
         print("Next: add GEMINI_API_KEY or GOOGLE_API_KEY to .env before starting Quacky.")
+    print("Run lint checks: python scripts/dev.py lint")
     print("Run the test suite: python scripts/dev.py test")
     print("Run the desktop app: python scripts/dev.py ui")
     print("Run the backend: python scripts/dev.py server")
@@ -140,6 +158,11 @@ def cmd_test(_args: argparse.Namespace) -> int:
     return _run_tests(venv_python)
 
 
+def cmd_lint(_args: argparse.Namespace) -> int:
+    venv_python = _require_venv()
+    return _run_lint(venv_python)
+
+
 def cmd_server(args: argparse.Namespace) -> int:
     venv_python = _require_venv()
     prelaunch_result = _prelaunch_checks(venv_python, args.skip_tests)
@@ -174,6 +197,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = subparsers.add_parser("doctor", help="Validate local Quacky setup")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    lint_parser = subparsers.add_parser("lint", help="Run Ruff lint checks")
+    lint_parser.set_defaults(func=cmd_lint)
 
     test_parser = subparsers.add_parser("test", help="Run the full pytest suite")
     test_parser.set_defaults(func=cmd_test)

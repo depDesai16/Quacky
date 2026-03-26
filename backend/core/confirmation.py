@@ -1,17 +1,17 @@
 # backend/core/confirmation.py
+from backend.core.response_style import style_direct_output
 from backend.personality.__init__ import update_memory
 from backend.tools import (
     add_outlook_event,
-    update_outlook_event_time,
+    cancel_timer,
+    clear_memory,
     delete_outlook_event_by_title,
     open_app,
     send_email,
-    set_timer,
     set_alarm,
-    cancel_timer,
-    clear_memory,
+    set_timer,
+    update_outlook_event_time,
 )
-from backend.core.response_style import style_direct_output
 
 YES = {"yes","y","yeah","yep","ok","okay","confirm","sure","go ahead","do it","please"}
 NO  = {"no","n","nope","nah","cancel","stop","don't","do not","nevermind","never mind"}

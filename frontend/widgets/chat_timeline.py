@@ -1,18 +1,30 @@
 
 import time
 
-from PyQt6.QtGui     import QColor, QFontMetrics
-from PyQt6.QtCore    import (Qt, QTimer, QPropertyAnimation, QEasingCurve,
-                              QEvent, QAbstractAnimation)
-from PyQt6.QtWidgets import (QScrollArea, QWidget, QVBoxLayout, QHBoxLayout,
-                              QLabel, QPushButton, QSizePolicy, QFrame,
-                              QGraphicsDropShadowEffect)
+from PyQt6.QtCore import QAbstractAnimation, QEasingCurve, QEvent, QPropertyAnimation, Qt, QTimer
+from PyQt6.QtGui import QColor, QFontMetrics
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGraphicsDropShadowEffect,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+from theme import FONT_STACK, ThemeManager
 
-from theme            import ThemeManager, FONT_STACK
-from .message_bubble  import (UserBubble, AssistantBubble, SystemMessage,
-                               StreamingAssistantBubble, animate_in_widget)
+from .empty_state import EmptyState
+from .message_bubble import (
+    AssistantBubble,
+    StreamingAssistantBubble,
+    SystemMessage,
+    UserBubble,
+    animate_in_widget,
+)
 from .thinking_bubble import ThinkingBubble
-from .empty_state     import EmptyState
 
 GROUP_SEC           = 60
 NEAR_BOTTOM_THRESHOLD_PX = 24

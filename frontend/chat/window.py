@@ -7,28 +7,45 @@ ROOT_DIR     = os.path.dirname(FRONTEND_DIR)
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
-                              QPropertyAnimation, QEasingCurve, QEvent, QTimer,
-                              QByteArray, QBuffer, QIODevice, QUrl)
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                              QHBoxLayout, QLabel, QGraphicsOpacityEffect)
-from PyQt6.QtGui     import QKeyEvent, QCursor, QShortcut, QKeySequence
-from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
+from draw_icon import draw_icon
+from PyQt6.QtCore import (
+    QBuffer,
+    QByteArray,
+    QEasingCurve,
+    QEvent,
+    QIODevice,
+    QObject,
+    QPoint,
+    QPropertyAnimation,
+    QSettings,
+    QSignalBlocker,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+)
+from PyQt6.QtGui import QCursor, QKeyEvent, QKeySequence, QShortcut
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsOpacityEffect,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
+from settings import SettingsPanel
+from theme import ThemeManager
+from widgets.card_widget import CardWidget
+from widgets.chat_timeline import ChatTimeline
+from widgets.composer import Composer
+from widgets.header_bar import HeaderBar
+from widgets.icon_buttons import MicButton, SendButton
+from widgets.toast import Toast
 
-from theme          import ThemeManager
-from draw_icon      import draw_icon
-from .model_window import ModelWindow
 from backend.client import QuackyClient
 
-from widgets.card_widget   import CardWidget
-from widgets.header_bar    import HeaderBar
-from widgets.chat_timeline import ChatTimeline
-from widgets.composer      import Composer
-from widgets.icon_buttons  import MicButton, SendButton
-from widgets.toast         import Toast
-
-from settings import SettingsPanel
+from .model_window import ModelWindow
 
 MAX_WINDOW_W = 1040
 MIN_WINDOW_W = 600
@@ -311,7 +328,7 @@ class QuackyWindow(QWidget):
         self.stacked_widget.addWidget(self._settings_container) # index 2
 
         # Speech-to-speech panel/runtime (isolated from chat mic pipeline)
-        from chat.speech_to_speech import SpeechToSpeechPanel, SpeechToSpeechController
+        from chat.speech_to_speech import SpeechToSpeechController, SpeechToSpeechPanel
         self._sts_panel = SpeechToSpeechPanel(parent=self.card)
         self._sts_panel.back_requested.connect(self._hide_sts_panel)
         self._sts_panel.start_requested.connect(self._on_sts_start)
@@ -476,7 +493,6 @@ class QuackyWindow(QWidget):
     
     def _register_new_user(self):
         """Show registration dialog"""
-        from PyQt6.QtWidgets import QMessageBox
         
         # Switch to camera view
         if self.stacked_widget.currentIndex() != 1:
@@ -484,7 +500,6 @@ class QuackyWindow(QWidget):
     
     def _start_face_id_switch(self):
         """Start Face ID authentication to switch profiles"""
-        from camera.face_id_dialog import FaceIDDialog
         
         # Stop camera if it's running
         was_on_camera = self.stacked_widget.currentIndex() == 1
@@ -501,7 +516,7 @@ class QuackyWindow(QWidget):
         # Create and show Face ID dialog
         dialog = FaceIDDialog(self.face_recognition, self)
         dialog.user_authenticated.connect(self._on_face_id_success)
-        result = dialog.exec()
+        dialog.exec()
         
         # Restart camera tab if it was on camera view
         if was_on_camera:

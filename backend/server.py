@@ -1,23 +1,25 @@
 # backend/server.py
-import json
 import base64
+import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend.config import get_settings
+from backend.core.activity_store import list_calendar_events
 from backend.core.chat_runtime import ChatRuntime
 from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
-    save_api_key,
-    remove_api_key,
-    test_api_key,
-    get_open_app_confirmation_enabled,
-    save_open_app_confirmation_enabled,
-    get_timer_confirmation_enabled,
-    save_timer_confirmation_enabled,
 )
-from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
+from backend.core.settings_service import (
+    get_open_app_confirmation_enabled,
+    get_timer_confirmation_enabled,
+    remove_api_key,
+    save_api_key,
+    save_open_app_confirmation_enabled,
+    save_timer_confirmation_enabled,
+    test_api_key,
+)
 from backend.features.timers import get_active_timers_data
-from backend.core.activity_store import list_calendar_events
+from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
 

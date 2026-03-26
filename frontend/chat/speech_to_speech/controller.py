@@ -4,7 +4,6 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from backend.client import QuackyClient
 
-
 STATE_IDLE = "idle"
 STATE_LISTENING = "listening"
 STATE_THINKING = "thinking"

@@ -1,30 +1,29 @@
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPoint, QSignalBlocker
+import math as _math
+
+from PyQt6.QtCore import QPoint, QPointF, QRectF, QSignalBlocker, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QListView,
+    QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
-    QLineEdit,
-    QScrollArea,
-    QComboBox,
-    QListView,
-    QFrame,
-    QStyledItemDelegate,
     QStyle,
-    QPushButton,
+    QStyledItemDelegate,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath, QFont, QFontMetrics
-from PyQt6.QtCore import QRectF, QPointF
-
-from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
-from .widgets.toggle_slider import ToggleSlider
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 from widgets.card_widget import CardWidget
 
-import math as _math
+from .widgets.toggle_slider import ToggleSlider
 
 SETTINGS_METRICS: dict = {
     "sidebar_width": 164,

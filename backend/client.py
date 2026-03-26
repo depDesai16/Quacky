@@ -1,7 +1,7 @@
+import base64
 import json
 import os
 import socket
-import base64
 import urllib.error
 import urllib.request
 

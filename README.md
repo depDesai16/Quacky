@@ -2,6 +2,28 @@
 
 Quacky is a local-first desktop assistant built in Python. It combines a PyQt desktop UI, a lightweight local HTTP backend, Gemini-based chat/tool orchestration, and a growing set of assistant features such as calendar actions, timers, memory, weather, and app launching.
 
+## Run Model
+
+Quacky is not deployed through GitHub Actions.
+
+Current behavior:
+
+- GitHub Actions runs CI only
+- the app itself runs locally on your machine
+- you need local setup plus a valid `.env` to launch it
+
+GitHub Actions currently handles:
+
+- dependency installation in CI
+- Ruff lint checks
+- automated test execution
+
+It does not:
+
+- deploy Quacky to a server
+- host the backend anywhere remote
+- provide a hosted desktop or web instance
+
 ## What It Does
 
 - Chat with a local desktop assistant UI
@@ -88,7 +110,13 @@ python scripts/dev.py doctor
 python scripts/dev.py test
 ```
 
-### 5. Run Quacky
+### 5. Run lint checks
+
+```bash
+python scripts/dev.py lint
+```
+
+### 6. Run Quacky
 
 Desktop app:
 
@@ -108,7 +136,7 @@ Text client against a running backend:
 python scripts/dev.py cli
 ```
 
-By default, `ui`, `server`, and `cli` run the full test suite before launching. During active debugging you can bypass that with `--skip-tests`.
+By default, `ui`, `server`, and `cli` run Ruff and the full test suite before launching. During active debugging you can bypass that with `--skip-tests`.
 
 ## Developer Commands
 
@@ -117,6 +145,7 @@ Unified entrypoint:
 ```bash
 python scripts/dev.py setup
 python scripts/dev.py doctor
+python scripts/dev.py lint
 python scripts/dev.py test
 python scripts/dev.py server
 python scripts/dev.py ui
@@ -157,6 +186,14 @@ Run the test suite:
 ```bash
 python scripts/dev.py test
 ```
+
+Run lint checks:
+
+```bash
+python scripts/dev.py lint
+```
+
+The current Ruff rollout is enforced on the actively maintained developer, test, and backend runtime paths rather than the entire repository.
 
 Useful smoke check:
 

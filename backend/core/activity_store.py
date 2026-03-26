@@ -7,7 +7,6 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-
 _LOCK = threading.Lock()
 _FILE = Path(__file__).resolve().parents[1] / "data" / "activity_log.json"
 _MAX_EVENTS = 120

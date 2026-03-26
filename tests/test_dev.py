@@ -42,19 +42,33 @@ class DevScriptTests(unittest.TestCase):
 
         self.assertEqual(result, 1)
 
-    def test_prelaunch_checks_runs_tests_when_not_skipped(self):
+    def test_prelaunch_checks_stops_when_lint_fails(self):
         with patch.object(dev, "_has_api_key", return_value=True):
-            with patch.object(dev, "_run_tests", return_value=0) as run_tests:
-                result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=False)
+            with patch.object(dev, "_run_lint", return_value=1) as run_lint:
+                with patch.object(dev, "_run_tests", return_value=0) as run_tests:
+                    result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=False)
 
+        run_lint.assert_called_once_with(Path("/tmp/python"))
+        run_tests.assert_not_called()
+        self.assertEqual(result, 1)
+
+    def test_prelaunch_checks_runs_lint_and_tests_when_not_skipped(self):
+        with patch.object(dev, "_has_api_key", return_value=True):
+            with patch.object(dev, "_run_lint", return_value=0) as run_lint:
+                with patch.object(dev, "_run_tests", return_value=0) as run_tests:
+                    result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=False)
+
+        run_lint.assert_called_once_with(Path("/tmp/python"))
         run_tests.assert_called_once_with(Path("/tmp/python"))
         self.assertEqual(result, 0)
 
-    def test_prelaunch_checks_skips_tests_when_requested(self):
+    def test_prelaunch_checks_skips_lint_and_tests_when_requested(self):
         with patch.object(dev, "_has_api_key", return_value=True):
-            with patch.object(dev, "_run_tests", return_value=0) as run_tests:
-                result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=True)
+            with patch.object(dev, "_run_lint", return_value=0) as run_lint:
+                with patch.object(dev, "_run_tests", return_value=0) as run_tests:
+                    result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=True)
 
+        run_lint.assert_not_called()
         run_tests.assert_not_called()
         self.assertEqual(result, 0)
 
