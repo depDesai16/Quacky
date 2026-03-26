@@ -36,38 +36,72 @@ Quacky/
 ## Setup
 
 ### Quick Start
-1. **Install dependencies:**
+1. **Run setup once:**
+   ```bash
+   ./scripts/setup.sh
+   ```
+
+   On Windows PowerShell:
+   ```powershell
+   .\scripts\setup.ps1
+   ```
+
+2. **Add your API key in `.env`:**
+   - Set `GEMINI_API_KEY=your_key_here`
+   - `GOOGLE_API_KEY` also works
+
+3. **Run Quacky:**
+   ```bash
+   python scripts/dev.py ui
+   ```
+
+   On Windows PowerShell:
+   ```powershell
+   python .\scripts\dev.py ui
+   ```
+
+4. **Check your local setup any time:**
+   ```bash
+   python scripts/dev.py doctor
+   ```
+
+5. **Install dependencies manually if you prefer:**
    ```bash
    pip install -r requirements.txt
    ```
 
-2. **Set up Gemini API:**
-   - Get API key from https://aistudio.google.com/
-   - Copy `.env.example` to `.env`
-   - Add your API key: `GEMINI_API_KEY=your_key_here`
-
-3. **Run the full system:**
+6. **Run the full system with wrappers if you prefer:**
    ```bash
-   python quacky_full.py
+   ./scripts/run-ui.sh
    ```
 
-4. **Start talking:**
+   On Windows PowerShell:
+   ```powershell
+   .\scripts\run-ui.ps1
+   ```
+
+7. **Or run backend only:**
+   ```bash
+   ./scripts/run-server.sh
+   ```
+
+8. **Start talking:**
    - Say "Hey Quacky, what's the weather?"
    - Say "Hey Quacky, open my calendar"
    - Say "quit" to exit
 
 ### Alternative Launchers
 ```bash
-# Simple speech-to-text only
-python run_quacky.py
+# One command interface
+python scripts/dev.py setup
+python scripts/dev.py doctor
+python scripts/dev.py server
+python scripts/dev.py ui
+python scripts/dev.py cli
 
-# From speechToText folder
-cd speechToText
-python quacky_stt.py
-
-# For text to text (testing features purposes)
-python -m backend.server # Terminal 1
-python backend/cli.py # Terminal 2 - use terminal 2 for chatting with ai
+# Wrapper scripts still work
+./scripts/run-server.sh
+./scripts/run-ui.sh
 ```
 
 ### Platform-Specific Notes
