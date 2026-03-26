@@ -42,6 +42,22 @@ class DevScriptTests(unittest.TestCase):
 
         self.assertEqual(result, 1)
 
+    def test_prelaunch_checks_runs_tests_when_not_skipped(self):
+        with patch.object(dev, "_has_api_key", return_value=True):
+            with patch.object(dev, "_run_tests", return_value=0) as run_tests:
+                result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=False)
+
+        run_tests.assert_called_once_with(Path("/tmp/python"))
+        self.assertEqual(result, 0)
+
+    def test_prelaunch_checks_skips_tests_when_requested(self):
+        with patch.object(dev, "_has_api_key", return_value=True):
+            with patch.object(dev, "_run_tests", return_value=0) as run_tests:
+                result = dev._prelaunch_checks(Path("/tmp/python"), skip_tests=True)
+
+        run_tests.assert_not_called()
+        self.assertEqual(result, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
