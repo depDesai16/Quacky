@@ -7,4 +7,6 @@ Week 7 Summary
 - Replaced face-recognition pickle storage with JSON-based persistence and removed committed biometric pickle artifacts from the repo.
 - Expanded `.gitignore` to cover biometric face-data storage, pickle artifacts, and local Codex workspace files.
 - Added dependency auditing to CI with `pip-audit` and set default GitHub Actions permissions to read-only.
+- Added phase-2 CI improvements including manual workflow dispatch, concurrency cancellation for stale runs, pytest coverage reporting, JUnit/XML report generation, and artifact uploads for CI diagnostics.
+- Added Dependabot configuration to automate weekly checks for outdated Python dependencies and GitHub Actions versions.
 - Added targeted unit tests covering local settings storage and safer Windows app launching.

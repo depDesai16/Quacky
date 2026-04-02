@@ -1,4 +1,4 @@
-
+import logging
 import os
 import signal
 import subprocess
@@ -47,6 +47,11 @@ from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 from theme import FONT_FAMILY_UI
 
 from backend.client import QuackyClient
+from backend.core.runtime_logging import configure_runtime_logging, install_exception_logging
+
+LOGGER = logging.getLogger(__name__)
+LOG_PATH = configure_runtime_logging("frontend")
+install_exception_logging(LOGGER)
 
 
 def _configure_app_identity(app: QApplication) -> None:
@@ -60,6 +65,7 @@ def _configure_app_identity(app: QApplication) -> None:
 
 def _start_server() -> subprocess.Popen:
     """Handle start server."""
+    LOGGER.info("Starting backend subprocess from desktop app")
     return subprocess.Popen([sys.executable, "-m", "backend.server"], cwd=ROOT_DIR)
 
 
@@ -131,6 +137,8 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
 
 
 if __name__ == "__main__":
+    LOGGER.info("Launching Quacky desktop app")
+    LOGGER.info("Runtime log file: %s", LOG_PATH)
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
@@ -152,6 +160,7 @@ if __name__ == "__main__":
     server_proc = _start_server()
 
     if not _wait_for_server(base_url):
+        LOGGER.error("Backend server failed health check at %s", base_url)
         QMessageBox.critical(None, "Quacky", "Backend server failed to start.")
         server_proc.terminate()
         sys.exit(1)
@@ -162,6 +171,7 @@ if __name__ == "__main__":
     chat_id  = chat_data.get("chat_id", "")
 
     if not chat_id:
+        LOGGER.error("Could not start initial chat session")
         QMessageBox.critical(None, "Quacky", "Could not start chat session.")
         server_proc.terminate()
         sys.exit(1)
@@ -178,16 +188,19 @@ if __name__ == "__main__":
         if _shutdown_requested:
             return
         _shutdown_requested = True
+        LOGGER.info("Shutting down Quacky desktop app")
         main_win.shutdown()
         if server_proc.poll() is None:
             server_proc.terminate()
             try:
                 server_proc.wait(timeout=3)
             except subprocess.TimeoutExpired:
+                LOGGER.warning("Backend subprocess did not exit cleanly; killing it")
                 server_proc.kill()
 
     def _handle_exit_signal(_sig, _frame):
         """Handle handle exit signal."""
+        LOGGER.info("Received exit signal; quitting desktop app")
         app.quit()
 
     sig_timer = QTimer()

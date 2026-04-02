@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from backend.config import get_settings
 from backend.core.activity_store import list_calendar_events
 from backend.core.chat_runtime import ChatRuntime
+from backend.core.runtime_logging import configure_runtime_logging, install_exception_logging
 from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
 )
@@ -28,6 +29,8 @@ from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
 LOGGER = logging.getLogger(__name__)
+LOG_PATH = configure_runtime_logging("backend")
+install_exception_logging(LOGGER)
 
 runtime = ChatRuntime(
     api_key=settings.api_key,
@@ -341,14 +344,18 @@ class QuackyHandler(BaseHTTPRequestHandler):
         _json_response(self, 404, {"error": "not found"})
 
 def run_server():
+    LOGGER.info("Starting backend server on 127.0.0.1:%s", PORT)
+    LOGGER.info("Runtime log file: %s", LOG_PATH)
     server = ThreadingHTTPServer(("127.0.0.1", PORT), QuackyHandler)
     print(f"Quacky server listening on http://localhost:{PORT}")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        LOGGER.info("Received keyboard interrupt, shutting down backend server")
         print("\nShutting down server.")
     finally:
         server.server_close()
+        LOGGER.info("Backend server stopped")
 
 
 if __name__ == "__main__":

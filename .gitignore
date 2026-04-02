@@ -9,3 +9,4 @@ frontend/camera/face_data/
 .ruff_cache/
 .vscode/
 .codex
+logs/

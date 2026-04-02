@@ -11,5 +11,6 @@ msal
 pywin32; sys_platform == "win32"
 elevenlabs
 pytest
+pytest-cov
 ruff
 pip-audit
