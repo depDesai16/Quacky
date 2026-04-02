@@ -4,6 +4,8 @@ __pycache__/
 backend/data/local_settings.json
 backend/data/user_memory.json
 backend/data/activity_log.json
-.pkl
+*.pkl
+frontend/camera/face_data/
 .ruff_cache/
 .vscode/
+.codex

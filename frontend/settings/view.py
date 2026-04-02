@@ -59,7 +59,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._api_key_save_btn = None
         self._api_key_test_btn = None
         self._api_key_remove_btn = None
-        self._saved_api_key = ""
+        self._has_saved_api_key = False
 
         self._settings_container = self._build_settings_page()
         root = QVBoxLayout(self)
@@ -101,10 +101,6 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
 
                 with QSignalBlocker(self._theme_mode_combo):
                     self._theme_mode_combo.setCurrentIndex(idx)
-        if hasattr(self, "_api_key_input") and self._api_key_input is not None:
-            current = self._api_key_input.text()
-            if not current.strip() and self._saved_api_key:
-                self._api_key_input.setText(self._saved_api_key)
         self._update_api_key_action_state()
         self._refresh_open_app_confirmation_setting()
         self._refresh_timer_confirmation_setting()
@@ -162,21 +158,15 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
                 )
                 del blocker
 
-    def _on_saved_api_key_loaded(self, saved_key: str, _error: str):
+    def _on_saved_api_key_loaded(self, has_saved_key: bool, _error: str):
         """Handle saved api key loaded callbacks."""
-        previous = self._saved_api_key
-        self._saved_api_key = saved_key
-        if self._api_key_input is None:
-            return
-        current = self._api_key_input.text().strip()
-        if (not current) or (current == previous):
-            self._api_key_input.setText(saved_key)
+        self._has_saved_api_key = bool(has_saved_key)
         self._update_api_key_action_state()
 
     def _update_api_key_action_state(self, *_args):
         """Update api key action state."""
         key_text = self._api_key_input.text().strip() if self._api_key_input else ""
-        saved = bool(getattr(self, "_saved_api_key", ""))
+        saved = bool(getattr(self, "_has_saved_api_key", False))
 
         if self._api_key_save_btn is not None:
             self._api_key_save_btn.setEnabled(bool(key_text))
@@ -199,7 +189,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         if not ok:
             self.toast.show_message(message, kind="error")
             return
-        self._saved_api_key = key
+        self._has_saved_api_key = True
         self._update_api_key_action_state()
         self.toast.show_message(message, kind="success")
 
@@ -220,7 +210,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         if not ok:
             self.toast.show_message(message, kind="error")
             return
-        self._saved_api_key = ""
+        self._has_saved_api_key = False
         self._update_api_key_action_state()
         self.toast.show_message(message, kind="warn")
 

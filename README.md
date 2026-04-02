@@ -17,12 +17,19 @@ GitHub Actions currently handles:
 - dependency installation in CI
 - Ruff lint checks
 - automated test execution
+- Python dependency auditing with `pip-audit`
 
 It does not:
 
 - deploy Quacky to a server
 - host the backend anywhere remote
 - provide a hosted desktop or web instance
+
+Current local security posture:
+
+- the backend is intended to be reachable only from the local machine
+- saved API keys are stored locally and are no longer returned by the settings API after save
+- face-recognition data is treated as local-only developer data and should not be committed
 
 ## What It Does
 
@@ -116,7 +123,13 @@ python scripts/dev.py test
 python scripts/dev.py lint
 ```
 
-### 6. Run Quacky
+### 6. Audit dependencies
+
+```bash
+python -m pip_audit -r requirements.txt
+```
+
+### 7. Run Quacky
 
 Desktop app:
 
@@ -193,6 +206,12 @@ Run lint checks:
 python scripts/dev.py lint
 ```
 
+Run a dependency audit:
+
+```bash
+python -m pip_audit -r requirements.txt
+```
+
 The current Ruff rollout is enforced on the actively maintained developer, test, and backend runtime paths rather than the entire repository.
 
 Useful smoke check:
@@ -221,3 +240,4 @@ This project is optimized for local development and feature iteration. The most 
 - reliable branch integration
 - test coverage around runtime routing and feature logic
 - keeping docs aligned with the actual repo structure
+- protecting local secrets and biometric data from accidental exposure

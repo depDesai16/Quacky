@@ -769,7 +769,6 @@ class SettingsPanelMixin:
         self._api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._api_key_input.setMinimumHeight(SETTINGS_METRICS["control_h"])
         self._api_key_input.setMaximumHeight(SETTINGS_METRICS["control_h"])
-        self._api_key_input.setText(getattr(self, "_saved_api_key", ""))
         self._api_key_input.textChanged.connect(self._update_api_key_action_state)
         self._settings_inputs.append(self._api_key_input)
 
@@ -860,8 +859,8 @@ class SettingsPanelMixin:
         card.add_row(action_row_widget)
 
         hint = QLabel(
-            "Stored locally on this device. Test connection sends a one-time "
-            "verification request to Google."
+            "Stored locally on this device. Saved keys are not shown again after "
+            "storage. Test connection sends a one-time verification request to Google."
         )
         hint.setObjectName("settingsHint")
         hint.setWordWrap(True)
@@ -986,15 +985,12 @@ class SettingsPanelMixin:
 
     def _load_saved_api_key(self) -> str:
         """Load saved api key."""
-        value = getattr(self, "_saved_api_key", "")
-        key = str(value).strip() if value is not None else ""
-        self._saved_api_key = key
-        return key
+        return ""
 
     def _update_api_key_action_state(self, *_args):
         """Update api key action state."""
         key_text = self._api_key_input.text().strip() if self._api_key_input else ""
-        saved = bool(getattr(self, "_saved_api_key", ""))
+        saved = bool(getattr(self, "_has_saved_api_key", False))
 
         if self._api_key_save_btn is not None:
             self._api_key_save_btn.setEnabled(bool(key_text))
@@ -1027,7 +1023,7 @@ class SettingsPanelMixin:
         if "error" in result:
             self.toast.show_message(str(result["error"]), kind="error")
             return
-        self._saved_api_key = key
+        self._has_saved_api_key = True
         self._update_api_key_action_state()
         self.toast.show_message("API key saved locally via backend.", kind="success")
 
@@ -1048,7 +1044,7 @@ class SettingsPanelMixin:
         if "error" in result:
             self.toast.show_message(str(result["error"]), kind="error")
             return
-        self._saved_api_key = ""
+        self._has_saved_api_key = False
         self._update_api_key_action_state()
         self.toast.show_message("Stored API key removed.", kind="warn")
 

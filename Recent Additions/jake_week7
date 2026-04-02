@@ -1,0 +1,10 @@
+Week 7 Summary
+
+- Hardened the local backend so it binds only to loopback and rejects non-local HTTP requests.
+- Stopped exposing the saved Gemini API key through the settings API and updated the settings UI to track only whether a key exists.
+- Improved local settings persistence with atomic writes and restrictive file permissions where supported.
+- Removed the Windows `shell=True` app-launch path to reduce command-injection risk when opening configured apps.
+- Replaced face-recognition pickle storage with JSON-based persistence and removed committed biometric pickle artifacts from the repo.
+- Expanded `.gitignore` to cover biometric face-data storage, pickle artifacts, and local Codex workspace files.
+- Added dependency auditing to CI with `pip-audit` and set default GitHub Actions permissions to read-only.
+- Added targeted unit tests covering local settings storage and safer Windows app launching.

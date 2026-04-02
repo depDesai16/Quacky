@@ -184,15 +184,15 @@ def _ensure_command_exists(command: str) -> bool:
 def _launch_command(command: str) -> None:
     """
     Launch `command`, expanding env vars first.
-    On Windows use shell=True so cmd.exe handles backslashes and extra args
-    (e.g. --processStart) correctly without shlex mangling anything.
+    On Windows pass the raw command string directly to CreateProcess to avoid
+    shell injection while still allowing quoted executable paths and arguments.
     """
     expanded = _expand(command).strip()
     if not expanded:
         raise RuntimeError("Empty launch command.")
 
     if sys.platform.startswith("win"):
-        subprocess.Popen(expanded, shell=True)
+        subprocess.Popen(expanded)
     else:
         parts = shlex.split(expanded)
         if not parts:

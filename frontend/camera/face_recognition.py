@@ -1,7 +1,7 @@
 """
 face_recognition.py - Face recognition and user profile management
 """
-import pickle
+import json
 from pathlib import Path
 
 import cv2
@@ -25,8 +25,10 @@ class FaceRecognitionManager:
         script_dir = Path(__file__).parent
         self.data_dir = script_dir / "face_data"
         self.data_dir.mkdir(exist_ok=True)
-        self.encodings_file = self.data_dir / "face_encodings.pkl"
-        self.profiles_file = self.data_dir / "user_profiles.pkl"
+        self.encodings_file = self.data_dir / "face_encodings.json"
+        self.profiles_file = self.data_dir / "user_profiles.json"
+        self.legacy_encodings_file = self.data_dir / "face_encodings.pkl"
+        self.legacy_profiles_file = self.data_dir / "user_profiles.pkl"
         
         # Load existing data
         self.face_encodings = {}  # {user_name: [encoding1, encoding2, ...]}
@@ -41,28 +43,43 @@ class FaceRecognitionManager:
         """Load face encodings and user profiles from disk"""
         if self.encodings_file.exists():
             try:
-                with open(self.encodings_file, 'rb') as f:
-                    self.face_encodings = pickle.load(f)
+                raw = json.loads(self.encodings_file.read_text(encoding="utf-8"))
+                self.face_encodings = {
+                    str(name): [np.asarray(item, dtype=float) for item in encodings]
+                    for name, encodings in raw.items()
+                    if isinstance(encodings, list)
+                }
             except Exception as e:
                 print(f"Error loading face encodings: {e}")
                 self.face_encodings = {}
+        elif self.legacy_encodings_file.exists():
+            print("Ignoring legacy face_encodings.pkl; register users again to migrate to JSON storage.")
         
         if self.profiles_file.exists():
             try:
-                with open(self.profiles_file, 'rb') as f:
-                    self.user_profiles = pickle.load(f)
+                raw = json.loads(self.profiles_file.read_text(encoding="utf-8"))
+                self.user_profiles = raw if isinstance(raw, dict) else {}
             except Exception as e:
                 print(f"Error loading user profiles: {e}")
                 self.user_profiles = {}
+        elif self.legacy_profiles_file.exists():
+            print("Ignoring legacy user_profiles.pkl; register users again to migrate to JSON storage.")
     
     def _save_data(self):
         """Save face encodings and user profiles to disk"""
         try:
-            with open(self.encodings_file, 'wb') as f:
-                pickle.dump(self.face_encodings, f)
-            
-            with open(self.profiles_file, 'wb') as f:
-                pickle.dump(self.user_profiles, f)
+            encodings_payload = {
+                name: [encoding.astype(float).tolist() for encoding in encodings]
+                for name, encodings in self.face_encodings.items()
+            }
+            self.encodings_file.write_text(
+                json.dumps(encodings_payload, indent=2),
+                encoding="utf-8",
+            )
+            self.profiles_file.write_text(
+                json.dumps(self.user_profiles, indent=2),
+                encoding="utf-8",
+            )
         except Exception as e:
             print(f"Error saving data: {e}")
     

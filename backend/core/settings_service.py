@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import urllib.error
 import urllib.parse
@@ -11,6 +12,10 @@ _FILE = Path(__file__).resolve().parents[1] / "data" / "local_settings.json"
 
 def _ensure_parent() -> None:
     _FILE.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(_FILE.parent, 0o700)
+    except OSError:
+        pass
 
 
 def _read_data() -> dict:
@@ -25,7 +30,13 @@ def _read_data() -> dict:
 
 def _write_data(data: dict) -> None:
     _ensure_parent()
-    _FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    tmp_file = _FILE.with_suffix(f"{_FILE.suffix}.tmp")
+    tmp_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+    os.replace(tmp_file, _FILE)
+    try:
+        os.chmod(_FILE, 0o600)
+    except OSError:
+        pass
 
 
 def get_api_key() -> str:
@@ -33,6 +44,10 @@ def get_api_key() -> str:
         data = _read_data()
         value = data.get("gemini_api_key", "")
         return str(value).strip() if value is not None else ""
+
+
+def has_api_key() -> bool:
+    return bool(get_api_key())
 
 
 def save_api_key(api_key: str) -> None:
