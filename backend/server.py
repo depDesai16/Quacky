@@ -10,7 +10,6 @@ from backend.core.activity_store import list_calendar_events
 from backend.core.chat_runtime import ChatRuntime
 from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
-    has_api_key as has_saved_api_key,
 )
 from backend.core.settings_service import (
     get_open_app_confirmation_enabled,
@@ -20,6 +19,9 @@ from backend.core.settings_service import (
     save_open_app_confirmation_enabled,
     save_timer_confirmation_enabled,
     test_api_key,
+)
+from backend.core.settings_service import (
+    has_api_key as has_saved_api_key,
 )
 from backend.features.timers import get_active_timers_data
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
