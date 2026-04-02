@@ -1,30 +1,29 @@
 
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QPoint, QSignalBlocker
+import math as _math
+
+from PyQt6.QtCore import QPoint, QPointF, QRectF, QSignalBlocker, Qt, QThread, QTimer, pyqtSignal
+from PyQt6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
-    QWidget,
-    QVBoxLayout,
+    QComboBox,
+    QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
+    QListView,
+    QPushButton,
+    QScrollArea,
     QSizePolicy,
     QStackedWidget,
-    QLineEdit,
-    QScrollArea,
-    QComboBox,
-    QListView,
-    QFrame,
-    QStyledItemDelegate,
     QStyle,
-    QPushButton,
+    QStyledItemDelegate,
+    QVBoxLayout,
+    QWidget,
 )
-from PyQt6.QtGui import QPainter, QPen, QColor, QPainterPath, QFont, QFontMetrics
-from PyQt6.QtCore import QRectF, QPointF
-
-from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
-from .widgets.toggle_slider import ToggleSlider
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 from widgets.card_widget import CardWidget
 
-import math as _math
+from .widgets.toggle_slider import ToggleSlider
 
 SETTINGS_METRICS: dict = {
     "sidebar_width": 164,
@@ -699,6 +698,26 @@ class SettingsPanelMixin:
         self._toggle_sts.toggled.connect(self.set_speechtospeech_enabled)
         card.add_row(row2)
 
+        row3, self._toggle_timer_confirm = self._make_settings_toggle_row(
+            "Confirm Timers/Alarms",
+            "Ask for confirmation before setting or canceling timers and alarms.",
+            bool(getattr(self, "timer_confirmation_enabled", True)),
+        )
+        self._toggle_timer_confirm.toggled.connect(
+            self.set_timer_confirmation_enabled
+        )
+        card.add_row(row3)
+
+        row4, self._toggle_open_app_confirm = self._make_settings_toggle_row(
+            "Confirm App Opens",
+            "Ask for confirmation before opening applications.",
+            bool(getattr(self, "open_app_confirmation_enabled", True)),
+        )
+        self._toggle_open_app_confirm.toggled.connect(
+            self.set_open_app_confirmation_enabled
+        )
+        card.add_row(row4)
+
         lay.addStretch(1)
         return page
 
@@ -750,7 +769,6 @@ class SettingsPanelMixin:
         self._api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
         self._api_key_input.setMinimumHeight(SETTINGS_METRICS["control_h"])
         self._api_key_input.setMaximumHeight(SETTINGS_METRICS["control_h"])
-        self._api_key_input.setText(getattr(self, "_saved_api_key", ""))
         self._api_key_input.textChanged.connect(self._update_api_key_action_state)
         self._settings_inputs.append(self._api_key_input)
 
@@ -841,8 +859,8 @@ class SettingsPanelMixin:
         card.add_row(action_row_widget)
 
         hint = QLabel(
-            "Stored locally on this device. Test connection sends a one-time "
-            "verification request to Google."
+            "Stored locally on this device. Saved keys are not shown again after "
+            "storage. Test connection sends a one-time verification request to Google."
         )
         hint.setObjectName("settingsHint")
         hint.setWordWrap(True)
@@ -967,15 +985,12 @@ class SettingsPanelMixin:
 
     def _load_saved_api_key(self) -> str:
         """Load saved api key."""
-        value = getattr(self, "_saved_api_key", "")
-        key = str(value).strip() if value is not None else ""
-        self._saved_api_key = key
-        return key
+        return ""
 
     def _update_api_key_action_state(self, *_args):
         """Update api key action state."""
         key_text = self._api_key_input.text().strip() if self._api_key_input else ""
-        saved = bool(getattr(self, "_saved_api_key", ""))
+        saved = bool(getattr(self, "_has_saved_api_key", False))
 
         if self._api_key_save_btn is not None:
             self._api_key_save_btn.setEnabled(bool(key_text))
@@ -1008,7 +1023,7 @@ class SettingsPanelMixin:
         if "error" in result:
             self.toast.show_message(str(result["error"]), kind="error")
             return
-        self._saved_api_key = key
+        self._has_saved_api_key = True
         self._update_api_key_action_state()
         self.toast.show_message("API key saved locally via backend.", kind="success")
 
@@ -1029,7 +1044,7 @@ class SettingsPanelMixin:
         if "error" in result:
             self.toast.show_message(str(result["error"]), kind="error")
             return
-        self._saved_api_key = ""
+        self._has_saved_api_key = False
         self._update_api_key_action_state()
         self.toast.show_message("Stored API key removed.", kind="warn")
 

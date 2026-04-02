@@ -1,9 +1,7 @@
 
-from PyQt6.QtCore    import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
-from PyQt6.QtGui     import QColor
-from PyQt6.QtWidgets import QLabel, QGraphicsOpacityEffect
-
-from theme import ThemeManager, FONT_STACK
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PyQt6.QtWidgets import QGraphicsOpacityEffect, QLabel
+from theme import FONT_STACK, ThemeManager
 
 TOAST_DURATION_MS = 2500
 FADE_IN_MS        = 200

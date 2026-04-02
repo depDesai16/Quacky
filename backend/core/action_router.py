@@ -3,10 +3,21 @@
 Intent dispatcher for Quacky.
 
 Receives classified intents from intent_classifier.py and routes
-weather, holiday, and open_app to their handlers.
+directly handled intents to their tool handlers.
 """
 
-from backend.tools import get_weather, get_holidays, open_app
+from backend.tools import (
+    cancel_timer,
+    forget_memory_item,
+    get_holidays,
+    get_weather,
+    list_memory,
+    list_timers,
+    open_app,
+    send_email,
+    set_alarm,
+    set_timer,
+)
 
 
 def dispatch_intents(intents: list[dict]) -> str | None:
@@ -43,6 +54,58 @@ def dispatch_intents(intents: list[dict]) -> str | None:
             if result:
                 results.append(result)
 
+        elif kind == "send_email":
+            result = send_email(
+                email_address=intent.get("email_address", ""),
+                subject=intent.get("subject", ""),
+                body=intent.get("body", ""),
+            )
+            if result:
+                results.append(result)
+
+        elif kind == "set_timer":
+            try:
+                duration_seconds = int(intent.get("duration_seconds") or 0)
+            except (TypeError, ValueError):
+                duration_seconds = 0
+            result = set_timer(
+                duration_seconds=duration_seconds,
+                label=intent.get("label", ""),
+            )
+            if result:
+                results.append(result)
+
+        elif kind == "set_alarm":
+            result = set_alarm(
+                alarm_time=intent.get("alarm_time", ""),
+                label=intent.get("label", ""),
+            )
+            if result:
+                results.append(result)
+
+        elif kind == "list_timers":
+            result = list_timers()
+            if result:
+                results.append(result)
+
+        elif kind == "cancel_timer":
+            result = cancel_timer(timer_ref=intent.get("timer_ref", ""))
+            if result:
+                results.append(result)
+
+        elif kind == "list_memory":
+            result = list_memory(scope=intent.get("scope", "all"))
+            if result:
+                results.append(result)
+
+        elif kind == "forget_memory_item":
+            result = forget_memory_item(
+                scope=intent.get("scope", ""),
+                value=intent.get("value", ""),
+            )
+            if result:
+                results.append(result)
+
     return "\n\n".join(results) if results else None
 
 
@@ -66,13 +129,24 @@ def extract_clarify_intent(intents: list[dict]) -> dict | None:
     return None
 
 
+def extract_confirmable_intent(intents: list[dict]) -> dict | None:
+    """
+    Return the first intent that should require explicit user confirmation.
+    """
+    for intent in intents:
+        kind = intent.get("intent", "").lower()
+        if kind in ("open_app", "send_email", "set_timer", "set_alarm", "cancel_timer", "forget_all_memory"):
+            return intent
+    return None
+
+
 def validate_calendar_intent(intent: dict) -> str | None:
     """
     Validate a calendar intent before execution.
     Returns an error message string if validation fails, None if valid.
     """
-    from datetime import datetime, timedelta
     import re
+    from datetime import datetime
 
     kind = intent.get("intent", "").lower()
 
@@ -107,6 +181,174 @@ def validate_calendar_intent(intent: dict) -> str | None:
             year = int(year_match.group(1))
             if year > datetime.now().year + 2:
                 return f"Event is scheduled for {year}, which is quite far in the future. Is that correct?"
+
+    return None
+
+
+def validate_confirmable_intent(intent: dict) -> str | None:
+    """
+    Validate high-impact non-calendar intents before confirmation.
+    """
+    kind = intent.get("intent", "").lower()
+
+    if kind == "open_app":
+        app = (intent.get("app") or "").strip()
+        if not app:
+            return "App name is required to open an app."
+        if len(app) > 255:
+            return "App name is too long (max 255 characters)."
+        return None
+
+    if kind == "send_email":
+        email_address = (intent.get("email_address") or "").strip()
+        subject = (intent.get("subject") or "").strip()
+        body = (intent.get("body") or "").strip()
+
+        if not email_address:
+            return "Recipient email address is required."
+        if "@" not in email_address or "." not in email_address.split("@")[-1]:
+            return "Recipient email address looks invalid."
+        if not subject:
+            return "Email subject is required."
+        if not body:
+            return "Email body is required."
+        if len(subject) > 255:
+            return "Email subject is too long (max 255 characters)."
+        if len(body) > 10000:
+            return "Email body is too long (max 10000 characters)."
+
+    if kind == "set_timer":
+        try:
+            duration = int(intent.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            duration = 0
+        if duration <= 0:
+            return "Timer duration must be greater than zero seconds."
+
+    if kind == "set_alarm":
+        alarm_time = (intent.get("alarm_time") or "").strip()
+        if not alarm_time:
+            return "Alarm time is required."
+
+    if kind == "cancel_timer":
+        timer_ref = (intent.get("timer_ref") or "").strip()
+        if not timer_ref:
+            return "Timer/alarm reference is required to cancel one."
+
+    if kind == "forget_all_memory":
+        scope = (intent.get("scope") or "all").strip().lower()
+        if scope in {"prefs", "pref", "preference"}:
+            scope = "preferences"
+        elif scope in {"task", "todo", "notes"}:
+            scope = "tasks"
+        if scope not in {"all", "preferences", "tasks"}:
+            return "Memory scope must be all, preferences, or tasks."
+
+    return None
+
+
+def build_confirmable_action(intent: dict) -> dict | None:
+    """
+    Convert a confirmable non-calendar intent into a pending_action payload.
+    """
+    kind = intent.get("intent", "").lower()
+
+    if kind == "open_app":
+        app = (intent.get("app") or "").strip()
+        if not app:
+            return None
+        return {
+            "kind": "open_app",
+            "op": "open",
+            "args": {"app_name": app},
+            "summary": f"open '{app}'",
+        }
+
+    if kind == "send_email":
+        email_address = (intent.get("email_address") or "").strip()
+        subject = (intent.get("subject") or "").strip()
+        body = (intent.get("body") or "").strip()
+        if not (email_address and subject and body):
+            return None
+
+        body_preview = " ".join(body.split())
+        if len(body_preview) > 120:
+            body_preview = body_preview[:117].rstrip() + "..."
+
+        return {
+            "kind": "send_email",
+            "op": "send",
+            "args": {
+                "email_address": email_address,
+                "subject": subject,
+                "body": body,
+            },
+            "summary": (
+                f"send an email to '{email_address}' "
+                f"with subject '{subject}' and body preview '{body_preview}'"
+            ),
+        }
+
+    if kind == "set_timer":
+        try:
+            duration = int(intent.get("duration_seconds") or 0)
+        except (TypeError, ValueError):
+            return None
+        if duration <= 0:
+            return None
+        label = (intent.get("label") or "").strip()
+        label_summary = f" labeled '{label}'" if label else ""
+        return {
+            "kind": "timer",
+            "op": "set_timer",
+            "args": {"duration_seconds": duration, "label": label},
+            "summary": f"set a timer for {duration} seconds{label_summary}",
+        }
+
+    if kind == "set_alarm":
+        alarm_time = (intent.get("alarm_time") or "").strip()
+        if not alarm_time:
+            return None
+        label = (intent.get("label") or "").strip()
+        label_summary = f" labeled '{label}'" if label else ""
+        return {
+            "kind": "timer",
+            "op": "set_alarm",
+            "args": {"alarm_time": alarm_time, "label": label},
+            "summary": f"set an alarm for '{alarm_time}'{label_summary}",
+        }
+
+    if kind == "cancel_timer":
+        timer_ref = (intent.get("timer_ref") or "").strip()
+        if not timer_ref:
+            return None
+        return {
+            "kind": "timer",
+            "op": "cancel",
+            "args": {"timer_ref": timer_ref},
+            "summary": f"cancel timer/alarm '{timer_ref}'",
+        }
+
+    if kind == "forget_all_memory":
+        scope = (intent.get("scope") or "all").strip().lower()
+        if scope in {"prefs", "pref", "preference"}:
+            scope = "preferences"
+        elif scope in {"task", "todo", "notes"}:
+            scope = "tasks"
+        if scope not in {"all", "preferences", "tasks"}:
+            scope = "all"
+
+        scope_summary = {
+            "all": "all remembered preferences and task notes",
+            "preferences": "all remembered preferences",
+            "tasks": "all remembered task notes",
+        }[scope]
+        return {
+            "kind": "memory",
+            "op": "clear_all",
+            "args": {"scope": scope},
+            "summary": f"forget {scope_summary}",
+        }
 
     return None
 

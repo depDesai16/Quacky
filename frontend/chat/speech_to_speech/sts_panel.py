@@ -19,26 +19,44 @@ Layout
 """
 
 import math
+import os
+import sys
+
 from PyQt6.QtCore import (
-    Qt, QTimer, QRectF, QPointF, QSize, pyqtSignal,
-    QPropertyAnimation, QEasingCurve, pyqtProperty,
+    QEasingCurve,
+    QPointF,
+    QPropertyAnimation,
+    QRectF,
+    QSize,
+    Qt,
+    QTimer,
+    pyqtProperty,
+    pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QPainter, QColor, QPen, QBrush, QPainterPath,
-    QRadialGradient, QFont,
+    QBrush,
+    QColor,
+    QFont,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QRadialGradient,
 )
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QAbstractButton, QSizePolicy, QScrollArea, QFrame,
+    QAbstractButton,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
-import sys
-import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)
 ))))
-from theme import ThemeManager, FONT_FAMILY_UI, FONT_STACK
-
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 
 # ── State constants ────────────────────────────────────────────────────────────
 STATE_IDLE       = "idle"
@@ -352,19 +370,18 @@ class _TranscriptBubble(QFrame):
         self._apply_style()
 
     def _apply_style(self):
-        t = self._tokens
-        self.setStyleSheet(f"""
-            QFrame#transcriptFrame {{
+        self.setStyleSheet("""
+            QFrame#transcriptFrame {
                 background: transparent;
                 border: none;
-            }}
-            QScrollArea#transcriptScroll {{
+            }
+            QScrollArea#transcriptScroll {
                 background: transparent;
                 border: none;
-            }}
-            QWidget#transcriptInner {{
+            }
+            QWidget#transcriptInner {
                 background: transparent;
-            }}
+            }
         """)
 
 

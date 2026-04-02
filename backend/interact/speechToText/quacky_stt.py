@@ -18,15 +18,16 @@ Update (non-breaking):
   - If response_handler is set: worker sets RESPONDING then calls handler(result)
   - If not set: preserves existing behavior (logs AI response if result is a string)
 """
-import speech_recognition as sr
+import os
+import queue
+import sys
 import threading
 import time
-import os
-import sys
-import queue
-import pyaudio
-from typing import Optional, Callable, Any
 from enum import Enum, auto
+from typing import Any, Callable, Optional
+
+import pyaudio
+import speech_recognition as sr
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 parent_dir = os.path.dirname(script_dir)

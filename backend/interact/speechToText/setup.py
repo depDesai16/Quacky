@@ -2,10 +2,11 @@
 """
 Setup script for cross-platform speech-to-text dependencies
 """
+import os
+import platform
 import subprocess
 import sys
-import platform
-import os
+
 
 def install_dependencies():
     """Install required dependencies based on the operating system"""

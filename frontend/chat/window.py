@@ -1,34 +1,51 @@
 import os
 import sys
 
-CHAT_DIR = os.path.dirname(os.path.abspath(__file__))
+CHAT_DIR     = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.dirname(CHAT_DIR)
-ROOT_DIR = os.path.dirname(FRONTEND_DIR)
+ROOT_DIR     = os.path.dirname(FRONTEND_DIR)
 if ROOT_DIR not in sys.path:
     sys.path.insert(0, ROOT_DIR)
 
-from PyQt6.QtCore    import (Qt, QThread, pyqtSignal, QObject,
-                              QPropertyAnimation, QEasingCurve, QEvent, QTimer,
-                              QByteArray, QBuffer, QIODevice, QUrl)
-from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout,
-                              QLabel, QGraphicsOpacityEffect)
-from PyQt6.QtGui     import QKeyEvent, QCursor
-from PyQt6.QtCore    import QSettings, QPoint, QSignalBlocker
+from draw_icon import draw_icon
+from PyQt6.QtCore import (
+    QBuffer,
+    QByteArray,
+    QEasingCurve,
+    QEvent,
+    QIODevice,
+    QObject,
+    QPoint,
+    QPropertyAnimation,
+    QSettings,
+    QSignalBlocker,
+    Qt,
+    QThread,
+    QTimer,
+    QUrl,
+    pyqtSignal,
+)
+from PyQt6.QtGui import QCursor, QKeyEvent, QKeySequence, QShortcut
 from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
-
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsOpacityEffect,
+    QLabel,
+    QVBoxLayout,
+    QWidget,
+)
+from settings import SettingsPanel
 from theme import ThemeManager
-from widgets.quacky_widget import get_quacky_icon
-from .model_window import ModelWindow
+from widgets.card_widget import CardWidget
+from widgets.chat_timeline import ChatTimeline
+from widgets.composer import Composer
+from widgets.header_bar import HeaderBar
+from widgets.icon_buttons import MicButton, SendButton
+from widgets.toast import Toast
+
 from backend.client import QuackyClient
 
-from widgets.card_widget   import CardWidget
-from widgets.header_bar    import HeaderBar
-from widgets.chat_timeline import ChatTimeline
-from widgets.composer      import Composer
-from widgets.icon_buttons  import MicButton, SendButton
-from widgets.toast         import Toast
-
-from settings import SettingsPanel
+from .model_window import ModelWindow
 
 MAX_WINDOW_W = 1040
 MIN_WINDOW_W = 600
@@ -143,6 +160,8 @@ class QuackyWindow(QWidget):
         self._sts_audio_data: QByteArray | None = None
         self._sts_tts_available     = True
         self.speechtospeech_enabled = True
+        self.open_app_confirmation_enabled = True
+        self.timer_confirmation_enabled = True
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -172,6 +191,8 @@ class QuackyWindow(QWidget):
         ThemeManager.load()
         self._restore_geometry()
         self._load_speech_to_speech_settings()
+        self._load_open_app_confirmation_settings()
+        self._load_timer_confirmation_settings()
 
         self.model_window = None
         try:
@@ -185,11 +206,7 @@ class QuackyWindow(QWidget):
                 )
             else:
                 self.model_window.move(1040, 88)
-            # Show the model window by default
-            self.model_window.show()
-            print(f"✓ Model window created and shown at position: {self.model_window.pos()}")
-        except Exception as e:
-            print(f"✗ Failed to create model window: {e}")
+        except Exception:
             self.model_window = None
 
         self._theme_fade_overlay = None
@@ -197,6 +214,8 @@ class QuackyWindow(QWidget):
 
         self._build_ui()
         self._install_resize_cursor_tracking()
+        self._timers_events_shortcut = QShortcut(QKeySequence("Ctrl+Y"), self)
+        self._timers_events_shortcut.activated.connect(self._toggle_timers_events_panel)
         ThemeManager.subscribe(self._on_theme_changed)
 
     def _load_speech_to_speech_settings(self):
@@ -216,6 +235,34 @@ class QuackyWindow(QWidget):
         if "tts_available" in result:
             self._sts_tts_available = bool(result.get("tts_available"))
 
+    def _load_open_app_confirmation_settings(self):
+        """Load open-app confirmation preference from backend when available."""
+        if not hasattr(self._client, "get_open_app_confirmation_settings"):
+            return
+        try:
+            result = self._client.get_open_app_confirmation_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+        if "enabled" in result:
+            self.open_app_confirmation_enabled = bool(result.get("enabled"))
+
+    def _load_timer_confirmation_settings(self):
+        """Load timer/alarm confirmation preference from backend when available."""
+        if not hasattr(self._client, "get_timer_confirmation_settings"):
+            return
+        try:
+            result = self._client.get_timer_confirmation_settings()
+        except Exception:
+            return
+
+        if not isinstance(result, dict):
+            return
+        if "enabled" in result:
+            self.timer_confirmation_enabled = bool(result.get("enabled"))
+
 
     def _build_ui(self):
         """Build ui."""
@@ -228,7 +275,7 @@ class QuackyWindow(QWidget):
         cl.setContentsMargins(0, 0, 0, 0)
         cl.setSpacing(0)
 
-        self.header = HeaderBar(icon=get_quacky_icon(), parent=self.card)
+        self.header = HeaderBar(icon=draw_icon(), parent=self.card)
         self.header.minimize_clicked.connect(self.hide)
         self.header.close_clicked.connect(QApplication.instance().quit)
         if hasattr(self.header, "user_chip_clicked"):
@@ -248,7 +295,7 @@ class QuackyWindow(QWidget):
         chat_inner.setContentsMargins(0, 0, 0, 0)
         chat_inner.setSpacing(0)
         
-        self.timeline = ChatTimeline(draw_icon_fn=get_quacky_icon, parent=self._chat_container)
+        self.timeline = ChatTimeline(draw_icon_fn=draw_icon, parent=self._chat_container)
         self._wire_suggestions()
         chat_inner.addWidget(self.timeline, 1)
         
@@ -264,6 +311,8 @@ class QuackyWindow(QWidget):
         self._settings_container = SettingsPanel(
             model_window=self.model_window,
             speechtospeech_enabled=self.speechtospeech_enabled,
+            open_app_confirmation_enabled=self.open_app_confirmation_enabled,
+            timer_confirmation_enabled=self.timer_confirmation_enabled,
             toast_callback=self._show_settings_toast,
             client=self._client,
             parent=self.card,
@@ -279,7 +328,7 @@ class QuackyWindow(QWidget):
         self.stacked_widget.addWidget(self._settings_container) # index 2
 
         # Speech-to-speech panel/runtime (isolated from chat mic pipeline)
-        from chat.speech_to_speech import SpeechToSpeechPanel, SpeechToSpeechController
+        from chat.speech_to_speech import SpeechToSpeechController, SpeechToSpeechPanel
         self._sts_panel = SpeechToSpeechPanel(parent=self.card)
         self._sts_panel.back_requested.connect(self._hide_sts_panel)
         self._sts_panel.start_requested.connect(self._on_sts_start)
@@ -316,6 +365,7 @@ class QuackyWindow(QWidget):
         self.sts_btn.clicked.connect(self._show_sts_panel)
         self._update_sts_button_hint()
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
+        self.composer.plus_btn.timers_events_clicked.connect(self._toggle_timers_events_panel)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
         self.composer.input_field.textChanged.connect(self._update_toast_anchor)
@@ -325,7 +375,7 @@ class QuackyWindow(QWidget):
         root.addWidget(self.card)
         self.toast = Toast(self.card)
         self._update_toast_anchor()
-
+    
     def _toggle_camera_view(self):
         """Toggle the camera panel on/off."""
         is_camera = self.stacked_widget.currentIndex() == 1
@@ -443,7 +493,6 @@ class QuackyWindow(QWidget):
     
     def _register_new_user(self):
         """Show registration dialog"""
-        from PyQt6.QtWidgets import QMessageBox
         
         # Switch to camera view
         if self.stacked_widget.currentIndex() != 1:
@@ -451,7 +500,6 @@ class QuackyWindow(QWidget):
     
     def _start_face_id_switch(self):
         """Start Face ID authentication to switch profiles"""
-        from camera.face_id_dialog import FaceIDDialog
         
         # Stop camera if it's running
         was_on_camera = self.stacked_widget.currentIndex() == 1
@@ -468,7 +516,7 @@ class QuackyWindow(QWidget):
         # Create and show Face ID dialog
         dialog = FaceIDDialog(self.face_recognition, self)
         dialog.user_authenticated.connect(self._on_face_id_success)
-        result = dialog.exec()
+        dialog.exec()
         
         # Restart camera tab if it was on camera view
         if was_on_camera:
@@ -831,20 +879,8 @@ class QuackyWindow(QWidget):
         if busy:
             self.header.set_status("thinking")
             self.timeline.show_thinking()
-            # Start thinking animation on the big duck
-            if self.model_window:
-                print("🦆 Starting thinking animation...")
-                if self.model_window and self.model_window.quacky_widget:
-                    self.model_window.quacky_widget.start_thinking()
-            else:
-                print("⚠️  No model window available")
         else:
             self.header.set_status("idle")
-            # Stop thinking animation on the big duck
-            if self.model_window:
-                print("🦆 Stopping thinking animation")
-                if self.model_window and self.model_window.quacky_widget:
-                    self.model_window.quacky_widget.stop_thinking()
 
     def _update_send_btn(self):
         """Update send btn."""
@@ -1037,6 +1073,10 @@ class QuackyWindow(QWidget):
             self._show_shortcuts_panel()
             return
 
+        if mod & Qt.KeyboardModifier.ControlModifier and key == Qt.Key.Key_Y:
+            self._toggle_timers_events_panel()
+            return
+
         if key == Qt.Key.Key_Escape:
             if self.composer.text().strip():
                 self.composer.clear()
@@ -1083,15 +1123,66 @@ class QuackyWindow(QWidget):
         'r':    Qt.CursorShape.SizeHorCursor,
         'drag': Qt.CursorShape.ArrowCursor,
     }
+    _SYSTEM_RESIZE_EDGES = {
+        't':  Qt.Edge.TopEdge,
+        'b':  Qt.Edge.BottomEdge,
+        'l':  Qt.Edge.LeftEdge,
+        'r':  Qt.Edge.RightEdge,
+        'tl': Qt.Edge.TopEdge | Qt.Edge.LeftEdge,
+        'tr': Qt.Edge.TopEdge | Qt.Edge.RightEdge,
+        'bl': Qt.Edge.BottomEdge | Qt.Edge.LeftEdge,
+        'br': Qt.Edge.BottomEdge | Qt.Edge.RightEdge,
+    }
+
+    def _window_handle(self):
+        """Return native window handle if available."""
+        handle = self.windowHandle()
+        if handle is None:
+            self.winId()
+            handle = self.windowHandle()
+        return handle
+
+    def _start_system_move(self) -> bool:
+        """Ask the compositor/window manager to move this frameless window."""
+        handle = self._window_handle()
+        if handle is None or not hasattr(handle, "startSystemMove"):
+            return False
+        try:
+            return bool(handle.startSystemMove())
+        except Exception:
+            return False
+
+    def _start_system_resize(self, region: str) -> bool:
+        """Ask the compositor/window manager to resize this frameless window."""
+        edges = self._SYSTEM_RESIZE_EDGES.get(region)
+        if edges is None:
+            return False
+        handle = self._window_handle()
+        if handle is None or not hasattr(handle, "startSystemResize"):
+            return False
+        try:
+            return bool(handle.startSystemResize(edges))
+        except Exception:
+            return False
 
     def mousePressEvent(self, event):
         """Handle the mousepress event."""
         if event.button() == Qt.MouseButton.LeftButton:
             region = self._hit_region(event.position().toPoint())
             if region == 'drag':
+                if self._start_system_move():
+                    self._drag_pos = None
+                    self._resize_dir = None
+                    event.accept()
+                    return
                 self._drag_pos   = event.globalPosition().toPoint()
                 self._resize_dir = None
             elif region:
+                if self._start_system_resize(region):
+                    self._drag_pos = None
+                    self._resize_dir = None
+                    event.accept()
+                    return
                 self._drag_pos         = event.globalPosition().toPoint()
                 self._resize_dir       = region
                 self._resize_start_geo = self.geometry()
@@ -1200,6 +1291,41 @@ class QuackyWindow(QWidget):
         panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
         panel.show()
         self._shortcuts_panel = panel
+
+    def _fetch_timers_events_dashboard(self) -> dict:
+        """Fetch dashboard payload for timers/alarms and calendar actions."""
+        if not hasattr(self._client, "get_timers_events_dashboard"):
+            return {"timers": [], "events": []}
+        try:
+            payload = self._client.get_timers_events_dashboard()
+        except Exception:
+            return {"timers": [], "events": []}
+        if isinstance(payload, dict):
+            return payload
+        return {"timers": [], "events": []}
+
+    def _toggle_timers_events_panel(self):
+        """Show/hide timers and calendar events dashboard panel."""
+        if hasattr(self, "_timers_events_panel") and self._timers_events_panel.isVisible():
+            self._timers_events_panel.close()
+            return
+
+        from .timers_events_panel import TimersEventsPanel
+        panel = TimersEventsPanel(
+            ThemeManager.tokens(),
+            fetch_dashboard=self._fetch_timers_events_dashboard,
+            parent=self,
+        )
+        ThemeManager.subscribe(panel.apply_theme)
+        panel.closed.connect(lambda: ThemeManager.unsubscribe(panel.apply_theme))
+        panel.adjustSize()
+        px = (self.width() - panel.width()) // 2
+        py = (self.height() - panel.height()) // 2
+        from PyQt6.QtCore import QPoint as _QP
+
+        panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
+        panel.show()
+        self._timers_events_panel = panel
 
     def _restore_geometry(self):
         """Handle restore geometry."""

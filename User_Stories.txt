@@ -16,16 +16,16 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want the assistant to perform basic actions within apps it has permission to use, so that I can save time on repetitive tasks.
 
-[Not Started] As a user, I want the assistant to set timers and alarms, so that I can manage my time effectively.
+[Done] As a user, I want the assistant to set timers and alarms, so that I can manage my time effectively.
 
 [Not Started] As a user, I want to choose which applications the assistant is allowed to control, so that I feel safe about what it can access.
 
 [Not Started] As a user, I want to enable or disable the assistant’s screen viewing at any time, so that I remain in control of my privacy.
 
-[Not Started] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
+[Done] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
 
-[Not Started] As a user, I want the assistant to learn my preferences over time, so that it becomes more personalized and helpful.
+[Partial] As a user, I want the assistant to learn my preferences over time, so that it becomes more personalized and helpful.
 
 [Not Started] As a user, I want the assistant to suggest helpful actions based on what I am doing, so that I can be more productive.
 
-[Partial] As a user, I want the assistant to remember tasks and context during a session, so that I do not need to repeat information.
+[Done] As a user, I want the assistant to remember tasks and context during a session, so that I do not need to repeat information.

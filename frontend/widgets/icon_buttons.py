@@ -1,8 +1,6 @@
-from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
-                              QRectF, QPointF, pyqtProperty)
-from PyQt6.QtGui     import (QPainter, QPainterPath, QPen, QBrush, QColor)
-from PyQt6.QtWidgets import QAbstractButton, QSizePolicy
-
+from PyQt6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRectF, Qt, pyqtProperty
+from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
+from PyQt6.QtWidgets import QAbstractButton
 from theme import ThemeManager
 
 SIZE = 32
@@ -321,7 +319,6 @@ class SpeechToSpeechButton(_CircleBase):
 
     def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
         """Draw animated waveform bars icon."""
-        from PyQt6.QtCore import QRectF as _RectF
         pen = QPen(color, 1.8, Qt.PenStyle.SolidLine,
                    Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
         p.setPen(pen)

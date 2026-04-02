@@ -2,3 +2,10 @@ __pycache__/
 .env
 .venv/
 backend/data/local_settings.json
+backend/data/user_memory.json
+backend/data/activity_log.json
+*.pkl
+frontend/camera/face_data/
+.ruff_cache/
+.vscode/
+.codex

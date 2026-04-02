@@ -1,172 +1,243 @@
 # Quacky
-A repo for Quacky, the unhinged desktop assistant with JARVIS-like voice interaction.
 
-## Features
-- **Voice-activated AI assistant** with "Hey Quacky" wake word detection
-- **Continuous speech recognition** with automatic microphone selection
-- **Gemini AI integration** for intelligent responses and tool usage
-- **Cross-platform speech-to-text** recognition
-- **System tool integration** (calendar, email, app launching)
-- **Clean voice command interface** with quit functionality
+Quacky is a local-first desktop assistant built in Python. It combines a PyQt desktop UI, a lightweight local HTTP backend, Gemini-based chat/tool orchestration, and a growing set of assistant features such as calendar actions, timers, memory, weather, and app launching.
 
-## The Stack
-- **Google Gemini AI**: Advanced language model with tool support
-- **SpeechRecognition**: Cross-platform speech-to-text
-- **PyAudio**: Audio input handling
-- **HTTP Server**: Local AI backend with REST API
-- **Python**: Core application logic
+## Run Model
 
-## Project Structure
-```
+Quacky is not deployed through GitHub Actions.
+
+Current behavior:
+
+- GitHub Actions runs CI only
+- the app itself runs locally on your machine
+- you need local setup plus a valid `.env` to launch it
+
+GitHub Actions currently handles:
+
+- dependency installation in CI
+- Ruff lint checks
+- automated test execution
+- Python dependency auditing with `pip-audit`
+
+It does not:
+
+- deploy Quacky to a server
+- host the backend anywhere remote
+- provide a hosted desktop or web instance
+
+Current local security posture:
+
+- the backend is intended to be reachable only from the local machine
+- saved API keys are stored locally and are no longer returned by the settings API after save
+- face-recognition data is treated as local-only developer data and should not be committed
+
+## What It Does
+
+- Chat with a local desktop assistant UI
+- Route user requests through a local backend server
+- Use Gemini for conversation, intent classification, and response styling
+- Execute assistant features such as timers, alarms, calendar actions, memory, app launching, weather, and holidays
+- Optionally generate speech output through ElevenLabs
+
+## Repo Layout
+
+```text
 Quacky/
-├── backend/
-│   ├── server.py           # Gemini AI backend server
-│   ├── client.py           # HTTP client for AI communication
-│   └── tools.py            # AI tools (calendar, email, apps)
-├── speechToText/
-│   ├── quacky_stt.py       # Main speech-to-text system
-│   ├── speech_to_text.py   # Core STT module
-│   └── setup.py            # STT setup script
-├── quacky_full.py          # Complete integrated system
-├── run_quacky.py           # Simple launcher
-├── requirements.txt        # Python dependencies
-└── .env                    # API keys (create from .env.example)
+├── backend/                 # Local HTTP backend and assistant logic
+├── frontend/                # PyQt desktop UI
+├── scripts/                 # Setup and local developer entrypoints
+├── tests/                   # Unit tests and smoke tests
+├── .github/workflows/       # CI
+├── README.md
+└── requirements.txt
 ```
 
-## Setup
+Key areas:
 
-### Quick Start
-1. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+- `backend/server.py`: HTTP server and route handlers
+- `backend/core/`: chat runtime, routing, confirmation, persistence helpers
+- `backend/features/`: feature implementations such as timers and calendar helpers
+- `backend/tools/`: tool-facing wrappers used by runtime and router layers
+- `frontend/app.py`: desktop app bootstrap
+- `frontend/chat/`: main chat window and chat-specific UI
+- `frontend/settings/`: settings UI and controller logic
+- `scripts/dev.py`: unified local setup and run entrypoint
 
-2. **Set up Gemini API:**
-   - Get API key from https://aistudio.google.com/
-   - Copy `.env.example` to `.env`
-   - Add your API key: `GEMINI_API_KEY=your_key_here`
+## Quick Start
 
-3. **Run the full system:**
-   ```bash
-   python quacky_full.py
-   ```
+### 1. Set up the project
 
-4. **Start talking:**
-   - Say "Hey Quacky, what's the weather?"
-   - Say "Hey Quacky, open my calendar"
-   - Say "quit" to exit
+macOS/Linux:
 
-### Alternative Launchers
 ```bash
-# Simple speech-to-text only
-python run_quacky.py
-
-# From speechToText folder
-cd speechToText
-python quacky_stt.py
-
-# For text to text (testing features purposes)
-python -m backend.server # Terminal 1
-python backend/cli.py # Terminal 2 - use terminal 2 for chatting with ai
+./scripts/setup.sh
 ```
 
-### Platform-Specific Notes
+Windows PowerShell:
 
-**Linux (Ubuntu/Debian):**
+```powershell
+.\scripts\setup.ps1
+```
+
+This will:
+
+- create `.venv`
+- install dependencies from `requirements.txt`
+- copy `.env.example` to `.env` if needed
+
+### 2. Add API keys
+
+At minimum, set one of these in `.env`:
+
+```env
+GEMINI_API_KEY=your_key_here
+```
+
+or
+
+```env
+GOOGLE_API_KEY=your_key_here
+```
+
+Optional keys:
+
+- `ELEVENLABS_API_KEY`
+- `WEATHERAPI_KEY`
+- `CALENDARIFIC_API_KEY`
+
+### 3. Validate local setup
+
+```bash
+python scripts/dev.py doctor
+```
+
+### 4. Run the full test suite
+
+```bash
+python scripts/dev.py test
+```
+
+### 5. Run lint checks
+
+```bash
+python scripts/dev.py lint
+```
+
+### 6. Audit dependencies
+
+```bash
+python -m pip_audit -r requirements.txt
+```
+
+### 7. Run Quacky
+
+Desktop app:
+
+```bash
+python scripts/dev.py ui
+```
+
+Backend only:
+
+```bash
+python scripts/dev.py server
+```
+
+Text client against a running backend:
+
+```bash
+python scripts/dev.py cli
+```
+
+By default, `ui`, `server`, and `cli` run Ruff and the full test suite before launching. During active debugging you can bypass that with `--skip-tests`.
+
+## Developer Commands
+
+Unified entrypoint:
+
+```bash
+python scripts/dev.py setup
+python scripts/dev.py doctor
+python scripts/dev.py lint
+python scripts/dev.py test
+python scripts/dev.py server
+python scripts/dev.py ui
+python scripts/dev.py cli
+```
+
+Wrapper scripts still exist for convenience:
+
+- `./scripts/setup.sh`
+- `./scripts/run-server.sh`
+- `./scripts/run-ui.sh`
+- `.\scripts\setup.ps1`
+- `.\scripts\run-server.ps1`
+- `.\scripts\run-ui.ps1`
+
+## Platform Notes
+
+Linux:
+
 ```bash
 sudo apt-get install python3-pyaudio portaudio19-dev
 ```
 
-**macOS:**
+macOS:
+
 ```bash
 brew install portaudio
 ```
 
-**Windows:**
-PyAudio should install automatically. If issues occur, install Visual C++ Build Tools.
+Windows:
 
-## Architecture
+- If PyAudio fails to install, install the Visual C++ Build Tools first.
 
-### Two-Process System
-1. **Speech-to-Text Client**: Handles voice recognition and microphone input
-2. **AI Backend Server**: Processes commands through Gemini AI with tool access
+## Testing
 
-### Voice Interaction Flow
-1. Continuous listening for "Hey Quacky" wake word
-2. Capture command after wake word detection
-3. Send to Gemini AI backend with tool access
-4. Display AI response with personality
-5. Return to listening for next command
+Run the test suite:
 
-## Usage
-
-### Voice Commands
-- **"Hey Quacky, [your command]"** - General AI interaction
-- **"Hey Quacky, what's on my calendar?"** - Uses calendar tool
-- **"Hey Quacky, email John about the meeting"** - Uses email tool
-- **"Hey Quacky, open Spotify"** - Uses app launcher tool
-- **"quit"** - Exit the system
-
-### API Usage (Advanced)
-
-```python
-from backend.client import QuackyClient
-
-# Connect to AI backend
-client = QuackyClient("http://localhost:8000")
-
-# Start chat with personality
-chat = client.start_chat(
-    system="You are Quacky, an unhinged but helpful assistant."
-)
-
-# Send message
-response = client.send_message(chat["chat_id"], "What's the weather?")
-print(response["text"])
+```bash
+python scripts/dev.py test
 ```
 
-## Tooling Guide (Gemini)
-The server exposes Gemini tools declared in `backend/tools.py`. To encourage tool use, include a system instruction when you start a chat and then ask for actions in normal language.
+Run lint checks:
 
-### Example system instruction
-Use this in `POST /chat/start` as the `system` field:
-"You can use tools to: get calendar events, send email, and open apps. Use them when needed and summarize the result."
+```bash
+python scripts/dev.py lint
+```
 
-### Example prompts
-- "What's on my calendar today?"
-- "Email sam@example.com with subject 'Status' and say I'll send notes tonight."
-- "Open Spotify."
+Run a dependency audit:
 
-### Forcing tool usage
-If you want to be explicit, say:
-- "Use the send_email tool to send an email to sam@example.com with subject 'Status' and body 'I'll send notes tonight.'"
+```bash
+python -m pip_audit -r requirements.txt
+```
 
-## Development
+The current Ruff rollout is enforced on the actively maintained developer, test, and backend runtime paths rather than the entire repository.
 
-### Adding New Tools
-1. Add function to `backend/tools.py`
-2. Import in `backend/server.py`
-3. Add to `_TOOLS` list
-4. Restart server
+Useful smoke check:
 
-### Customizing Voice Recognition
-- Modify wake words in `speechToText/quacky_stt.py`
-- Adjust microphone sensitivity and timeout settings
-- Add custom voice commands
+```bash
+python -m compileall backend frontend tests scripts
+```
 
-## Personality
-> Quacky is an unhinged but helpful desktop assistant with personality. He's conversational, witty, and adds character to responses while remaining useful.
-The server exposes Gemini tools declared in `backend/tools.py`. To encourage tool use, include a system instruction when you start a chat and then ask for actions in normal language.
+CI lives in [`.github/workflows/ci.yml`](/home/jake/code/Quacky/.github/workflows/ci.yml).
 
-### Example system instruction
-Use this in `POST /chat/start` as the `system` field:
-“You can use tools to: get calendar events, send email, and open apps. Use them when needed and summarize the result.”
+## Architecture Docs
 
-### Example prompts
-- “What’s on my calendar today?”
-- “Email sam@example.com with subject ‘Status’ and say I’ll send notes tonight.”
-- “Open Spotify.”
+For current architecture and design notes, start with:
 
-### Forcing tool usage
-If you want to be explicit, say:
-- “Use the send_email tool to send an email to sam@example.com with subject ‘Status’ and body ‘I’ll send notes tonight.’”
+- [`docs/ARCHITECTURE.md`](/home/jake/code/Quacky/docs/ARCHITECTURE.md)
+- [`docs/BACKEND_ARCHITECTURE.md`](/home/jake/code/Quacky/docs/BACKEND_ARCHITECTURE.md)
+- [`docs/FRONTEND_ARCHITECTURE.md`](/home/jake/code/Quacky/docs/FRONTEND_ARCHITECTURE.md)
+
+The existing frontend-specific notes also remain in [`frontend/ARCHITECTURE.md`](/home/jake/code/Quacky/frontend/ARCHITECTURE.md).
+
+## Current State
+
+This project is optimized for local development and feature iteration. The most important operational concerns right now are:
+
+- consistent local setup
+- reliable branch integration
+- test coverage around runtime routing and feature logic
+- keeping docs aligned with the actual repo structure
+- protecting local secrets and biometric data from accidental exposure

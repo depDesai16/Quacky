@@ -1,23 +1,56 @@
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy
 
-from theme import ThemeManager, FONT_STACK
-from widgets.quacky_widget import QuackyBubble
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtProperty, pyqtSignal
+from PyQt6.QtGui import QColor, QFontMetrics, QPainter
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from theme import FONT_STACK, ThemeManager
+
+
+class _AccentLine(QWidget):
+
+    def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
+        super().__init__(parent)
+        self._tokens = tokens
+        self._line_opacity = 0.58
+        self.setFixedSize(280, 2)
+
+    def set_opacity(self, value: float):
+        """Set opacity."""
+        self._line_opacity = max(0.0, min(1.0, float(value)))
+        self.update()
+
+    def apply_theme(self, tokens: dict):
+        """Apply theme."""
+        self._tokens = tokens
+        self.update()
+
+    def paintEvent(self, _event):
+        """Handle the paint event."""
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        c = QColor(self._tokens["accent.primary"])
+        c.setAlphaF(self._line_opacity)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(c)
+        p.drawRoundedRect(QRectF(self.rect()), 1.0, 1.0)
+        p.end()
 
 
 class _Dot(QWidget):
-    """A small animated-looking dot for the status hint."""
+
     def __init__(self, tokens: dict, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = tokens
         self.setFixedSize(7, 7)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         self.update()
 
     def paintEvent(self, _event):
+        """Handle the paint event."""
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._tokens["accent.primary"])
@@ -29,44 +62,42 @@ class _Dot(QWidget):
 
 
 class EmptyState(QWidget):
+
     suggestion_clicked = pyqtSignal(str)
 
     def __init__(self, tokens: dict, icon_fn=None, parent=None):
+        """Initialize the instance state."""
         super().__init__(parent)
         self._tokens = tokens
-        
+        self._line_opacity = 0.58
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Main wrapper to center everything vertically and horizontally
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         outer.setSpacing(0)
-        outer.setContentsMargins(20, 12, 20, 12)
+        outer.setContentsMargins(40, 24, 40, 24)
 
         self._content = QWidget(self)
         self._content.setObjectName("emptyStateContent")
         self._content.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._content.setMaximumWidth(640)
-        self._content.setMinimumWidth(380) # Match bubble width
+        self._content.setMinimumWidth(300)
 
         content_col = QVBoxLayout(self._content)
         content_col.setContentsMargins(0, 0, 0, 0)
         content_col.setSpacing(0)
 
-        # 1. The Animated Quacky Bubble
-        self._bubble = QuackyBubble(self._content)
-        content_col.addWidget(self._bubble, 0, Qt.AlignmentFlag.AlignHCenter)
-        content_col.addSpacing(12) # Tight spacing to connect the graphic to the text
+        self._accent_top = _AccentLine(tokens, self._content)
+        content_col.addWidget(self._accent_top, 0, Qt.AlignmentFlag.AlignHCenter)
+        content_col.addSpacing(18)
 
-        # 2. Heading
         self._heading = QLabel("How can I help?")
         self._heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._heading.setWordWrap(True)
         content_col.addWidget(self._heading)
         content_col.addSpacing(8)
 
-        # 3. Subtitle
         self._subtitle = QLabel(
             "Ask questions, draft text, or get help with\n"
             "tasks right from your desktop."
@@ -74,9 +105,8 @@ class EmptyState(QWidget):
         self._subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._subtitle.setWordWrap(True)
         content_col.addWidget(self._subtitle)
-        content_col.addSpacing(24)
+        content_col.addSpacing(16)
 
-        # 4. Status Hints Row
         hint_row = QHBoxLayout()
         hint_row.setContentsMargins(0, 0, 0, 0)
         hint_row.setSpacing(8)
@@ -93,14 +123,39 @@ class EmptyState(QWidget):
         hint_wrap = QWidget(self._content)
         hint_wrap.setLayout(hint_row)
         content_col.addWidget(hint_wrap, 0, Qt.AlignmentFlag.AlignHCenter)
+        content_col.addSpacing(14)
+
+        self._accent_bottom = _AccentLine(tokens, self._content)
+        content_col.addWidget(self._accent_bottom, 0, Qt.AlignmentFlag.AlignHCenter)
 
         outer.addWidget(self._content, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        # Hook up theming
+        self._line_blink = QPropertyAnimation(self, b"line_opacity", self)
+        self._line_blink.setDuration(1000)
+        self._line_blink.setStartValue(0.18)
+        self._line_blink.setEndValue(0.92)
+        self._line_blink.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self._line_blink.setLoopCount(-1)
+        self._line_blink.start()
+
         ThemeManager.subscribe(self.apply_theme)
         self.apply_theme(tokens)
+        self._update_accent_width()
+
+    @pyqtProperty(float)
+    def line_opacity(self):
+        """Handle line opacity."""
+        return self._line_opacity
+
+    @line_opacity.setter
+    def line_opacity(self, value):
+        """Handle line opacity."""
+        self._line_opacity = max(0.0, min(1.0, float(value)))
+        self._accent_top.set_opacity(self._line_opacity)
+        self._accent_bottom.set_opacity(self._line_opacity)
 
     def apply_theme(self, tokens: dict):
+        """Apply theme."""
         self._tokens = tokens
         t = tokens
 
@@ -151,9 +206,36 @@ class EmptyState(QWidget):
             f"}}"
         )
 
+        self._accent_top.apply_theme(tokens)
+        self._accent_bottom.apply_theme(tokens)
+        self._accent_top.set_opacity(self._line_opacity)
+        self._accent_bottom.set_opacity(self._line_opacity)
         self._dot.apply_theme(tokens)
+        self._update_accent_width()
+
+    def _label_text_width(self, lbl: QLabel) -> int:
+        """Handle label text width."""
+        fm = QFontMetrics(lbl.font())
+        lines = lbl.text().splitlines() or [lbl.text()]
+        return max(fm.horizontalAdvance(line) for line in lines if line) if lines else 0
+
+    def _update_accent_width(self):
+        """Update accent width."""
+        heading_w = self._label_text_width(self._heading)
+        subtitle_w = self._label_text_width(self._subtitle)
+        target = max(heading_w, subtitle_w)
+        target = max(220, target)
+        target = min(target, self._content.maximumWidth())
+        self._accent_top.setFixedWidth(target)
+        self._accent_bottom.setFixedWidth(target)
+
+    def resizeEvent(self, event):
+        """Handle the resize event."""
+        super().resizeEvent(event)
+        self._update_accent_width()
 
     def __del__(self):
+        """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
         except Exception:

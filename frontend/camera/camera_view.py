@@ -1,20 +1,33 @@
 """
 camera_view.py - Camera view widget with face tracking and analysis
 """
-import cv2
-from PyQt6.QtCore import (Qt, QThread, pyqtSignal, QRectF, QPointF,
-                           QPropertyAnimation, QEasingCurve, pyqtProperty, QTimer)
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-                              QLineEdit, QPushButton, QSizePolicy, QAbstractButton,
-                              QFrame)
-from PyQt6.QtGui import (QImage, QPixmap, QPainter, QColor, QPen,
-                          QPainterPath, QBrush, QFont)
-import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from theme import ThemeManager, FONT_FAMILY_UI, FONT_STACK
-from .camera_analyzer import CameraAnalyzer
+import sys
 
+import cv2
+from PyQt6.QtCore import (
+    QPointF,
+    QRectF,
+    Qt,
+    QThread,
+    pyqtSignal,
+)
+from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPixmap
+from PyQt6.QtWidgets import (
+    QAbstractButton,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
+
+from .camera_analyzer import CameraAnalyzer
 
 # ─────────────────────────────────────────────
 # Camera capture thread

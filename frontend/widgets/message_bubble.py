@@ -2,11 +2,16 @@
 import html
 import re
 
-from PyQt6.QtCore    import Qt, QTimer, QPropertyAnimation, QEasingCurve
-from PyQt6.QtWidgets import (QWidget, QFrame, QLabel, QVBoxLayout,
-                              QSizePolicy, QGraphicsOpacityEffect)
-
-from theme import ThemeManager, FONT_STACK, FONT_MONO
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
+from PyQt6.QtWidgets import (
+    QFrame,
+    QGraphicsOpacityEffect,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
+from theme import FONT_MONO, FONT_STACK
 
 _DEFAULT_MAX_W = 400
 _APPEAR_MS = 180
@@ -376,7 +381,7 @@ class AssistantBubble(QFrame):
     def paintEvent(self, event):
         """Handle the paint event."""
         super().paintEvent(event)
-        from PyQt6.QtGui import QPainter, QColor, QPen
+        from PyQt6.QtGui import QColor, QPainter, QPen
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._tokens["accent.primary"])
@@ -465,7 +470,7 @@ class StreamingAssistantBubble(QFrame):
     def paintEvent(self, event):
         """Handle the paint event."""
         super().paintEvent(event)
-        from PyQt6.QtGui import QPainter, QColor, QPen
+        from PyQt6.QtGui import QColor, QPainter, QPen
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         c = QColor(self._tokens["accent.primary"])

@@ -2,11 +2,14 @@
 Test script for face recognition
 Run this to test if face recognition is working properly
 """
-import cv2
-import sys
 import os
+import sys
+
+import cv2
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from camera.face_recognition import FaceRecognitionManager
+
 
 def main():
     print("Face Recognition Test")
@@ -75,7 +78,7 @@ def main():
             print("\nTesting recognition...")
             name, confidence = fr.recognize_user(frame)
             if name == "Unknown":
-                print(f"✗ No user recognized")
+                print("✗ No user recognized")
             else:
                 print(f"✓ Recognized: {name} ({confidence*100:.1f}% confidence)")
     

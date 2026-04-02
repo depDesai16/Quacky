@@ -1,19 +1,33 @@
 # backend/server.py
-import json
 import base64
+import ipaddress
+import json
+import logging
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from backend.config import get_settings
+from backend.core.activity_store import list_calendar_events
 from backend.core.chat_runtime import ChatRuntime
 from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
-    save_api_key,
+)
+from backend.core.settings_service import (
+    get_open_app_confirmation_enabled,
+    get_timer_confirmation_enabled,
     remove_api_key,
+    save_api_key,
+    save_open_app_confirmation_enabled,
+    save_timer_confirmation_enabled,
     test_api_key,
 )
+from backend.core.settings_service import (
+    has_api_key as has_saved_api_key,
+)
+from backend.features.timers import get_active_timers_data
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 
 settings = get_settings()
+LOGGER = logging.getLogger(__name__)
 
 runtime = ChatRuntime(
     api_key=settings.api_key,
@@ -32,6 +46,14 @@ tts_client = (
     else None
 )
 speech_to_speech_state = {"enabled": bool(settings.tts_default_enabled)}
+open_app_confirmation_state = {
+    "enabled": bool(get_open_app_confirmation_enabled(default=True))
+}
+runtime.set_open_app_confirmation_enabled(open_app_confirmation_state["enabled"])
+timer_confirmation_state = {
+    "enabled": bool(get_timer_confirmation_enabled(default=True))
+}
+runtime.set_timer_confirmation_enabled(timer_confirmation_state["enabled"])
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -49,6 +71,8 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict):
         handler.send_response(status)
         handler.send_header("Content-Type", "application/json")
         handler.send_header("Content-Length", str(len(body)))
+        handler.send_header("Cache-Control", "no-store")
+        handler.send_header("X-Content-Type-Options", "nosniff")
         handler.end_headers()
         handler.wfile.write(body)
     except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
@@ -77,16 +101,32 @@ def _build_chat_response(chat_id: str, text: str, tts_requested: bool) -> dict:
                 payload["tts_error"] = str(tts_exc)
     return payload
 
+
+def _is_loopback_client(handler: BaseHTTPRequestHandler) -> bool:
+    host = handler.client_address[0]
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return host == "localhost"
+
 class QuackyHandler(BaseHTTPRequestHandler):
+    server_version = "Quacky"
+    sys_version = ""
+
+    def log_message(self, format: str, *args) -> None:
+        LOGGER.info("%s - %s", self.address_string(), format % args)
 
     def do_GET(self):
+        if not _is_loopback_client(self):
+            _json_response(self, 403, {"error": "local requests only"})
+            return
+
         if self.path == "/health":
             _json_response(self, 200, {"status": "ok"})
             return
 
         if self.path == "/settings/api-key":
-            key = get_saved_api_key()
-            _json_response(self, 200, {"api_key": key, "has_key": bool(key)})
+            _json_response(self, 200, {"has_key": has_saved_api_key()})
             return
 
         if self.path == "/settings/speech-to-speech":
@@ -98,6 +138,22 @@ class QuackyHandler(BaseHTTPRequestHandler):
                     "tts_available": bool(tts_client),
                     "default_enabled": bool(settings.tts_default_enabled),
                 },
+            )
+            return
+
+        if self.path == "/settings/open-app-confirmation":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(open_app_confirmation_state["enabled"])},
+            )
+            return
+
+        if self.path == "/settings/timer-confirmation":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(timer_confirmation_state["enabled"])},
             )
             return
 
@@ -115,10 +171,25 @@ class QuackyHandler(BaseHTTPRequestHandler):
             _json_response(self, 200, {"chat_id": chat_id, "history": history})
             return
 
+        if self.path == "/dashboard/timers-events":
+            _json_response(
+                self,
+                200,
+                {
+                    "timers": get_active_timers_data(),
+                    "events": list_calendar_events(limit=40),
+                },
+            )
+            return
+
         _json_response(self, 404, {"error": "not found"})
 
 
     def do_POST(self):
+        if not _is_loopback_client(self):
+            _json_response(self, 403, {"error": "local requests only"})
+            return
+
         if self.path == "/chat/start":
             data = _read_json(self)
             system_instruction = data.get("system")
@@ -159,8 +230,9 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 _json_response(self, 200, payload)
             except KeyError:
                 _json_response(self, 404, {"error": "chat not found"})
-            except Exception as e:
-                _json_response(self, 500, {"error": str(e)})
+            except Exception:
+                LOGGER.exception("Unhandled error while processing /chat/message")
+                _json_response(self, 500, {"error": "internal server error"})
             return
 
         if self.path == "/chat/speech-to-speech":
@@ -182,8 +254,9 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 _json_response(self, 200, payload)
             except KeyError:
                 _json_response(self, 404, {"error": "chat not found"})
-            except Exception as e:
-                _json_response(self, 500, {"error": str(e)})
+            except Exception:
+                LOGGER.exception("Unhandled error while processing /chat/speech-to-speech")
+                _json_response(self, 500, {"error": "internal server error"})
             return
 
         if self.path == "/chat/reset":
@@ -239,10 +312,36 @@ class QuackyHandler(BaseHTTPRequestHandler):
             )
             return
 
+        if self.path == "/settings/open-app-confirmation":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=True)
+            open_app_confirmation_state["enabled"] = enabled
+            runtime.set_open_app_confirmation_enabled(enabled)
+            save_open_app_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
+        if self.path == "/settings/timer-confirmation":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=True)
+            timer_confirmation_state["enabled"] = enabled
+            runtime.set_timer_confirmation_enabled(enabled)
+            save_timer_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
         _json_response(self, 404, {"error": "not found"})
 
 def run_server():
-    server = ThreadingHTTPServer(("", PORT), QuackyHandler)
+    server = ThreadingHTTPServer(("127.0.0.1", PORT), QuackyHandler)
     print(f"Quacky server listening on http://localhost:{PORT}")
     try:
         server.serve_forever()

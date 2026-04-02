@@ -413,7 +413,8 @@ def create_outlook_event(
         _mark_event_signature(signature)
         return result
     except Exception as _exc:
-        import traceback, sys
+        import sys
+        import traceback
         _desktop_error = str(_exc)
         print(
             f"[calendar_feature] Desktop Outlook save failed for '{clean_title}': {_exc}\n"
@@ -460,7 +461,8 @@ def update_outlook_event(
     event_reference_date = None
     if is_bare_time and os.name == 'nt':
         try:
-            import pythoncom as _pc, win32com.client as _wc
+            import pythoncom as _pc
+            import win32com.client as _wc
             _pc.CoInitialize()
             try:
                 _ol = _wc.Dispatch('Outlook.Application')

@@ -1,5 +1,5 @@
 SpeechRecognition==3.10.0
-PyAudio==0.2.14
+PyAudio==0.2.11
 google-genai
 python-dotenv
 PyQt6
@@ -10,9 +10,6 @@ standard-aifc
 msal
 pywin32; sys_platform == "win32"
 elevenlabs
-dotenv
-mediapipe
-numpy
-markdown
-lottie
-opencv-python
+pytest
+ruff
+pip-audit

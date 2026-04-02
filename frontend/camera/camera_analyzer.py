@@ -1,19 +1,14 @@
 """
 camera_analyzer.py - Advanced camera analysis with emotion, gesture, and attention detection
 """
+import importlib.util
+
 import cv2
-import numpy as np
 from PyQt6.QtCore import QObject, pyqtSignal
+
 from .face_recognition import FaceRecognitionManager
 
-try:
-    import mediapipe as mp
-    from mediapipe.tasks import python
-    from mediapipe.tasks.python import vision
-    MEDIAPIPE_AVAILABLE = True
-except (ImportError, AttributeError) as e:
-    MEDIAPIPE_AVAILABLE = False
-    print(f"MediaPipe not available: {e}")
+MEDIAPIPE_AVAILABLE = importlib.util.find_spec("mediapipe") is not None
 
 
 class CameraAnalyzer(QObject):
@@ -130,9 +125,6 @@ class CameraAnalyzer(QObject):
         h, w = face_roi.shape
         if h == 0 or w == 0:
             return "neutral"
-        
-        # Get mouth region (bottom third of face)
-        mouth_region = face_roi[int(h*0.6):h, :]
         
         # Detect eyes for emotion cues
         eyes = self.eye_cascade.detectMultiScale(face_roi, 1.1, 5)

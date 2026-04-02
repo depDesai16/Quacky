@@ -1,11 +1,7 @@
 
-from PyQt6.QtCore    import (Qt, QPropertyAnimation, QEasingCurve,
-                              pyqtProperty, QRectF, QTimer)
-from PyQt6.QtGui     import QPainter, QColor, QBrush, QPixmap
-from PyQt6.QtWidgets import (QWidget, QHBoxLayout, QFrame, QSizePolicy)
-
-from theme import ThemeManager
-from .mini_thinking_duck import MiniThinkingDuck
+from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, QTimer, pyqtProperty
+from PyQt6.QtGui import QBrush, QColor, QPainter
+from PyQt6.QtWidgets import QFrame, QHBoxLayout, QSizePolicy, QWidget
 
 DOT_SIZE    = 7
 DOT_SPACING = 7
@@ -54,7 +50,7 @@ class _WaveDot(QWidget):
 
 class ThinkingBubble(QFrame):
 
-    def __init__(self, tokens: dict, icon_pixmap: QPixmap = None, parent=None):
+    def __init__(self, tokens: dict, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
         self._tokens    = tokens
@@ -64,16 +60,8 @@ class ThinkingBubble(QFrame):
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 10, 16, 10)
+        layout.setContentsMargins(16, 14, 16, 12)
         layout.setSpacing(DOT_SPACING)
-        
-        # Add mini thinking duck if icon provided
-        if icon_pixmap:
-            self._mini_duck = MiniThinkingDuck(icon_pixmap, self)
-            layout.addWidget(self._mini_duck, 0, Qt.AlignmentFlag.AlignVCenter)
-            layout.addSpacing(6)
-        else:
-            self._mini_duck = None
 
         self._dots  = []
         self._anims = []
@@ -103,8 +91,6 @@ class ThinkingBubble(QFrame):
         """Handle stop animations."""
         for a in self._anims:
             a.stop()
-        if self._mini_duck:
-            self._mini_duck.stop_animations()
 
     def apply_theme(self, tokens: dict):
         """Apply theme."""

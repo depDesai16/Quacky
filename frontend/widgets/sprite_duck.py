@@ -32,7 +32,7 @@ class SpriteDuck(QWidget):
         'jumping': (2, 0, 6, 10),       # Rows 2-3: 6 frames - jumping
         'sitting': (4, 0, 4, 6),        # Rows 4-5: 4 frames - sitting
         'eating': (6, 0, 4, 8),         # Rows 6-7: 4 frames - eating
-        'sleeping': (8, 0, 4, 4),       # Rows 8-9: 4 frames - sleeping
+        'sleeping': (8, 0, 4, 4),       # Rows 8,10: R=8, L=10 (row 9 is also right)
         'looking': (10, 0, 4, 6),       # Rows 10-11: 4 frames - looking around
         'flying': (11, 0, 10, 12),      # Rows 11-12: 10 frames - flying (for swimming!)
         'takeoff': (13, 0, 15, 12),     # Rows 13-14: 15 frames - taking off/landing
@@ -139,10 +139,10 @@ class SpriteDuck(QWidget):
         if self._state in ("idle", "thinking"):
             self._float_offset = math.sin(self._t / 1000.0 * 2 * math.pi / 5.0) * 12.0
         
-        # Update thinking animation (more dramatic)
+        # Update thinking animation
         if self._state == "thinking":
             self._thinking_bob = math.sin((self._t / 1000.0) * 2 * math.pi) * 25.0
-            self._thinking_tilt = math.sin((self._t / 1400.0) * 2 * math.pi) * 12.0
+            self._thinking_tilt = 0.0  # No tilt - causes spinning with sprites
         else:
             self._thinking_bob = 0.0
             self._thinking_tilt = 0.0
@@ -182,11 +182,15 @@ class SpriteDuck(QWidget):
         col = start_col + self._frame_index
         
         # Calculate row based on facing direction
-        # Even rows = right-facing, odd rows = left-facing
+        # Most animations: right = base_row, left = base_row + 1
+        # Exception: sleeping right=8, left=10 (row 9 is also right-facing)
         if self._flip_h:
-            row = base_row + 1  # Use odd row (left-facing)
+            if base_row == 8:  # sleeping special case
+                row = 10
+            else:
+                row = base_row + 1
         else:
-            row = base_row  # Use even row (right-facing)
+            row = base_row
         
         # Extract frame from sprite sheet
         source_rect = QRectF(

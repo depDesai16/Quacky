@@ -4,6 +4,7 @@ App tool wrapper for Quacky.
 
 from backend.features.open_app import open_app as open_app_feature
 
+
 def open_app(app_name: str) -> str:
     """
     Open an application by name using the open_app feature.

@@ -2,7 +2,7 @@ from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 
 class _ApiKeyLoadWorker(QThread):
-    loaded = pyqtSignal(str, str)
+    loaded = pyqtSignal(bool, str)
 
     def __init__(self, client):
         """Initialize the instance state."""
@@ -12,23 +12,22 @@ class _ApiKeyLoadWorker(QThread):
     def run(self):
         """Execute the worker task."""
         if self._client is None:
-            self.loaded.emit("", "Client unavailable for API key load.")
+            self.loaded.emit(False, "Client unavailable for API key load.")
             return
         try:
             result = self._client.get_saved_api_key()
         except Exception as exc:
-            self.loaded.emit("", str(exc))
+            self.loaded.emit(False, str(exc))
             return
 
         if isinstance(result, dict) and "error" in result:
-            self.loaded.emit("", str(result.get("error", "Unknown error")))
+            self.loaded.emit(False, str(result.get("error", "Unknown error")))
             return
 
-        value = ""
+        has_key = False
         if isinstance(result, dict):
-            raw = result.get("api_key", "")
-            value = str(raw).strip() if raw is not None else ""
-        self.loaded.emit(value, "")
+            has_key = bool(result.get("has_key"))
+        self.loaded.emit(has_key, "")
 
 
 class _ApiKeyTestWorker(QThread):
@@ -63,7 +62,7 @@ class _ApiKeyTestWorker(QThread):
 
 
 class SettingsController(QObject):
-    saved_api_key_loaded = pyqtSignal(str, str)
+    saved_api_key_loaded = pyqtSignal(bool, str)
     api_key_test_result = pyqtSignal(bool, str)
     api_key_test_started = pyqtSignal()
     api_key_test_finished = pyqtSignal()
@@ -125,9 +124,9 @@ class SettingsController(QObject):
         """Return whether is api key test running."""
         return self._test_worker is not None
 
-    def _on_saved_api_key_loaded(self, key: str, error: str):
+    def _on_saved_api_key_loaded(self, has_key: bool, error: str):
         """Handle saved api key loaded callbacks."""
-        self.saved_api_key_loaded.emit(key, error)
+        self.saved_api_key_loaded.emit(has_key, error)
 
     def _on_load_finished(self):
         """Handle load finished callbacks."""

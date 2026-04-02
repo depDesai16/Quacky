@@ -1,5 +1,6 @@
 # backend/weather_feature.py
 import os
+
 import requests
 from dotenv import load_dotenv
 
@@ -171,11 +172,10 @@ def get_weekend_forecast(query: str = "") -> str:
     weekday = today.weekday()  
 
     if weekday == 5:      
-        days_to_sat, days_to_sun = 0, 1
+        _, days_to_sun = 0, 1
     elif weekday == 6:    
-        days_to_sat, days_to_sun = 6, 0   
+        _, days_to_sun = 6, 0   
     else:
-        days_to_sat = 5 - weekday
         days_to_sun = 6 - weekday
 
     days_needed = min(days_to_sun + 1, MAX_FORECAST_DAYS)
