@@ -206,7 +206,10 @@ class QuackyWindow(QWidget):
                 )
             else:
                 self.model_window.move(1040, 88)
-        except Exception:
+            self.model_window.show()
+            self.model_window.clicked.connect(self._on_duck_clicked)
+            self.model_window.file_dropped.connect(self._on_duck_file_dropped)
+        except Exception as e:
             self.model_window = None
 
         self._theme_fade_overlay = None
@@ -569,6 +572,36 @@ class QuackyWindow(QWidget):
         self.composer.input_field.setFocus()
 
 
+    def _on_duck_clicked(self):
+        """Bring Quacky window to front when duck is clicked."""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _on_duck_file_dropped(self, file_path):
+        """Handle file dropped on the duck - send to chat for analysis."""
+        import os
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+        filename = os.path.basename(file_path)
+        prompt = f"I dropped a file on you! Please analyze this file: {filename}\nPath: {file_path}"
+
+        # Read small text files and include content
+        try:
+            ext = os.path.splitext(file_path)[1].lower()
+            text_exts = {'.txt', '.py', '.js', '.ts', '.json', '.md', '.csv', '.html', '.css', '.xml', '.yaml', '.yml', '.toml', '.cfg', '.ini', '.log'}
+            if ext in text_exts and os.path.getsize(file_path) < 50000:
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                prompt = f"I dropped a file on you! Here's the content of {filename}:\n\n```\n{content}\n```\n\nPlease summarize or analyze this file."
+        except Exception:
+            pass
+
+        self.composer.input_field.setPlainText(prompt)
+        self.send_message()
+
     def set_model_visible(self, visible: bool):
         """Set model visible."""
         if self.model_window is None:
@@ -879,8 +912,14 @@ class QuackyWindow(QWidget):
         if busy:
             self.header.set_status("thinking")
             self.timeline.show_thinking()
+            # Duck reacts: fly to chat window and think
+            if self.model_window:
+                self.model_window.react_to_question(self.pos())
         else:
             self.header.set_status("idle")
+            # Duck reacts: response arrived
+            if self.model_window:
+                self.model_window.react_to_response()
 
     def _update_send_btn(self):
         """Update send btn."""

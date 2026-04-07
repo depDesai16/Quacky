@@ -130,7 +130,8 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     return tray
 
 
-if __name__ == "__main__":
+def run_it():
+    """Entry point called from root app.py"""
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)
     _configure_app_identity(app)
@@ -166,6 +167,7 @@ if __name__ == "__main__":
         server_proc.terminate()
         sys.exit(1)
 
+    global main_win
     main_win = QuackyWindow(client=client, chat_id=chat_id)
 
     tray = build_system_tray(app)
@@ -173,8 +175,7 @@ if __name__ == "__main__":
     main_win.show()
 
     def _on_quit():
-        """Handle quit callbacks."""
-        global _shutdown_requested
+        nonlocal _shutdown_requested
         if _shutdown_requested:
             return
         _shutdown_requested = True
@@ -187,7 +188,6 @@ if __name__ == "__main__":
                 server_proc.kill()
 
     def _handle_exit_signal(_sig, _frame):
-        """Handle handle exit signal."""
         app.quit()
 
     sig_timer = QTimer()
@@ -202,3 +202,7 @@ if __name__ == "__main__":
 
     app.aboutToQuit.connect(_on_quit)
     sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    run_it()
