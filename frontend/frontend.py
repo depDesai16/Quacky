@@ -7,6 +7,8 @@ import time
 import urllib.error
 import urllib.request
 
+from widgets.quacky_widget import get_quacky_icon
+
 FRONTEND_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(FRONTEND_DIR)
 if ROOT_DIR not in sys.path:
@@ -40,7 +42,6 @@ def _configure_platform_env() -> None:
 _configure_platform_env()
 
 from chat.window import QuackyWindow
-from draw_icon import draw_icon
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QFont, QFontDatabase
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
@@ -115,7 +116,7 @@ def on_tray_activated(reason):
 
 def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     """Build system tray."""
-    tray = QSystemTrayIcon(draw_icon(), parent=app)
+    tray = QSystemTrayIcon(get_quacky_icon(), parent=app)
     tray.setToolTip("Quacky")
 
     tray_menu = QMenu()

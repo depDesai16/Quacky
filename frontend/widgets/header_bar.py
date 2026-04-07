@@ -2,26 +2,20 @@
 import math
 
 from PyQt6.QtCore import (
-    QEasingCurve,
-    QPoint,
-    QPointF,
-    QPropertyAnimation,
-    QRectF,
     Qt,
+    QPropertyAnimation,
+    QEasingCurve,
     pyqtProperty,
+    QRectF,
+    QPointF,
     pyqtSignal,
 )
 from PyQt6.QtGui import (
-    QBrush,
-    QColor,
-    QFont,
-    QFontMetrics,
-    QPainter,
-    QPainterPath,
-    QPen,
+    QPainter, QColor, QBrush, QFont, QFontMetrics, QPen, QPainterPath,
 )
-from PyQt6.QtWidgets import QApplication, QHBoxLayout, QLabel, QPushButton, QSizePolicy, QWidget
-from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
+from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
+
+from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
 
 
 class StatusChip(QWidget):
@@ -330,7 +324,6 @@ class HeaderBar(QWidget):
         self.setObjectName("headerBar")
         self.setFixedHeight(self.HEIGHT)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self._fallback_drag_offset: QPoint | None = None
 
         self._tokens = ThemeManager.tokens()
 
@@ -352,13 +345,9 @@ class HeaderBar(QWidget):
 
         self._title = QLabel("Quacky")
         self._title.setObjectName("headerTitle")
-        self._title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         layout.addWidget(self._title)
 
         self.status_chip = StatusChip()
-        self.status_chip.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
         layout.addWidget(self.status_chip)
 
         layout.addStretch()
@@ -378,57 +367,6 @@ class HeaderBar(QWidget):
 
         self._apply_style()
         ThemeManager.subscribe(self.apply_theme)
-
-    def _start_system_window_move(self) -> bool:
-        """Request compositor/window-manager driven move when available."""
-        win = self.window()
-        if win is None:
-            return False
-        handle = win.windowHandle()
-        if handle is None:
-            # Ensure a native handle exists before trying system move APIs.
-            win.winId()
-            handle = win.windowHandle()
-        if handle is None or not hasattr(handle, "startSystemMove"):
-            return False
-        try:
-            return bool(handle.startSystemMove())
-        except Exception:
-            return False
-
-    def mousePressEvent(self, event):
-        """Handle mouse press to drag frameless top-level windows."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            if self._start_system_window_move():
-                event.accept()
-                return
-            win = self.window()
-            if win is not None:
-                self._fallback_drag_offset = (
-                    event.globalPosition().toPoint() - win.frameGeometry().topLeft()
-                )
-                event.accept()
-                return
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        """Fallback move for platforms without startSystemMove support."""
-        if (
-            event.buttons() & Qt.MouseButton.LeftButton
-            and self._fallback_drag_offset is not None
-        ):
-            win = self.window()
-            if win is not None:
-                win.move(event.globalPosition().toPoint() - self._fallback_drag_offset)
-                event.accept()
-                return
-        super().mouseMoveEvent(event)
-
-    def mouseReleaseEvent(self, event):
-        """Reset local drag state on release."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self._fallback_drag_offset = None
-        super().mouseReleaseEvent(event)
 
 
     def enter_settings_mode(self):
