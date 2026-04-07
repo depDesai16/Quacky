@@ -8,7 +8,7 @@ class ConfigTests(unittest.TestCase):
     def test_get_settings_uses_default_values(self):
         env = {"GEMINI_API_KEY": "test-key"}
 
-        with patch.object(config, "load_dotenv", lambda: None):
+        with patch.object(config, "load_dotenv", lambda *a, **kw: None):
             with patch.dict("os.environ", env, clear=True):
                 settings = config.get_settings()
 
@@ -20,7 +20,7 @@ class ConfigTests(unittest.TestCase):
     def test_get_settings_supports_google_api_key(self):
         env = {"GOOGLE_API_KEY": "google-key", "PORT": "9000", "TTS_DEFAULT_ENABLED": "true"}
 
-        with patch.object(config, "load_dotenv", lambda: None):
+        with patch.object(config, "load_dotenv", lambda *a, **kw: None):
             with patch.dict("os.environ", env, clear=True):
                 settings = config.get_settings()
 
@@ -29,7 +29,7 @@ class ConfigTests(unittest.TestCase):
         self.assertTrue(settings.tts_default_enabled)
 
     def test_get_settings_requires_an_api_key(self):
-        with patch.object(config, "load_dotenv", lambda: None):
+        with patch.object(config, "load_dotenv", lambda *a, **kw: None):
             with patch.dict("os.environ", {}, clear=True):
                 with self.assertRaises(RuntimeError):
                     config.get_settings()
