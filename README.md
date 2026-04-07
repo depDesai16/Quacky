@@ -43,6 +43,7 @@ Current local security posture:
 
 ```text
 Quacky/
+├── app.py                   # Root desktop launcher
 ├── backend/                 # Local HTTP backend and assistant logic
 ├── frontend/                # PyQt desktop UI
 ├── scripts/                 # Setup and local developer entrypoints
@@ -54,6 +55,7 @@ Quacky/
 
 Key areas:
 
+- `app.py`: root-level desktop launcher for `python app.py`
 - `backend/server.py`: HTTP server and route handlers
 - `backend/core/`: chat runtime, routing, confirmation, persistence helpers
 - `backend/features/`: feature implementations such as timers and calendar helpers
@@ -132,6 +134,12 @@ python -m pip_audit -r requirements.txt
 ### 7. Run Quacky
 
 Desktop app:
+
+```bash
+python app.py
+```
+
+Developer entrypoint with preflight checks:
 
 ```bash
 python scripts/dev.py ui
