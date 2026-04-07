@@ -1,15 +1,10 @@
-import runpy
 import sys
-from pathlib import Path
+import os
 
+# Add BOTH the root and the frontend folder to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend"))
 
-ROOT_DIR = Path(__file__).resolve().parent
-FRONTEND_DIR = ROOT_DIR / "frontend"
+import frontend
 
-for path in (str(FRONTEND_DIR), str(ROOT_DIR)):
-    if path not in sys.path:
-        sys.path.insert(0, path)
-
-
-if __name__ == "__main__":
-    runpy.run_module("frontend.app", run_name="__main__")
+frontend.run_it()

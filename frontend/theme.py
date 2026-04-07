@@ -199,7 +199,6 @@ FONT_STACK = _to_qss_stack(_UI_FONT_CANDIDATES, "sans-serif")
 FONT_MONO = _to_qss_stack(_MONO_FONT_CANDIDATES, "monospace")
 
 
-
 class ThemeManager:
     _mode:      str  = "dark"
     _callbacks: list = []
