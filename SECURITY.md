@@ -19,7 +19,7 @@ We appreciate your efforts to responsibly disclose your findings and will make e
 
 Instead, please report them via one of the following methods:
 
-1. **Email**: Send details to [your-email@example.com] (replace with actual email)
+1. **Email**: Send details to **some email, idk yet**
 2. **GitHub Security Advisory**: Use the [Security Advisory](https://github.com/YOUR_USERNAME/Quacky/security/advisories/new) feature
 
 ### What to Include in Your Report
@@ -148,18 +148,45 @@ This project aims to comply with:
 
 We use the following tools to maintain security:
 
-- **Bandit**: Python security linter
+- **Bandit**: Python security linter (config: `security/config/.bandit`)
 - **Safety**: Dependency vulnerability scanner
 - **pip-audit**: PyPI package auditing
 - **GitHub Dependabot**: Automated dependency updates
 - **CodeQL**: Semantic code analysis
 
+## Setup
+
+To set up security tools, run:
+
+**Linux/Mac:**
+```bash
+chmod +x security/scripts/setup_security.sh
+./security/scripts/setup_security.sh
+```
+
+**Windows:**
+```cmd
+security\scripts\setup_security.bat
+```
+
+## Running Security Scans
+
+**Linux/Mac:**
+```bash
+./security/scripts/run_security_scans.sh
+```
+
+**Windows:**
+```cmd
+security\scripts\run_security_scans.bat
+```
+
 ## Contact
 
 For security concerns, please contact:
-- Security Team: [security@example.com]
-- Project Maintainer: [maintainer@example.com]
+- Security Team: [We have a security team??]
+- Project Maintainer: [I guess someone maintains us]
 
 ---
 
-**Last Updated**: March 2026
+**Last Updated**: April 2026
