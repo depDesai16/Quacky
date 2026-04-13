@@ -1,12 +1,86 @@
 __pycache__/
 .env
 .venv/
+venv/
+env/
+
+# Quacky specific data files
 backend/data/local_settings.json
 backend/data/user_memory.json
 backend/data/activity_log.json
 *.pkl
 frontend/camera/face_data/
-.ruff_cache/
-.vscode/
-.codex
 logs/
+
+# Security and sensitive files
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.log
+*.sqlite
+*.db
+.secrets.baseline
+secrets/
+credentials/
+
+# IDE and editor files
+.vscode/
+.idea/
+.codex
+.ruff_cache/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Python
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Security scan results
+bandit-report.json
+safety-report.json
+pip-audit-report.json
+security-scan-results/
+
+# Temporary files
+*.tmp
+*.bak
+*.backup
+.cache/
+
+# Face recognition data (sensitive)
+frontend/camera/face_data/*.pkl
+
+# Email credentials backup
+*.env.backup
+*.env.local
