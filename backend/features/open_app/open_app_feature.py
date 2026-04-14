@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -9,7 +10,7 @@ import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, List
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 APPLIST_PATH = Path(__file__).resolve().parent / "applist.txt"
 
@@ -237,7 +238,43 @@ def _open_fallback_in_browser(app: AppEntry, requested_name: str) -> str:
     return f"Desktop app unavailable and browser fallback could not be opened for {app.name}."
 
 
+def _is_direct_url_target(value: str) -> bool:
+    raw = (value or "").strip()
+    if not raw or " " in raw:
+        return False
+
+    parsed = urlparse(raw)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return True
+
+    if raw.lower().startswith("localhost:"):
+        return True
+
+    return bool(
+        re.fullmatch(r"(?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:/.*)?", raw, re.IGNORECASE)
+    )
+
+
+def _normalize_direct_url_target(value: str) -> str:
+    raw = (value or "").strip()
+    parsed = urlparse(raw)
+    if parsed.scheme in {"http", "https"} and parsed.netloc:
+        return raw
+    return f"https://{raw}" if not raw.lower().startswith("localhost:") else f"http://{raw}"
+
+
+def _open_direct_url_target(value: str) -> str:
+    url = _normalize_direct_url_target(value)
+    opened = webbrowser.open(url, new=2)
+    if opened:
+        return f"Opened {url}."
+    return f"Could not open {url} in the browser."
+
+
 def open_app(app_name: str) -> str:
+    if _is_direct_url_target(app_name):
+        return _open_direct_url_target(app_name)
+
     apps = load_app_list()
     if not apps:
         return "No apps configured yet. Add entries to backend/applist.txt."
