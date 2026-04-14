@@ -514,11 +514,11 @@ class QuackyWindow(QWidget):
 
     def _show_settings(self):
         """Show settings."""
-        self._settings_container.prepare_for_show()
         self.stacked_widget.setCurrentIndex(2)  # Settings is index 2
         self.composer.hide()
         self.composer.plus_btn.set_camera_active(False)
         self.header.enter_settings_mode()
+        QTimer.singleShot(0, self._settings_container.prepare_for_show)
 
     def _show_chat(self):
         """Show chat."""

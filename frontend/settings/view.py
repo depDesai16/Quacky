@@ -70,6 +70,9 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._settings_controller.saved_api_key_loaded.connect(
             self._on_saved_api_key_loaded
         )
+        self._settings_controller.confirmation_settings_loaded.connect(
+            self._on_confirmation_settings_loaded
+        )
         self._settings_controller.api_key_test_result.connect(
             self._on_api_key_test_result
         )
@@ -102,9 +105,42 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
                 with QSignalBlocker(self._theme_mode_combo):
                     self._theme_mode_combo.setCurrentIndex(idx)
         self._update_api_key_action_state()
-        self._refresh_open_app_confirmation_setting()
-        self._refresh_timer_confirmation_setting()
+        self._settings_controller.refresh_confirmation_settings_async()
         self._settings_controller.refresh_saved_api_key_async()
+
+    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, _error: str):
+        """Handle async confirmation settings refresh callbacks."""
+        if open_enabled is not None:
+            self.open_app_confirmation_enabled = bool(open_enabled)
+            if (
+                hasattr(self, "_toggle_open_app_confirm")
+                and self._toggle_open_app_confirm is not None
+                and self._toggle_open_app_confirm.isChecked()
+                != self.open_app_confirmation_enabled
+            ):
+                from PyQt6.QtCore import QSignalBlocker
+
+                blocker = QSignalBlocker(self._toggle_open_app_confirm)
+                self._toggle_open_app_confirm.setChecked(
+                    self.open_app_confirmation_enabled
+                )
+                del blocker
+
+        if timer_enabled is not None:
+            self.timer_confirmation_enabled = bool(timer_enabled)
+            if (
+                hasattr(self, "_toggle_timer_confirm")
+                and self._toggle_timer_confirm is not None
+                and self._toggle_timer_confirm.isChecked()
+                != self.timer_confirmation_enabled
+            ):
+                from PyQt6.QtCore import QSignalBlocker
+
+                blocker = QSignalBlocker(self._toggle_timer_confirm)
+                self._toggle_timer_confirm.setChecked(
+                    self.timer_confirmation_enabled
+                )
+                del blocker
 
     def _refresh_open_app_confirmation_setting(self):
         """Refresh open-app confirmation state from backend for UI sync."""

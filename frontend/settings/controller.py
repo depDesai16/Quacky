@@ -61,8 +61,50 @@ class _ApiKeyTestWorker(QThread):
         self.result_ready.emit(ok, message)
 
 
+class _ConfirmationSettingsLoadWorker(QThread):
+    loaded = pyqtSignal(object, object, str)
+
+    def __init__(self, client):
+        """Initialize the instance state."""
+        super().__init__()
+        self._client = client
+
+    def run(self):
+        """Execute the worker task."""
+        if self._client is None:
+            self.loaded.emit(None, None, "Client unavailable for settings load.")
+            return
+
+        open_enabled = None
+        timer_enabled = None
+        errors: list[str] = []
+
+        try:
+            if hasattr(self._client, "get_open_app_confirmation_settings"):
+                result = self._client.get_open_app_confirmation_settings()
+                if isinstance(result, dict) and "enabled" in result:
+                    open_enabled = bool(result.get("enabled"))
+        except Exception as exc:
+            errors.append(str(exc))
+
+        try:
+            if hasattr(self._client, "get_timer_confirmation_settings"):
+                result = self._client.get_timer_confirmation_settings()
+                if isinstance(result, dict) and "enabled" in result:
+                    timer_enabled = bool(result.get("enabled"))
+        except Exception as exc:
+            errors.append(str(exc))
+
+        self.loaded.emit(
+            open_enabled,
+            timer_enabled,
+            "; ".join(errors),
+        )
+
+
 class SettingsController(QObject):
     saved_api_key_loaded = pyqtSignal(bool, str)
+    confirmation_settings_loaded = pyqtSignal(object, object, str)
     api_key_test_result = pyqtSignal(bool, str)
     api_key_test_started = pyqtSignal()
     api_key_test_finished = pyqtSignal()
@@ -72,6 +114,7 @@ class SettingsController(QObject):
         super().__init__(parent)
         self._client = client
         self._load_worker: _ApiKeyLoadWorker | None = None
+        self._confirmation_worker: _ConfirmationSettingsLoadWorker | None = None
         self._test_worker: _ApiKeyTestWorker | None = None
 
     def refresh_saved_api_key_async(self):
@@ -82,6 +125,16 @@ class SettingsController(QObject):
         worker.loaded.connect(self._on_saved_api_key_loaded)
         worker.finished.connect(self._on_load_finished)
         self._load_worker = worker
+        worker.start()
+
+    def refresh_confirmation_settings_async(self):
+        """Load confirmation toggle states without blocking the UI thread."""
+        if self._confirmation_worker is not None:
+            return
+        worker = _ConfirmationSettingsLoadWorker(self._client)
+        worker.loaded.connect(self._on_confirmation_settings_loaded)
+        worker.finished.connect(self._on_confirmation_finished)
+        self._confirmation_worker = worker
         worker.start()
 
     def save_api_key(self, key: str) -> tuple[bool, str]:
@@ -135,6 +188,17 @@ class SettingsController(QObject):
         self._load_worker.deleteLater()
         self._load_worker = None
 
+    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, error: str):
+        """Handle confirmation settings loaded callbacks."""
+        self.confirmation_settings_loaded.emit(open_enabled, timer_enabled, error)
+
+    def _on_confirmation_finished(self):
+        """Handle confirmation settings worker completion."""
+        if self._confirmation_worker is None:
+            return
+        self._confirmation_worker.deleteLater()
+        self._confirmation_worker = None
+
     def _on_test_finished(self):
         """Handle test finished callbacks."""
         if self._test_worker is None:
@@ -153,6 +217,15 @@ class SettingsController(QObject):
             except Exception:
                 pass
             self._load_worker = None
+
+        if self._confirmation_worker is not None:
+            try:
+                self._confirmation_worker.requestInterruption()
+                self._confirmation_worker.quit()
+                self._confirmation_worker.wait(300)
+            except Exception:
+                pass
+            self._confirmation_worker = None
 
         if self._test_worker is not None:
             try:
