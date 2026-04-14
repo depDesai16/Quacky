@@ -14,9 +14,17 @@ class ModelWindow(QWidget):
         self._old_pos = None
         self._drag_started = False
         self._is_dragging = False
+        self._using_system_move = False
         self._move_timer = None
         self._wait_timer = None
         self._gen = 0
+        app = QApplication.instance()
+        platform_name = (
+            app.platformName().lower()
+            if app is not None and hasattr(app, "platformName")
+            else ""
+        )
+        self._programmatic_move_allowed = "wayland" not in platform_name
 
         self.setWindowFlags(
             Qt.WindowType.FramelessWindowHint
@@ -64,6 +72,9 @@ class ModelWindow(QWidget):
             return
         if self._is_dragging:
             return
+        if not self._programmatic_move_allowed:
+            self._do_idle()
+            return
 
         self._cancel_all()
         roll = random.randint(1, 100)
@@ -82,6 +93,10 @@ class ModelWindow(QWidget):
 
     def _do_fly(self):
         """Fly to a random position on screen using a bezier arc."""
+        if not self._programmatic_move_allowed:
+            self._do_idle()
+            return
+
         screen = QApplication.primaryScreen()
         if not screen:
             self._schedule_next(1000)
@@ -152,6 +167,10 @@ class ModelWindow(QWidget):
 
     def _do_follow_mouse(self):
         """Briefly chase the mouse cursor."""
+        if not self._programmatic_move_allowed:
+            self._do_idle()
+            return
+
         gen = self._gen
         follow_duration = random.randint(2200, 4200)
         elapsed = [0]
@@ -197,6 +216,24 @@ class ModelWindow(QWidget):
         self._move_timer.timeout.connect(step)
         self._move_timer.start()
 
+    def _window_handle(self):
+        """Return native window handle if available."""
+        handle = self.windowHandle()
+        if handle is None:
+            self.winId()
+            handle = self.windowHandle()
+        return handle
+
+    def _start_system_move(self) -> bool:
+        """Use native compositor drag when available."""
+        handle = self._window_handle()
+        if handle is None or not hasattr(handle, "startSystemMove"):
+            return False
+        try:
+            return bool(handle.startSystemMove())
+        except Exception:
+            return False
+
     def mousePressEvent(self, event):
         """Handle mousepress event."""
         if event.button() == Qt.MouseButton.LeftButton:
@@ -204,9 +241,19 @@ class ModelWindow(QWidget):
             self._drag_started = False
             self._is_dragging = True
             self._cancel_all()
+            if self._start_system_move():
+                self._using_system_move = True
+                self._old_pos = None
+                self._drag_started = True
+                event.accept()
+                return
+        super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
         """Handle mousemove event."""
+        if self._using_system_move:
+            super().mouseMoveEvent(event)
+            return
         if self._old_pos:
             delta = event.globalPosition().toPoint() - self._old_pos
             if abs(delta.x()) > 3 or abs(delta.y()) > 3:
@@ -214,10 +261,13 @@ class ModelWindow(QWidget):
             if self._drag_started:
                 self.move(self.x() + delta.x(), self.y() + delta.y())
             self._old_pos = event.globalPosition().toPoint()
+        super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event):
         """Handle mouserelease event."""
+        self._using_system_move = False
         self._old_pos = None
         self._is_dragging = False
         self._drag_started = False
         self._schedule_next(900)
+        super().mouseReleaseEvent(event)

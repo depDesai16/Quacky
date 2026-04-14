@@ -23,10 +23,22 @@ def _configure_platform_env() -> None:
     if sys.platform.startswith("linux"):
         session_type = (os.getenv("XDG_SESSION_TYPE") or "").lower()
         has_wayland = bool(os.getenv("WAYLAND_DISPLAY")) or session_type == "wayland"
+        prefer_wayland = (
+            (os.getenv("QUACKY_PREFER_WAYLAND") or "").strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
 
         if has_wayland:
-            os.environ.setdefault("QT_QPA_PLATFORM", "wayland;xcb")
-            os.environ.setdefault("PYOPENGL_PLATFORM", "egl")
+            # Default to X11/XWayland for better support of frameless dragging
+            # and programmatic movement of the floating duck window.
+            os.environ.setdefault(
+                "QT_QPA_PLATFORM",
+                "wayland;xcb" if prefer_wayland else "xcb",
+            )
+            os.environ.setdefault(
+                "PYOPENGL_PLATFORM",
+                "egl" if prefer_wayland else "x11",
+            )
             os.environ.setdefault("QT_OPENGL", "software")
         else:
             os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
