@@ -2,6 +2,21 @@
 from google.genai import errors as genai_errors
 
 
+def _safe_send_message(chat, prompt: str) -> str | None:
+    """Return model text when available, otherwise fall back to caller defaults."""
+    try:
+        response = chat.send_message(prompt)
+    except genai_errors.APIError:
+        return None
+    except Exception:
+        return None
+
+    text = getattr(response, "text", None)
+    if isinstance(text, str) and text.strip():
+        return text
+    return None
+
+
 def style_direct_output(chat, user_message: str, tool_result: str) -> str:
     """
     Rephrase deterministic/tool output using the same chat (and therefore system prompt).
@@ -14,10 +29,8 @@ def style_direct_output(chat, user_message: str, tool_result: str) -> str:
         f"User asked: {user_message}\n\n"
         f"Tool result:\n{tool_result}"
     )
-    try:
-        return chat.send_message(prompt).text
-    except genai_errors.ClientError:
-        return tool_result
+    styled = _safe_send_message(chat, prompt)
+    return styled or tool_result
 
 
 def ask_quacky_confirmation(chat, user_message: str, action_summary: str) -> str:
@@ -28,7 +41,5 @@ def ask_quacky_confirmation(chat, user_message: str, action_summary: str) -> str
         f"User said: {user_message}\n"
         f"Action: {action_summary}\n"
     )
-    try:
-        return chat.send_message(prompt).text
-    except genai_errors.ClientError:
-        return f"Please confirm the following action: {action_summary}"
+    styled = _safe_send_message(chat, prompt)
+    return styled or f"Please confirm the following action: {action_summary}"

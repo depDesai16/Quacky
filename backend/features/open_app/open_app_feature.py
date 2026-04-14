@@ -60,6 +60,8 @@ def _parse_app_line(line: str) -> AppEntry | None:
     raw = line.strip()
     if not raw or raw.startswith("#"):
         return None
+    if raw.lower().startswith("format:"):
+        return None
 
     parts = [p.strip() for p in raw.split("|")]
     if len(parts) < 2:
