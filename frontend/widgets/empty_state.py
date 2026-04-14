@@ -1,13 +1,14 @@
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
-from PyQt6.QtGui import QPainter, QColor
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy
+from PyQt6.QtGui import QColor, QPainter
+from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
-from theme import ThemeManager, FONT_STACK
+from theme import FONT_STACK, ThemeManager
 from widgets.quacky_widget import QuackyBubble
 
 
 class _Dot(QWidget):
-    """A small animated-looking dot for the status hint."""
+    """A small status dot for the empty-state hint row."""
+
     def __init__(self, tokens: dict, parent=None):
         super().__init__(parent)
         self._tokens = tokens
@@ -34,11 +35,10 @@ class EmptyState(QWidget):
     def __init__(self, tokens: dict, icon_fn=None, parent=None):
         super().__init__(parent)
         self._tokens = tokens
-        
+
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 
-        # Main wrapper to center everything vertically and horizontally
         outer = QVBoxLayout(self)
         outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         outer.setSpacing(0)
@@ -48,25 +48,22 @@ class EmptyState(QWidget):
         self._content.setObjectName("emptyStateContent")
         self._content.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         self._content.setMaximumWidth(640)
-        self._content.setMinimumWidth(380) # Match bubble width
+        self._content.setMinimumWidth(380)
 
         content_col = QVBoxLayout(self._content)
         content_col.setContentsMargins(0, 0, 0, 0)
         content_col.setSpacing(0)
 
-        # 1. The Animated Quacky Bubble
         self._bubble = QuackyBubble(self._content)
         content_col.addWidget(self._bubble, 0, Qt.AlignmentFlag.AlignHCenter)
-        content_col.addSpacing(12) # Tight spacing to connect the graphic to the text
+        content_col.addSpacing(10)
 
-        # 2. Heading
         self._heading = QLabel("How can I help?")
         self._heading.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._heading.setWordWrap(True)
         content_col.addWidget(self._heading)
         content_col.addSpacing(8)
 
-        # 3. Subtitle
         self._subtitle = QLabel(
             "Ask questions, draft text, or get help with\n"
             "tasks right from your desktop."
@@ -76,7 +73,6 @@ class EmptyState(QWidget):
         content_col.addWidget(self._subtitle)
         content_col.addSpacing(24)
 
-        # 4. Status Hints Row
         hint_row = QHBoxLayout()
         hint_row.setContentsMargins(0, 0, 0, 0)
         hint_row.setSpacing(8)
@@ -96,7 +92,6 @@ class EmptyState(QWidget):
 
         outer.addWidget(self._content, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        # Hook up theming
         ThemeManager.subscribe(self.apply_theme)
         self.apply_theme(tokens)
 
@@ -104,7 +99,9 @@ class EmptyState(QWidget):
         self._tokens = tokens
         t = tokens
 
-        self._content.setStyleSheet("QWidget#emptyStateContent { background: transparent; border: none; }")
+        self._content.setStyleSheet(
+            "QWidget#emptyStateContent { background: transparent; border: none; }"
+        )
 
         self._heading.setStyleSheet(
             f"QLabel {{"

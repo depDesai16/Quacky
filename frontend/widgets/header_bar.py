@@ -338,8 +338,9 @@ class HeaderBar(QWidget):
         layout.addWidget(self._back_btn)
 
         self._avatar = QLabel()
-        self._avatar.setPixmap(icon.pixmap(30, 30))
-        self._avatar.setFixedSize(30, 30)
+        self._avatar.setPixmap(icon.pixmap(40, 40))
+        self._avatar.setFixedSize(40, 40)
+        self._avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._avatar.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
         layout.addWidget(self._avatar)
 
