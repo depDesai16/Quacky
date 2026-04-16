@@ -2,11 +2,11 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Done] As a user, I want to interact with the assistant using voice or text, so that I can communicate in the way that is most convenient.
 
-[Not Started] As a user, I want the assistant to see what is on my screen (with permission), so that it can provide help based on my current context.
+[Done] As a user, I want the assistant to see what is on my screen (with permission), so that it can provide help based on my current context.
 
-[Not Started] As a user, I want the assistant to describe or summarize what is on my screen, so that I can quickly understand complex or unfamiliar content.
+[Done] As a user, I want the assistant to describe or summarize what is on my screen, so that I can quickly understand complex or unfamiliar content.
 
-[Not Started] As a user, I want to ask questions about something currently visible on my screen, so that I can receive contextual help without copying and pasting.
+[Done] As a user, I want to ask questions about something currently visible on my screen, so that I can receive contextual help without copying and pasting.
 
 [Not Started] As a user, I want the assistant to create reminders for me, so that I do not forget important tasks.
 
@@ -20,12 +20,12 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want to choose which applications the assistant is allowed to control, so that I feel safe about what it can access.
 
-[Not Started] As a user, I want to enable or disable the assistant’s screen viewing at any time, so that I remain in control of my privacy.
+[Done] As a user, I want to enable or disable the assistant’s screen viewing at any time, so that I remain in control of my privacy.
 
 [Done] As a user, I want the assistant to confirm before performing important actions, so that mistakes can be prevented.
 
 [Partial] As a user, I want the assistant to learn my preferences over time, so that it becomes more personalized and helpful.
 
-[Not Started] As a user, I want the assistant to suggest helpful actions based on what I am doing, so that I can be more productive.
+[Done] As a user, I want the assistant to suggest helpful actions based on what I am doing, so that I can be more productive.
 
 [Done] As a user, I want the assistant to remember tasks and context during a session, so that I do not need to repeat information.

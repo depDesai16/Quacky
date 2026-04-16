@@ -63,7 +63,10 @@ class ChatRuntime:
     def _send_chat_message(chat, message: str, screenshot_bytes: bytes | None, screenshot_mime_type: str) -> str:
         prompt = (message or "").strip()
         if not screenshot_bytes:
-            return chat.send_message(prompt).text
+            try:
+                return chat.send_message(prompt).text
+            except Exception:
+                return "Quacky hit a temporary model hiccup. Try that again in a moment."
 
         multimodal_prompt = ChatRuntime._attach_screen_context_note(prompt)
         mime_type = (screenshot_mime_type or "image/png").strip() or "image/png"
@@ -82,7 +85,10 @@ class ChatRuntime:
                 "A screenshot was available for this turn, but it could not be attached. "
                 "Answer based on text only."
             ).strip()
-            return chat.send_message(fallback_prompt).text
+            try:
+                return chat.send_message(fallback_prompt).text
+            except Exception:
+                return "Quacky hit a temporary model hiccup while checking your screen. Try again in a moment."
 
     @staticmethod
     def _merge_due_alerts(text: str, due_alerts: list[str]) -> str:

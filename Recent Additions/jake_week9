@@ -1,0 +1,12 @@
+Week 9 Summary
+
+- Built the first screen-viewing feature set so Quacky can attach screenshots to chat requests and answer questions about visible content.
+- Added an explicit screen-viewing toggle in both Settings and the composer so the feature is user-controlled instead of always-on.
+- Wired screenshot-aware chat requests through the backend runtime and Gemini multimodal path, with text-only fallback when image attachment fails.
+- Added a persistent live screen-capture session for Wayland so permission is requested on toggle instead of on every message send.
+- Added cross-platform screen-capture routing with separate fallback strategies for Windows, macOS, X11, and Wayland.
+- Moved screen-frame PNG encoding off the main UI path into a worker thread so live capture does not block the interface.
+- Added frame freshness tracking so later chat turns wait briefly for a newer live frame instead of blindly reusing the previously sent screenshot.
+- Updated startup behavior so screen viewing always begins disabled on launch, even if it was enabled in a previous session.
+- Hardened the screenshot send path and model fallback behavior so temporary Gemini overloads do not surface as raw backend 500s.
+- Added focused tests for screen-capture strategy selection, screenshot payload wiring, and the updated settings persistence behavior.

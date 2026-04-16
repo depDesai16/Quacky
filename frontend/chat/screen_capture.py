@@ -171,6 +171,7 @@ class PersistentScreenCaptureSession(QObject):
 
         self._latest_png_bytes: bytes | None = None
         self._last_error = ""
+        self._frame_counter = 0
         self._encode_in_flight = False
         self._pending_image: QImage | None = None
         self._encoder_thread = QThread(self)
@@ -208,6 +209,7 @@ class PersistentScreenCaptureSession(QObject):
         except Exception:
             pass
         self._latest_png_bytes = None
+        self._frame_counter = 0
         self._pending_image = None
         self._encode_in_flight = False
         self.frame_changed.emit(False)
@@ -221,8 +223,33 @@ class PersistentScreenCaptureSession(QObject):
     def latest_png_bytes(self) -> bytes | None:
         return self._latest_png_bytes
 
+    def latest_frame_id(self) -> int:
+        return int(self._frame_counter)
+
     def last_error(self) -> str:
         return self._last_error
+
+    def wait_for_frame_after(self, last_frame_id: int, timeout_ms: int = 700) -> bool:
+        if self._frame_counter > int(last_frame_id):
+            return True
+
+        loop = QEventLoop(self)
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+
+        def _quit_if_newer(_has_frame: bool):
+            if self._frame_counter > int(last_frame_id) and loop.isRunning():
+                loop.quit()
+
+        self.frame_changed.connect(_quit_if_newer)
+        timer.timeout.connect(loop.quit)
+        timer.start(max(50, int(timeout_ms)))
+        loop.exec()
+        try:
+            self.frame_changed.disconnect(_quit_if_newer)
+        except Exception:
+            pass
+        return self._frame_counter > int(last_frame_id)
 
     def _on_frame(self, frame: QVideoFrame):
         if not frame.isValid():
@@ -239,6 +266,7 @@ class PersistentScreenCaptureSession(QObject):
 
     def _on_encoded(self, png_bytes: bytes):
         self._latest_png_bytes = png_bytes
+        self._frame_counter += 1
         self._last_error = ""
         self._encode_in_flight = False
         self.frame_changed.emit(True)
@@ -269,6 +297,7 @@ class PersistentScreenCaptureSession(QObject):
     def _on_active_changed(self, active: bool):
         if not active:
             self._latest_png_bytes = None
+            self._frame_counter = 0
             self._pending_image = None
             self._encode_in_flight = False
             self.frame_changed.emit(False)

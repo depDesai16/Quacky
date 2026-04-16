@@ -177,6 +177,7 @@ class QuackyWindow(QWidget):
         self.timer_confirmation_enabled = True
         self.screen_viewing_enabled = False
         self._screen_capture_session = PersistentScreenCaptureSession(self)
+        self._last_sent_screen_frame_id = 0
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -207,6 +208,7 @@ class QuackyWindow(QWidget):
         self._restore_geometry()
         self._load_speech_to_speech_settings()
         self._load_confirmation_settings()
+        self._reset_screen_viewing_startup_state()
 
         self.model_window = None
         try:
@@ -275,6 +277,16 @@ class QuackyWindow(QWidget):
                 result = None
             if isinstance(result, dict) and "enabled" in result:
                 self.screen_viewing_enabled = bool(result.get("enabled"))
+
+    def _reset_screen_viewing_startup_state(self):
+        """Always start new app sessions with screen viewing disabled."""
+        self.screen_viewing_enabled = False
+        self._last_sent_screen_frame_id = 0
+        if hasattr(self._client, "set_screen_viewing_enabled"):
+            try:
+                self._client.set_screen_viewing_enabled(False)
+            except Exception:
+                pass
 
 
     def _build_ui(self):
@@ -659,6 +671,7 @@ class QuackyWindow(QWidget):
             self._ensure_screen_capture_session(show_prompt_hint=True)
         else:
             self._screen_capture_session.stop()
+            self._last_sent_screen_frame_id = 0
 
     def _update_screen_view_button(self):
         """Reflect screen-viewing state in the composer button."""
@@ -705,22 +718,36 @@ class QuackyWindow(QWidget):
             return {}
 
         if self._screen_capture_session.has_frame():
+            current_frame_id = self._screen_capture_session.latest_frame_id()
+            if current_frame_id <= self._last_sent_screen_frame_id:
+                self._screen_capture_session.wait_for_frame_after(
+                    self._last_sent_screen_frame_id,
+                    timeout_ms=900,
+                )
+                current_frame_id = self._screen_capture_session.latest_frame_id()
+
             encoded = base64.b64encode(
                 self._screen_capture_session.latest_png_bytes() or b""
             ).decode("ascii")
             if encoded:
+                self._last_sent_screen_frame_id = current_frame_id
                 return {
                     "screenshot_base64": encoded,
                     "screenshot_mime_type": "image/png",
                 }
 
-        session_started = self._ensure_screen_capture_session(show_prompt_hint=is_wayland_session())
         if is_wayland_session():
-            if session_started:
-                self._show_settings_toast(
-                    "Waiting for the shared screen to produce its first frame. Try sending again in a moment.",
-                    "warn",
-                )
+            self._show_settings_toast(
+                "Screen viewing is waiting for a live shared frame. Toggle it on and choose a screen first.",
+                "warn",
+            )
+            return {}
+
+        if self._screen_capture_session.is_active():
+            self._show_settings_toast(
+                "Screen viewing is active but no frame is ready yet. Try again in a moment.",
+                "warn",
+            )
             return {}
 
         screen = self.screen() or QApplication.primaryScreen()
