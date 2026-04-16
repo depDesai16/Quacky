@@ -1,13 +1,13 @@
-import importlib.util
 import sys
 import unittest
+from importlib import util
 from pathlib import Path
 from unittest.mock import patch
 
 
 _MODULE_PATH = Path(__file__).resolve().parents[1] / "frontend" / "chat" / "screen_capture.py"
-_SPEC = importlib.util.spec_from_file_location("quacky_screen_capture", _MODULE_PATH)
-screen_capture = importlib.util.module_from_spec(_SPEC)
+_SPEC = util.spec_from_file_location("quacky_screen_capture", _MODULE_PATH)
+screen_capture = util.module_from_spec(_SPEC)
 assert _SPEC is not None and _SPEC.loader is not None
 sys.modules[_SPEC.name] = screen_capture
 _SPEC.loader.exec_module(screen_capture)
