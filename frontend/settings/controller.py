@@ -62,7 +62,7 @@ class _ApiKeyTestWorker(QThread):
 
 
 class _ConfirmationSettingsLoadWorker(QThread):
-    loaded = pyqtSignal(object, object, str)
+    loaded = pyqtSignal(object, object, object, str)
 
     def __init__(self, client):
         """Initialize the instance state."""
@@ -77,6 +77,7 @@ class _ConfirmationSettingsLoadWorker(QThread):
 
         open_enabled = None
         timer_enabled = None
+        screen_enabled = None
         errors: list[str] = []
 
         try:
@@ -95,16 +96,25 @@ class _ConfirmationSettingsLoadWorker(QThread):
         except Exception as exc:
             errors.append(str(exc))
 
+        try:
+            if hasattr(self._client, "get_screen_viewing_settings"):
+                result = self._client.get_screen_viewing_settings()
+                if isinstance(result, dict) and "enabled" in result:
+                    screen_enabled = bool(result.get("enabled"))
+        except Exception as exc:
+            errors.append(str(exc))
+
         self.loaded.emit(
             open_enabled,
             timer_enabled,
+            screen_enabled,
             "; ".join(errors),
         )
 
 
 class SettingsController(QObject):
     saved_api_key_loaded = pyqtSignal(bool, str)
-    confirmation_settings_loaded = pyqtSignal(object, object, str)
+    confirmation_settings_loaded = pyqtSignal(object, object, object, str)
     api_key_test_result = pyqtSignal(bool, str)
     api_key_test_started = pyqtSignal()
     api_key_test_finished = pyqtSignal()
@@ -188,9 +198,9 @@ class SettingsController(QObject):
         self._load_worker.deleteLater()
         self._load_worker = None
 
-    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, error: str):
+    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, screen_enabled, error: str):
         """Handle confirmation settings loaded callbacks."""
-        self.confirmation_settings_loaded.emit(open_enabled, timer_enabled, error)
+        self.confirmation_settings_loaded.emit(open_enabled, timer_enabled, screen_enabled, error)
 
     def _on_confirmation_finished(self):
         """Handle confirmation settings worker completion."""

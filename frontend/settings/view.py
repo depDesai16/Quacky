@@ -22,6 +22,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
     speechtospeech_enabled_changed = pyqtSignal(bool)
     open_app_confirmation_enabled_changed = pyqtSignal(bool)
     timer_confirmation_enabled_changed = pyqtSignal(bool)
+    screen_viewing_enabled_changed = pyqtSignal(bool)
 
     def __init__(
         self,
@@ -29,6 +30,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         speechtospeech_enabled: bool,
         open_app_confirmation_enabled: bool,
         timer_confirmation_enabled: bool,
+        screen_viewing_enabled: bool,
         toast_callback,
         client,
         parent=None,
@@ -41,6 +43,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self.speechtospeech_enabled = bool(speechtospeech_enabled)
         self.open_app_confirmation_enabled = bool(open_app_confirmation_enabled)
         self.timer_confirmation_enabled = bool(timer_confirmation_enabled)
+        self.screen_viewing_enabled = bool(screen_viewing_enabled)
         self.toast = _ToastProxy(toast_callback)
         self._settings_controller = SettingsController(client, parent=self)
 
@@ -108,7 +111,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._settings_controller.refresh_confirmation_settings_async()
         self._settings_controller.refresh_saved_api_key_async()
 
-    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, _error: str):
+    def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, screen_enabled, _error: str):
         """Handle async confirmation settings refresh callbacks."""
         if open_enabled is not None:
             self.open_app_confirmation_enabled = bool(open_enabled)
@@ -139,6 +142,22 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
                 blocker = QSignalBlocker(self._toggle_timer_confirm)
                 self._toggle_timer_confirm.setChecked(
                     self.timer_confirmation_enabled
+                )
+                del blocker
+
+        if screen_enabled is not None:
+            self.screen_viewing_enabled = bool(screen_enabled)
+            if (
+                hasattr(self, "_toggle_screen_viewing")
+                and self._toggle_screen_viewing is not None
+                and self._toggle_screen_viewing.isChecked()
+                != self.screen_viewing_enabled
+            ):
+                from PyQt6.QtCore import QSignalBlocker
+
+                blocker = QSignalBlocker(self._toggle_screen_viewing)
+                self._toggle_screen_viewing.setChecked(
+                    self.screen_viewing_enabled
                 )
                 del blocker
 
@@ -403,6 +422,50 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
             del blocker
 
         self.timer_confirmation_enabled_changed.emit(self.timer_confirmation_enabled)
+
+    def set_screen_viewing_enabled(self, enabled: bool):
+        """Set whether screen-view screenshots are attached to chat requests."""
+        requested = bool(enabled)
+        resolved = requested
+
+        if self._client is not None and hasattr(
+            self._client, "set_screen_viewing_enabled"
+        ):
+            try:
+                result = self._client.set_screen_viewing_enabled(requested)
+            except Exception as exc:
+                self.toast.show_message(
+                    f"Failed to update screen viewing: {exc}",
+                    kind="error",
+                )
+                result = {"error": str(exc)}
+
+            if isinstance(result, dict) and "error" in result:
+                self.toast.show_message(
+                    f"Failed to update screen viewing: {result['error']}",
+                    kind="error",
+                )
+                resolved = self.screen_viewing_enabled
+            elif isinstance(result, dict) and "enabled" in result:
+                resolved = bool(result.get("enabled"))
+
+        self.screen_viewing_enabled = bool(resolved)
+
+        if (
+            hasattr(self, "_toggle_screen_viewing")
+            and self._toggle_screen_viewing is not None
+            and self._toggle_screen_viewing.isChecked()
+            != self.screen_viewing_enabled
+        ):
+            from PyQt6.QtCore import QSignalBlocker
+
+            blocker = QSignalBlocker(self._toggle_screen_viewing)
+            self._toggle_screen_viewing.setChecked(
+                self.screen_viewing_enabled
+            )
+            del blocker
+
+        self.screen_viewing_enabled_changed.emit(self.screen_viewing_enabled)
 
     def _show_settings(self):
         """Show settings."""

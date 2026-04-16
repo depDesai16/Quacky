@@ -14,10 +14,12 @@ from backend.core.settings_service import (
 )
 from backend.core.settings_service import (
     get_open_app_confirmation_enabled,
+    get_screen_viewing_enabled,
     get_timer_confirmation_enabled,
     remove_api_key,
     save_api_key,
     save_open_app_confirmation_enabled,
+    save_screen_viewing_enabled,
     save_timer_confirmation_enabled,
     test_api_key,
 )
@@ -57,6 +59,11 @@ timer_confirmation_state = {
     "enabled": bool(get_timer_confirmation_enabled(default=True))
 }
 runtime.set_timer_confirmation_enabled(timer_confirmation_state["enabled"])
+screen_viewing_state = {
+    "enabled": bool(get_screen_viewing_enabled(default=False))
+}
+runtime.set_screen_viewing_enabled(screen_viewing_state["enabled"])
+_MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 
 
 def _as_bool(value, default: bool = False) -> bool:
@@ -103,6 +110,29 @@ def _build_chat_response(chat_id: str, text: str, tts_requested: bool) -> dict:
             except Exception as tts_exc:
                 payload["tts_error"] = str(tts_exc)
     return payload
+
+
+def _decode_optional_screenshot(data: dict) -> tuple[bytes | None, str | None, str | None]:
+    raw = data.get("screenshot_base64")
+    if raw in {None, ""}:
+        return None, None, None
+
+    try:
+        decoded = base64.b64decode(str(raw), validate=True)
+    except Exception:
+        return None, None, "screenshot_base64 is invalid"
+
+    if not decoded:
+        return None, None, "screenshot_base64 is empty"
+
+    if len(decoded) > _MAX_SCREENSHOT_BYTES:
+        return None, None, "screenshot is too large"
+
+    mime_type = str(data.get("screenshot_mime_type", "image/png")).strip() or "image/png"
+    if mime_type not in {"image/png", "image/jpeg", "image/webp"}:
+        mime_type = "image/png"
+
+    return decoded, mime_type, None
 
 
 def _is_loopback_client(handler: BaseHTTPRequestHandler) -> bool:
@@ -157,6 +187,14 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 self,
                 200,
                 {"enabled": bool(timer_confirmation_state["enabled"])},
+            )
+            return
+
+        if self.path == "/settings/screen-viewing":
+            _json_response(
+                self,
+                200,
+                {"enabled": bool(screen_viewing_state["enabled"])},
             )
             return
 
@@ -218,6 +256,7 @@ class QuackyHandler(BaseHTTPRequestHandler):
             chat_id = data.get("chat_id")
             message = data.get("message")
             tts_requested = _as_bool(data.get("tts"), default=speech_to_speech_state["enabled"])
+            screenshot_bytes, screenshot_mime_type, screenshot_error = _decode_optional_screenshot(data)
 
             if not chat_id:
                 _json_response(self, 400, {"error": "chat_id is required"})
@@ -227,8 +266,17 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 _json_response(self, 400, {"error": "message is required"})
                 return
 
+            if screenshot_error is not None:
+                _json_response(self, 400, {"error": screenshot_error})
+                return
+
             try:
-                text = runtime.handle_message(chat_id, message)
+                text = runtime.handle_message(
+                    chat_id,
+                    message,
+                    screenshot_bytes=screenshot_bytes,
+                    screenshot_mime_type=screenshot_mime_type or "image/png",
+                )
                 payload = _build_chat_response(chat_id, text, tts_requested)
                 _json_response(self, 200, payload)
             except KeyError:
@@ -338,6 +386,19 @@ class QuackyHandler(BaseHTTPRequestHandler):
             timer_confirmation_state["enabled"] = enabled
             runtime.set_timer_confirmation_enabled(enabled)
             save_timer_confirmation_enabled(enabled)
+            _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
+        if self.path == "/settings/screen-viewing":
+            data = _read_json(self)
+            if "enabled" not in data:
+                _json_response(self, 400, {"error": "enabled is required"})
+                return
+
+            enabled = _as_bool(data.get("enabled"), default=False)
+            screen_viewing_state["enabled"] = enabled
+            runtime.set_screen_viewing_enabled(enabled)
+            save_screen_viewing_enabled(enabled)
             _json_response(self, 200, {"enabled": bool(enabled)})
             return
 

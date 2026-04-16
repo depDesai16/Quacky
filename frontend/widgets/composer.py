@@ -482,7 +482,7 @@ class _ComposerPill(QWidget):
     CHAR_LIMIT = 2000
     CHAR_WARN  = 800
 
-    def __init__(self, mic_btn, plus_btn, input_field, send_btn, sts_btn, parent=None):
+    def __init__(self, mic_btn, plus_btn, screen_btn, input_field, send_btn, sts_btn, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
         self._tokens  = ThemeManager.tokens()
@@ -503,6 +503,7 @@ class _ComposerPill(QWidget):
 
         toolbar.addWidget(mic_btn,  0, Qt.AlignmentFlag.AlignVCenter)
         toolbar.addWidget(plus_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        toolbar.addWidget(screen_btn, 0, Qt.AlignmentFlag.AlignVCenter)
         toolbar.addStretch(1)
 
         self._char_label = QLabel("0 / 2000")
@@ -594,16 +595,18 @@ class _ComposerPill(QWidget):
 
 class Composer(QWidget):
 
-    def __init__(self, mic_button, send_button, sts_button, parent=None):
+    def __init__(self, mic_button, send_button, sts_button, screen_button, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
         self._tokens       = ThemeManager.tokens()
         self.input_field   = ComposerInput()
         self.plus_btn      = _PlusMenuButton()
+        self.screen_btn    = screen_button
 
         self._pill = _ComposerPill(
             mic_btn    = mic_button,
             plus_btn   = self.plus_btn,
+            screen_btn = self.screen_btn,
             input_field= self.input_field,
             send_btn   = send_button,
             sts_btn    = sts_button,

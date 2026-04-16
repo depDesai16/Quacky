@@ -7,6 +7,27 @@ from backend.client import QuackyClient
 
 
 class QuackyClientTests(unittest.TestCase):
+    def test_send_message_includes_screenshot_payload_when_provided(self):
+        client = QuackyClient()
+
+        with patch.object(client, "_post", return_value={"ok": True}) as post:
+            client.send_message(
+                "chat-1",
+                "what is on my screen?",
+                screenshot_base64="abc123",
+                screenshot_mime_type="image/png",
+            )
+
+        post.assert_called_once_with(
+            "/chat/message",
+            {
+                "chat_id": "chat-1",
+                "message": "what is on my screen?",
+                "screenshot_base64": "abc123",
+                "screenshot_mime_type": "image/png",
+            },
+        )
+
     def test_decode_audio_bytes_returns_bytes_for_valid_payload(self):
         audio = b"quack"
         payload = {"audio_base64": base64.b64encode(audio).decode("ascii")}

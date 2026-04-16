@@ -40,6 +40,19 @@ class SettingsServiceTests(unittest.TestCase):
                 self.assertEqual(settings_service.get_api_key(), "")
                 self.assertFalse(settings_service.has_api_key())
 
+    def test_screen_viewing_setting_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings_path = Path(tmpdir) / "local_settings.json"
+
+            with patch.object(settings_service, "_FILE", settings_path):
+                self.assertFalse(settings_service.get_screen_viewing_enabled(default=False))
+
+                settings_service.save_screen_viewing_enabled(True)
+                self.assertTrue(settings_service.get_screen_viewing_enabled(default=False))
+
+                settings_service.save_screen_viewing_enabled(False)
+                self.assertFalse(settings_service.get_screen_viewing_enabled(default=True))
+
 
 if __name__ == "__main__":
     unittest.main()

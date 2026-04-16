@@ -10,9 +10,9 @@ Status legend: [Done] [Partial] [Not Started]
 
 [Not Started] As a user, I want the assistant to create reminders for me, so that I do not forget important tasks.
 
-[Not Started] As a user, I want the assistant to create, edit, and delete calendar events (with permission), so that I can manage my schedule more efficiently.
+[Done] As a user, I want the assistant to create, edit, and delete calendar events (with permission), so that I can manage my schedule more efficiently.
 
-[Partial] As a user, I want the assistant to open applications for me, so that I can launch tools quickly or hands-free.
+[Done] As a user, I want the assistant to open applications for me, so that I can launch tools quickly or hands-free.
 
 [Not Started] As a user, I want the assistant to perform basic actions within apps it has permission to use, so that I can save time on repetitive tasks.
 

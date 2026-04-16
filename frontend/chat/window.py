@@ -1,3 +1,4 @@
+import base64
 import os
 import sys
 
@@ -19,13 +20,14 @@ from PyQt6.QtMultimedia import QAudioOutput, QMediaPlayer
 from theme import ThemeManager
 from widgets.quacky_widget import get_quacky_icon
 from .model_window import ModelWindow
+from .screen_capture import PersistentScreenCaptureSession, capture_screen_png, is_wayland_session
 from backend.client import QuackyClient
 
 from widgets.card_widget   import CardWidget
 from widgets.header_bar    import HeaderBar
 from widgets.chat_timeline import ChatTimeline
 from widgets.composer      import Composer
-from widgets.icon_buttons  import MicButton, SendButton
+from widgets.icon_buttons  import MicButton, ScreenViewButton, SendButton
 from widgets.toast         import Toast
 
 from settings import SettingsPanel
@@ -39,16 +41,30 @@ class ChatWorker(QThread):
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, client: QuackyClient, chat_id: str, message: str):
+    def __init__(
+        self,
+        client: QuackyClient,
+        chat_id: str,
+        message: str,
+        screenshot_base64: str | None = None,
+        screenshot_mime_type: str | None = None,
+    ):
         """Initialize the instance state."""
         super().__init__()
         self._client  = client
         self._chat_id = chat_id
         self._message = message
+        self._screenshot_base64 = screenshot_base64
+        self._screenshot_mime_type = screenshot_mime_type
 
     def run(self):
         """Execute the worker task."""
-        result = self._client.send_message(self._chat_id, self._message)
+        result = self._client.send_message(
+            self._chat_id,
+            self._message,
+            screenshot_base64=self._screenshot_base64,
+            screenshot_mime_type=self._screenshot_mime_type,
+        )
         if "error" in result:
             self.error_occurred.emit(result["error"])
         else:
@@ -61,12 +77,21 @@ class StreamingChatWorker(QThread):
     response_ready = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
-    def __init__(self, client: QuackyClient, chat_id: str, message: str):
+    def __init__(
+        self,
+        client: QuackyClient,
+        chat_id: str,
+        message: str,
+        screenshot_base64: str | None = None,
+        screenshot_mime_type: str | None = None,
+    ):
         """Initialize the instance state."""
         super().__init__()
         self._client  = client
         self._chat_id = chat_id
         self._message = message
+        self._screenshot_base64 = screenshot_base64
+        self._screenshot_mime_type = screenshot_mime_type
 
     def run(self):
         """Execute the worker task."""
@@ -89,7 +114,12 @@ class StreamingChatWorker(QThread):
             except Exception:
                 pass
 
-        result = self._client.send_message(self._chat_id, self._message)
+        result = self._client.send_message(
+            self._chat_id,
+            self._message,
+            screenshot_base64=self._screenshot_base64,
+            screenshot_mime_type=self._screenshot_mime_type,
+        )
         if "error" in result:
             self.error_occurred.emit(result["error"])
             return
@@ -145,6 +175,8 @@ class QuackyWindow(QWidget):
         self.speechtospeech_enabled = True
         self.open_app_confirmation_enabled = True
         self.timer_confirmation_enabled = True
+        self.screen_viewing_enabled = False
+        self._screen_capture_session = PersistentScreenCaptureSession(self)
         self._drag_pos:        QPoint | None = None
         self._resize_dir:       str    | None = None
         self._resize_start_geo         = None
@@ -195,6 +227,8 @@ class QuackyWindow(QWidget):
         self._theme_fade_overlay = None
         self._theme_fade_anim    = None
 
+        self._screen_capture_session.error_occurred.connect(self._on_screen_capture_error)
+
         self._build_ui()
         self._install_resize_cursor_tracking()
         ThemeManager.subscribe(self._on_theme_changed)
@@ -233,6 +267,14 @@ class QuackyWindow(QWidget):
                 result = None
             if isinstance(result, dict) and "enabled" in result:
                 self.timer_confirmation_enabled = bool(result.get("enabled"))
+
+        if hasattr(self._client, "get_screen_viewing_settings"):
+            try:
+                result = self._client.get_screen_viewing_settings()
+            except Exception:
+                result = None
+            if isinstance(result, dict) and "enabled" in result:
+                self.screen_viewing_enabled = bool(result.get("enabled"))
 
 
     def _build_ui(self):
@@ -284,6 +326,7 @@ class QuackyWindow(QWidget):
             speechtospeech_enabled=self.speechtospeech_enabled,
             open_app_confirmation_enabled=self.open_app_confirmation_enabled,
             timer_confirmation_enabled=self.timer_confirmation_enabled,
+            screen_viewing_enabled=self.screen_viewing_enabled,
             toast_callback=self._show_settings_toast,
             client=self._client,
             parent=self.card,
@@ -291,6 +334,9 @@ class QuackyWindow(QWidget):
         self._settings_container.model_visibility_changed.connect(self.set_model_visible)
         self._settings_container.speechtospeech_enabled_changed.connect(
             self.set_speechtospeech_enabled
+        )
+        self._settings_container.screen_viewing_enabled_changed.connect(
+            self.set_screen_viewing_enabled
         )
         
         # Add views to stacked widget
@@ -325,16 +371,20 @@ class QuackyWindow(QWidget):
         self.send_btn = SendButton()
         from widgets.icon_buttons import SpeechToSpeechButton
         self.sts_btn  = SpeechToSpeechButton()
+        self.screen_btn = ScreenViewButton()
         self.composer = Composer(
             mic_button=self.mic_btn,
             send_button=self.send_btn,
             sts_button=self.sts_btn,
+            screen_button=self.screen_btn,
             parent=self.card,
         )
         self.composer.input_field.send_requested.connect(self.send_message)
         self.send_btn.clicked.connect(self.send_message)
         self.sts_btn.clicked.connect(self._show_sts_panel)
+        self.screen_btn.toggled.connect(self._settings_container.set_screen_viewing_enabled)
         self._update_sts_button_hint()
+        self._update_screen_view_button()
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
@@ -601,6 +651,95 @@ class QuackyWindow(QWidget):
         self.set_speechtospeech_enabled(True)
         return True
 
+    def set_screen_viewing_enabled(self, enabled: bool):
+        """Update local screen-viewing state and UI affordances."""
+        self.screen_viewing_enabled = bool(enabled)
+        self._update_screen_view_button()
+        if self.screen_viewing_enabled:
+            self._ensure_screen_capture_session(show_prompt_hint=True)
+        else:
+            self._screen_capture_session.stop()
+
+    def _update_screen_view_button(self):
+        """Reflect screen-viewing state in the composer button."""
+        if not hasattr(self, "screen_btn"):
+            return
+        self.screen_btn.setEnabled(True)
+        with QSignalBlocker(self.screen_btn):
+            self.screen_btn.setChecked(self.screen_viewing_enabled)
+        if self.screen_viewing_enabled:
+            self.screen_btn.setToolTip("Screen viewing is on")
+        else:
+            self.screen_btn.setToolTip("Enable screen viewing")
+
+    def _on_screen_capture_error(self, message: str):
+        """Surface capture errors while screen viewing is enabled."""
+        if self.screen_viewing_enabled and message:
+            self._show_settings_toast(f"Screen viewing error: {message}", "warn")
+
+    def _ensure_screen_capture_session(self, show_prompt_hint: bool = False) -> bool:
+        """Start or keep a persistent capture session alive while screen viewing is enabled."""
+        if not self.screen_viewing_enabled:
+            return False
+        if self._screen_capture_session.is_active():
+            return True
+
+        started, info = self._screen_capture_session.start(
+            self.screen() or QApplication.primaryScreen()
+        )
+        if not started:
+            if self._screen_capture_session.last_error():
+                self._show_settings_toast(
+                    f"Failed to start screen viewing: {self._screen_capture_session.last_error()}",
+                    "warn",
+                )
+            return False
+
+        if show_prompt_hint and info:
+            self._show_settings_toast(info, "warn")
+        return True
+
+    def _build_screen_context_payload(self) -> dict:
+        """Capture the active screen as a PNG when screen viewing is enabled."""
+        if not self.screen_viewing_enabled:
+            return {}
+
+        if self._screen_capture_session.has_frame():
+            encoded = base64.b64encode(
+                self._screen_capture_session.latest_png_bytes() or b""
+            ).decode("ascii")
+            if encoded:
+                return {
+                    "screenshot_base64": encoded,
+                    "screenshot_mime_type": "image/png",
+                }
+
+        session_started = self._ensure_screen_capture_session(show_prompt_hint=is_wayland_session())
+        if is_wayland_session():
+            if session_started:
+                self._show_settings_toast(
+                    "Waiting for the shared screen to produce its first frame. Try sending again in a moment.",
+                    "warn",
+                )
+            return {}
+
+        screen = self.screen() or QApplication.primaryScreen()
+        result = capture_screen_png(screen)
+        if not result.png_bytes:
+            detail = f" ({result.method})" if result.method else ""
+            suffix = f": {result.error}" if result.error else ""
+            self._show_settings_toast(
+                f"Screen capture failed{detail}. Sending text only{suffix}",
+                "warn",
+            )
+            return {}
+
+        encoded = base64.b64encode(result.png_bytes).decode("ascii")
+        return {
+            "screenshot_base64": encoded,
+            "screenshot_mime_type": "image/png",
+        }
+
     def _init_sts_audio_player(self):
         """Initialize audio playback for speech-to-speech responses."""
         self._sts_audio_output = QAudioOutput(self)
@@ -668,6 +807,8 @@ class QuackyWindow(QWidget):
         """Handle shutdown."""
         if hasattr(self, "_settings_container"):
             self._settings_container.shutdown()
+        if hasattr(self, "_screen_capture_session") and self._screen_capture_session is not None:
+            self._screen_capture_session.shutdown()
         if self._sts_controller is not None:
             self._sts_controller.shutdown()
         if self._sts_audio_player is not None:
@@ -688,8 +829,15 @@ class QuackyWindow(QWidget):
         self._last_failed_text = text
         self._append_user(text)
         self._set_input_busy(True)
+        screen_payload = self._build_screen_context_payload()
 
-        worker = StreamingChatWorker(self._client, self._chat_id, text)
+        worker = StreamingChatWorker(
+            self._client,
+            self._chat_id,
+            text,
+            screenshot_base64=screen_payload.get("screenshot_base64"),
+            screenshot_mime_type=screen_payload.get("screenshot_mime_type"),
+        )
         worker.chunk_received.connect(self._on_chunk)
         worker.response_ready.connect(self._on_stream_complete)
         worker.error_occurred.connect(self._on_error)

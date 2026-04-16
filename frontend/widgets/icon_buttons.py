@@ -337,3 +337,31 @@ class SpeechToSpeechButton(_CircleBase):
                 QPointF(bx, cy - h / 2.0),
                 QPointF(bx, cy + h / 2.0),
             )
+
+
+class ScreenViewButton(_CircleBase):
+    """Checkable button that indicates whether screen context is attached."""
+
+    def __init__(self, parent=None):
+        """Initialize the instance state."""
+        super().__init__(parent)
+        self.setCheckable(True)
+        self.setToolTip("Enable screen viewing")
+
+    def _draw_icon(self, p: QPainter, cx: float, cy: float, color: QColor):
+        """Draw a compact monitor glyph."""
+        pen = QPen(color, 1.5, Qt.PenStyle.SolidLine,
+                   Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+        p.setPen(pen)
+        p.setBrush(Qt.BrushStyle.NoBrush)
+
+        frame = QPainterPath()
+        frame.addRoundedRect(QRectF(cx - 6.5, cy - 5.7, 13.0, 8.6), 1.6, 1.6)
+        p.drawPath(frame)
+
+        p.drawLine(QPointF(cx - 2.2, cy + 5.1), QPointF(cx + 2.2, cy + 5.1))
+        p.drawLine(QPointF(cx, cy + 2.9), QPointF(cx, cy + 5.1))
+
+        if self.isChecked():
+            p.drawLine(QPointF(cx - 3.4, cy - 1.0), QPointF(cx - 0.9, cy + 1.5))
+            p.drawLine(QPointF(cx - 0.9, cy + 1.5), QPointF(cx + 3.6, cy - 2.7))

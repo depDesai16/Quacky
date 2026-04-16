@@ -718,6 +718,16 @@ class SettingsPanelMixin:
         )
         card.add_row(row4)
 
+        row5, self._toggle_screen_viewing = self._make_settings_toggle_row(
+            "Screen Viewing",
+            "Allow Quacky to attach a screenshot of your current screen to chat messages.",
+            bool(getattr(self, "screen_viewing_enabled", False)),
+        )
+        self._toggle_screen_viewing.toggled.connect(
+            self.set_screen_viewing_enabled
+        )
+        card.add_row(row5)
+
         lay.addStretch(1)
         return page
 

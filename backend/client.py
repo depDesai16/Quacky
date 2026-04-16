@@ -61,10 +61,20 @@ class QuackyClient:
             payload["model"] = model
         return self._post("/chat/start", payload)
 
-    def send_message(self, chat_id: str, message: str, tts: bool | None = None) -> dict:
+    def send_message(
+        self,
+        chat_id: str,
+        message: str,
+        tts: bool | None = None,
+        screenshot_base64: str | None = None,
+        screenshot_mime_type: str | None = None,
+    ) -> dict:
         payload = {"chat_id": chat_id, "message": message}
         if tts is not None:
             payload["tts"] = tts
+        if screenshot_base64:
+            payload["screenshot_base64"] = screenshot_base64
+            payload["screenshot_mime_type"] = screenshot_mime_type or "image/png"
         return self._post("/chat/message", payload)
 
     def send_speech_to_speech_message(self, chat_id: str, message: str) -> dict:
@@ -91,6 +101,12 @@ class QuackyClient:
 
     def set_timer_confirmation_enabled(self, enabled: bool) -> dict:
         return self._post("/settings/timer-confirmation", {"enabled": bool(enabled)})
+
+    def get_screen_viewing_settings(self) -> dict:
+        return self._get("/settings/screen-viewing")
+
+    def set_screen_viewing_enabled(self, enabled: bool) -> dict:
+        return self._post("/settings/screen-viewing", {"enabled": bool(enabled)})
 
     @staticmethod
     def decode_audio_bytes(response: dict) -> bytes | None:

@@ -36,6 +36,7 @@ class ChatRuntime:
         self.memory: dict[str, dict] = {}
         self.open_app_confirmation_enabled = True
         self.timer_confirmation_enabled = True
+        self.screen_viewing_enabled = False
 
     def set_open_app_confirmation_enabled(self, enabled: bool) -> None:
         """Set whether open-app actions require explicit confirmation."""
@@ -44,6 +45,44 @@ class ChatRuntime:
     def set_timer_confirmation_enabled(self, enabled: bool) -> None:
         """Set whether timer/alarm actions require explicit confirmation."""
         self.timer_confirmation_enabled = bool(enabled)
+
+    def set_screen_viewing_enabled(self, enabled: bool) -> None:
+        """Set whether screenshot context may be attached to chat requests."""
+        self.screen_viewing_enabled = bool(enabled)
+
+    @staticmethod
+    def _attach_screen_context_note(message: str) -> str:
+        text = (message or "").strip()
+        note = (
+            "The user also shared a screenshot of their current screen. "
+            "Use it only when it helps answer the request."
+        )
+        return f"{text}\n\n{note}" if text else note
+
+    @staticmethod
+    def _send_chat_message(chat, message: str, screenshot_bytes: bytes | None, screenshot_mime_type: str) -> str:
+        prompt = (message or "").strip()
+        if not screenshot_bytes:
+            return chat.send_message(prompt).text
+
+        multimodal_prompt = ChatRuntime._attach_screen_context_note(prompt)
+        mime_type = (screenshot_mime_type or "image/png").strip() or "image/png"
+
+        try:
+            response = chat.send_message(
+                [
+                    types.Part.from_text(text=multimodal_prompt),
+                    types.Part.from_bytes(data=screenshot_bytes, mime_type=mime_type),
+                ]
+            )
+            return response.text
+        except Exception:
+            fallback_prompt = (
+                f"{prompt}\n\n"
+                "A screenshot was available for this turn, but it could not be attached. "
+                "Answer based on text only."
+            ).strip()
+            return chat.send_message(fallback_prompt).text
 
     @staticmethod
     def _merge_due_alerts(text: str, due_alerts: list[str]) -> str:
@@ -85,10 +124,17 @@ class ChatRuntime:
         del self.chats[chat_id]
         self.memory.pop(chat_id, None)
 
-    def handle_message(self, chat_id: str, message: str) -> str:
+    def handle_message(
+        self,
+        chat_id: str,
+        message: str,
+        screenshot_bytes: bytes | None = None,
+        screenshot_mime_type: str = "image/png",
+    ) -> str:
         chat = self._get_chat(chat_id)
         mem = self.memory.setdefault(chat_id, {})
         due_alerts = drain_due_alerts()
+        screenshot_payload = screenshot_bytes if self.screen_viewing_enabled else None
 
         def finalize(response_text: str) -> str:
             return self._merge_due_alerts(response_text, due_alerts)
@@ -182,7 +228,14 @@ class ChatRuntime:
 
         augmented = augment_with_context(self.memory, chat_id, message)
         update_memory(self.memory, chat_id, message)
-        return finalize(chat.send_message(augmented).text)
+        return finalize(
+            self._send_chat_message(
+                chat,
+                augmented,
+                screenshot_payload,
+                screenshot_mime_type,
+            )
+        )
 
     def _get_chat(self, chat_id: str):
         if not chat_id or chat_id not in self.chats:
