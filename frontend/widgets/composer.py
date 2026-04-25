@@ -176,6 +176,8 @@ class _PlusMenuButton(QAbstractButton):
         """Build a polished full-width menu row with icon, label, subtitle and hover accent bar."""
         from PyQt6.QtWidgets import QHBoxLayout, QVBoxLayout
         t = tokens
+        safe_label = label.replace("&", "&&")
+        safe_subtitle = subtitle.replace("&", "&&")
 
         row = QWidget()
         row.setObjectName("menuRow")
@@ -211,8 +213,9 @@ class _PlusMenuButton(QAbstractButton):
         text_col.setContentsMargins(0, 0, 0, 0)
         text_col.setSpacing(1)
 
-        lbl = QLabel(label)
+        lbl = QLabel(safe_label)
         lbl.setObjectName("rowLabel")
+        lbl.setTextFormat(Qt.TextFormat.PlainText)
         lbl.setStyleSheet(
             f"color: {t['text.primary']}; background: transparent; border: none;"
             f" font-family: '{FONT_FAMILY_UI}', sans-serif;"
@@ -220,8 +223,9 @@ class _PlusMenuButton(QAbstractButton):
         )
         text_col.addWidget(lbl)
 
-        sub = QLabel(subtitle)
+        sub = QLabel(safe_subtitle)
         sub.setObjectName("rowSub")
+        sub.setTextFormat(Qt.TextFormat.PlainText)
         sub.setStyleSheet(
             f"color: {t['text.muted']}; background: transparent; border: none;"
             f" font-family: '{FONT_FAMILY_UI}', sans-serif;"

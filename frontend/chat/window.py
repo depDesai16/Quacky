@@ -398,6 +398,7 @@ class QuackyWindow(QWidget):
         self._update_sts_button_hint()
         self._update_screen_view_button()
         self.composer.plus_btn.camera_clicked.connect(self._toggle_camera_view)
+        self.composer.plus_btn.timers_events_clicked.connect(self._show_timers_events_panel)
         self.composer.plus_btn.shortcuts_clicked.connect(self._show_shortcuts_panel)
         self.composer.input_field.textChanged.connect(self._update_send_btn)
         self.composer.input_field.textChanged.connect(self._update_toast_anchor)
@@ -1220,6 +1221,10 @@ class QuackyWindow(QWidget):
             self._show_shortcuts_panel()
             return
 
+        if mod & Qt.KeyboardModifier.ControlModifier and key == Qt.Key.Key_Y:
+            self._show_timers_events_panel()
+            return
+
         if key == Qt.Key.Key_Escape:
             if self.composer.text().strip():
                 self.composer.clear()
@@ -1434,6 +1439,27 @@ class QuackyWindow(QWidget):
         panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
         panel.show()
         self._shortcuts_panel = panel
+
+    def _show_timers_events_panel(self):
+        """Show timers and events panel."""
+        if hasattr(self, "_timers_events_panel") and self._timers_events_panel.isVisible():
+            self._timers_events_panel.close()
+            return
+        from .timers_events_panel import TimersEventsPanel
+        panel = TimersEventsPanel(
+            ThemeManager.tokens(),
+            fetch_dashboard=self._client.get_timers_events_dashboard,
+            parent=self,
+        )
+        ThemeManager.subscribe(panel.apply_theme)
+        panel.closed.connect(lambda: ThemeManager.unsubscribe(panel.apply_theme))
+        panel.adjustSize()
+        px = (self.width() - panel.width()) // 2
+        py = (self.height() - panel.height()) // 2
+        from PyQt6.QtCore import QPoint as _QP
+        panel.move(self.mapToGlobal(self.rect().topLeft()) + _QP(px, py))
+        panel.show()
+        self._timers_events_panel = panel
 
     def _restore_geometry(self):
         """Handle restore geometry."""

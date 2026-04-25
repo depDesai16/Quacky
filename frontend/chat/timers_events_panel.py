@@ -30,6 +30,8 @@ class TimersEventsPanel(QWidget):
         )
         self._tokens = tokens
         self._fetch_dashboard = fetch_dashboard
+        self._last_timers: list[dict] = []
+        self._last_events: list[dict] = []
         self.setWindowTitle("Quacky - Timers & Events")
         self.setObjectName("quacky-timers-events-panel")
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -47,6 +49,7 @@ class TimersEventsPanel(QWidget):
         header = QHBoxLayout()
         header.setContentsMargins(0, 0, 0, 0)
         self._title = QLabel("Timers & Events")
+        self._title.setTextFormat(Qt.TextFormat.PlainText)
         header.addWidget(self._title, 1)
         self._refresh_btn = QPushButton("Refresh")
         self._refresh_btn.clicked.connect(self.refresh_now)
@@ -54,6 +57,7 @@ class TimersEventsPanel(QWidget):
         outer.addLayout(header)
 
         self._sub = QLabel("Live timers/alarms and recently generated calendar actions.")
+        self._sub.setTextFormat(Qt.TextFormat.PlainText)
         outer.addWidget(self._sub)
 
         self._scroll = QScrollArea()
@@ -71,11 +75,15 @@ class TimersEventsPanel(QWidget):
         self._content_layout.setSpacing(14)
 
         self._timers_title = QLabel("ACTIVE TIMERS / ALARMS")
+        self._timers_title.setTextFormat(Qt.TextFormat.PlainText)
         self._timers_body = QLabel("")
+        self._timers_body.setTextFormat(Qt.TextFormat.PlainText)
         self._timers_body.setWordWrap(True)
 
         self._events_title = QLabel("RECENT CALENDAR EVENTS")
+        self._events_title.setTextFormat(Qt.TextFormat.PlainText)
         self._events_body = QLabel("")
+        self._events_body.setTextFormat(Qt.TextFormat.PlainText)
         self._events_body.setWordWrap(True)
 
         self._content_layout.addWidget(self._timers_title)
@@ -187,7 +195,7 @@ class TimersEventsPanel(QWidget):
             due_text = f" | due {due}" if due else ""
             remaining_text = f" | {remaining} left" if remaining else ""
             lines.append(f"- {kind} {timer_id}{label_suffix}{remaining_text}{due_text}")
-        return "\n".join(lines)
+        return "\n".join(lines).replace("&", "&&")
 
     def _format_events(self, events: list[dict]) -> str:
         if not events:
@@ -208,14 +216,14 @@ class TimersEventsPanel(QWidget):
                 span = f" | {start}"
             when = f" [{created_at}]" if created_at else ""
             lines.append(f"- {action}: {title}{span}{when} ({status_chip})")
-        return "\n".join(lines)
+        return "\n".join(lines).replace("&", "&&")
 
     def refresh_now(self):
         try:
             payload = self._fetch_dashboard() or {}
         except Exception as exc:
             self._timers_body.setText("Failed to load timers.")
-            self._events_body.setText(f"Failed to load events: {exc}")
+            self._events_body.setText(f"Failed to load events: {str(exc).replace('&', '&&')}")
             return
 
         timers = payload.get("timers") if isinstance(payload, dict) else []
@@ -224,6 +232,8 @@ class TimersEventsPanel(QWidget):
             timers = []
         if not isinstance(events, list):
             events = []
+        self._last_timers = timers
+        self._last_events = events
         self._timers_body.setText(self._format_timers(timers))
         self._events_body.setText(self._format_events(events))
 
