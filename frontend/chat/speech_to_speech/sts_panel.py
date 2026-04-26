@@ -18,6 +18,7 @@ Layout
   └──────────────────────────────┘
 """
 
+import logging
 import math
 import os
 import sys
@@ -58,11 +59,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
 ))))
 from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 
+LOGGER = logging.getLogger(__name__)
+
 # ── State constants ────────────────────────────────────────────────────────────
 STATE_IDLE       = "idle"
 STATE_LISTENING  = "listening"
 STATE_THINKING   = "thinking"
 STATE_SPEAKING   = "speaking"
+_VALID_STATES = {STATE_IDLE, STATE_LISTENING, STATE_THINKING, STATE_SPEAKING}
+
+
+def _safe_theme_unsubscribe(callback) -> None:
+    try:
+        ThemeManager.unsubscribe(callback)
+    except Exception as exc:
+        LOGGER.debug("Failed to unsubscribe theme callback: %s", exc, exc_info=True)
 
 # ── Back button ────────────────────────────────────────────────────────────────
 
@@ -492,7 +503,8 @@ class SpeechToSpeechPanel(QWidget):
 
     def set_state(self, state: str):
         """Called by host window to update visual state."""
-        assert state in (STATE_IDLE, STATE_LISTENING, STATE_THINKING, STATE_SPEAKING)
+        if state not in _VALID_STATES:
+            raise ValueError(f"Unsupported speech-to-speech state: {state!r}")
         self._state = state
         self._orb.set_state(state)
         self._action_btn.set_state(state)
@@ -614,7 +626,4 @@ class SpeechToSpeechPanel(QWidget):
         """)
 
     def __del__(self):
-        try:
-            ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self._on_theme)

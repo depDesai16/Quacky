@@ -1,4 +1,4 @@
-
+import logging
 import math as _math
 
 from PyQt6.QtCore import QPoint, QPointF, QRectF, QSignalBlocker, Qt, QThread, QTimer, pyqtSignal
@@ -24,6 +24,15 @@ from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
 from widgets.card_widget import CardWidget
 
 from .widgets.toggle_slider import ToggleSlider
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _safe_theme_unsubscribe(callback) -> None:
+    try:
+        ThemeManager.unsubscribe(callback)
+    except Exception as exc:
+        LOGGER.debug("Failed to unsubscribe theme callback: %s", exc, exc_info=True)
 
 SETTINGS_METRICS: dict = {
     "sidebar_width": 164,
@@ -211,10 +220,7 @@ class _SettingsTabButton(QWidget):
 
     def __del__(self):
         """Release resources during object cleanup."""
-        try:
-            ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self._on_theme)
 
 
 class _SettingsCard(QWidget):
@@ -386,10 +392,7 @@ class _ModeComboDelegate(QStyledItemDelegate):
 
     def dispose(self):
         """Handle dispose."""
-        try:
-            ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self._on_theme)
 
     def __del__(self):
         """Release resources during object cleanup."""
@@ -553,18 +556,12 @@ class _ModeComboBox(QComboBox):
 
     def closeEvent(self, event):
         """Handle the close event."""
-        try:
-            ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self._on_theme)
         super().closeEvent(event)
 
     def __del__(self):
         """Release resources during object cleanup."""
-        try:
-            ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self._on_theme)
 
 
 class _ApiKeyTestWorker(QThread):

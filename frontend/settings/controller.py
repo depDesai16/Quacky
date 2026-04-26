@@ -1,4 +1,8 @@
+import logging
+
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _ApiKeyLoadWorker(QThread):
@@ -224,8 +228,8 @@ class SettingsController(QObject):
                 self._load_worker.requestInterruption()
                 self._load_worker.quit()
                 self._load_worker.wait(300)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.debug("Failed to stop API-key load worker cleanly: %s", exc, exc_info=True)
             self._load_worker = None
 
         if self._confirmation_worker is not None:
@@ -233,8 +237,8 @@ class SettingsController(QObject):
                 self._confirmation_worker.requestInterruption()
                 self._confirmation_worker.quit()
                 self._confirmation_worker.wait(300)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.debug("Failed to stop confirmation worker cleanly: %s", exc, exc_info=True)
             self._confirmation_worker = None
 
         if self._test_worker is not None:
@@ -242,6 +246,6 @@ class SettingsController(QObject):
                 self._test_worker.requestInterruption()
                 self._test_worker.quit()
                 self._test_worker.wait(300)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.debug("Failed to stop API-key test worker cleanly: %s", exc, exc_info=True)
             self._test_worker = None

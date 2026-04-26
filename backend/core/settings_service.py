@@ -198,8 +198,8 @@ def test_api_key(api_key: str) -> tuple[bool, str]:
             message = payload.get("error", {}).get("message")
             if message:
                 return False, f"Key test failed: {message}"
-        except Exception:
-            pass
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return False, f"Key test failed (HTTP {exc.code})."
         return False, f"Key test failed (HTTP {exc.code})."
     except Exception as exc:
         return False, f"Key test failed: {exc}"

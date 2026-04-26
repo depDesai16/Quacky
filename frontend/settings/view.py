@@ -1,9 +1,13 @@
+import logging
+
 from PyQt6.QtCore import pyqtSignal
 from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout, QWidget
 from theme import ThemeManager
 
 from .controller import SettingsController
 from .ui import SettingsPanelMixin
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _ToastProxy:
@@ -776,5 +780,5 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe settings panel theme callback: %s", exc, exc_info=True)

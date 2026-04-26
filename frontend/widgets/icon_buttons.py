@@ -1,8 +1,11 @@
+import logging
+
 from PyQt6.QtCore import QEasingCurve, QPointF, QPropertyAnimation, QRectF, Qt, pyqtProperty
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QAbstractButton
 from theme import ThemeManager
 
+LOGGER = logging.getLogger(__name__)
 SIZE = 32
 
 
@@ -108,8 +111,8 @@ class _CircleBase(QAbstractButton):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe icon-button theme callback: %s", exc, exc_info=True)
 
 
 

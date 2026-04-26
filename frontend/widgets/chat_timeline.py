@@ -1,4 +1,4 @@
-
+import logging
 import time
 
 from PyQt6.QtGui     import QColor, QFontMetrics
@@ -14,6 +14,8 @@ from .message_bubble  import (UserBubble, AssistantBubble, SystemMessage,
 from .thinking_bubble import ThinkingBubble
 from .empty_state     import EmptyState
 from widgets.quacky_widget import pop_bubble
+
+LOGGER = logging.getLogger(__name__)
 
 GROUP_SEC           = 60
 NEAR_BOTTOM_THRESHOLD_PX = 24
@@ -821,5 +823,5 @@ class ChatTimeline(QScrollArea):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe chat timeline theme callback: %s", exc, exc_info=True)

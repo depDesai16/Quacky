@@ -1,8 +1,11 @@
+import logging
+
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, QRectF, Qt, pyqtProperty, pyqtSignal
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPen
 from PyQt6.QtWidgets import QWidget
 from theme import ThemeManager
 
+LOGGER = logging.getLogger(__name__)
 
 class ToggleSlider(QWidget):
     toggled = pyqtSignal(bool)
@@ -97,5 +100,5 @@ class ToggleSlider(QWidget):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe toggle theme callback: %s", exc, exc_info=True)

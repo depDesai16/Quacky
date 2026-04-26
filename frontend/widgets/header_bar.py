@@ -1,4 +1,4 @@
-
+import logging
 import math
 
 from PyQt6.QtCore import (
@@ -16,6 +16,15 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QApplication, QWidget, QHBoxLayout, QLabel, QPushButton, QSizePolicy
 
 from theme import ThemeManager, FONT_STACK, FONT_FAMILY_UI
+
+LOGGER = logging.getLogger(__name__)
+
+
+def _safe_theme_unsubscribe(callback) -> None:
+    try:
+        ThemeManager.unsubscribe(callback)
+    except Exception as exc:
+        LOGGER.debug("Failed to unsubscribe theme callback: %s", exc, exc_info=True)
 
 
 class StatusChip(QWidget):
@@ -62,7 +71,8 @@ class StatusChip(QWidget):
 
     def set_state(self, state: str):
         """Set state."""
-        assert state in self.STATES
+        if state not in self.STATES:
+            raise ValueError(f"Unsupported status state: {state!r}")
         self._state = state
         if state == "thinking":
             self._pulse_anim.start()
@@ -143,10 +153,7 @@ class StatusChip(QWidget):
 
     def __del__(self):
         """Release resources during object cleanup."""
-        try:
-            ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self.apply_theme)
 
 
 class WindowControlButton(QPushButton):
@@ -154,7 +161,8 @@ class WindowControlButton(QPushButton):
     def __init__(self, kind: str, parent=None):
         """Initialize the instance state."""
         super().__init__(parent)
-        assert kind in ("minimize", "close", "settings", "back")
+        if kind not in ("minimize", "close", "settings", "back"):
+            raise ValueError(f"Unsupported window control kind: {kind!r}")
         self._kind = kind
         self._tokens = ThemeManager.tokens()
         self._hovered = False
@@ -420,7 +428,4 @@ class HeaderBar(QWidget):
 
     def __del__(self):
         """Release resources during object cleanup."""
-        try:
-            ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        _safe_theme_unsubscribe(self.apply_theme)

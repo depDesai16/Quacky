@@ -1,9 +1,13 @@
+import logging
+
 from PyQt6.QtCore import Qt, QRectF, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 from theme import FONT_STACK, ThemeManager
 from widgets.quacky_widget import QuackyBubble
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _Dot(QWidget):
@@ -153,5 +157,5 @@ class EmptyState(QWidget):
     def __del__(self):
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe empty-state theme callback: %s", exc, exc_info=True)

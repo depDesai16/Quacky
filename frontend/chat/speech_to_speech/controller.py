@@ -1,3 +1,4 @@
+import logging
 import threading
 
 from PyQt6.QtCore import QObject, pyqtSignal
@@ -8,6 +9,7 @@ STATE_IDLE = "idle"
 STATE_LISTENING = "listening"
 STATE_THINKING = "thinking"
 STATE_SPEAKING = "speaking"
+LOGGER = logging.getLogger(__name__)
 
 
 class SpeechToSpeechController(QObject):
@@ -83,8 +85,8 @@ class SpeechToSpeechController(QObject):
             try:
                 if stt.is_listening:
                     stt.shutdown()
-            except Exception:
-                pass
+            except Exception as shutdown_exc:
+                LOGGER.debug("Failed to shut down STT during stop fallback: %s", shutdown_exc, exc_info=True)
         finally:
             self.state_changed.emit(STATE_IDLE)
 
@@ -102,8 +104,8 @@ class SpeechToSpeechController(QObject):
         try:
             if stt.is_listening:
                 stt.shutdown()
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to shut down STT controller cleanly: %s", exc, exc_info=True)
         self.state_changed.emit(STATE_IDLE)
 
     def notify_audio_playback_finished(self):
@@ -126,9 +128,9 @@ class SpeechToSpeechController(QObject):
     def _prewarm_worker(self):
         try:
             self._ensure_stt()
-        except Exception:
+        except Exception as exc:
             # Prewarm is best-effort; Start still handles errors visibly.
-            pass
+            LOGGER.debug("Speech-to-speech prewarm failed: %s", exc, exc_info=True)
         finally:
             with self._lock:
                 self._prewarm_thread = None

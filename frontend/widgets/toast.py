@@ -1,7 +1,9 @@
-
+import logging
 from PyQt6.QtCore import QEasingCurve, QPropertyAnimation, Qt, QTimer
 from PyQt6.QtWidgets import QGraphicsOpacityEffect, QLabel
 from theme import FONT_STACK, ThemeManager
+
+LOGGER = logging.getLogger(__name__)
 
 TOAST_DURATION_MS = 2500
 FADE_IN_MS        = 200
@@ -112,5 +114,5 @@ class Toast(QLabel):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe toast theme callback: %s", exc, exc_info=True)

@@ -1,9 +1,12 @@
+import logging
+
 import sys
 from PyQt6.QtCore import Qt, QRectF
 from PyQt6.QtGui import QPainter, QColor, QPen, QPainterPath, QRegion
 from PyQt6.QtWidgets import QWidget, QGraphicsDropShadowEffect
 from theme import ThemeManager
 
+LOGGER = logging.getLogger(__name__)
 
 class CardWidget(QWidget):
     RADIUS = 14
@@ -84,5 +87,5 @@ class CardWidget(QWidget):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe card theme callback: %s", exc, exc_info=True)

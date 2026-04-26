@@ -1,3 +1,5 @@
+import logging
+
 from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QKeyEvent, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import (
@@ -14,6 +16,8 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 from theme import FONT_FAMILY_UI, FONT_STACK, ThemeManager
+
+LOGGER = logging.getLogger(__name__)
 
 
 class _MenuIcon(QWidget):
@@ -403,8 +407,8 @@ class _PlusMenuButton(QAbstractButton):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self._on_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe plus-menu theme callback: %s", exc, exc_info=True)
 
 
 
@@ -476,8 +480,8 @@ class ComposerInput(QTextEdit):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe composer input theme callback: %s", exc, exc_info=True)
 
 
 
@@ -592,8 +596,8 @@ class _ComposerPill(QWidget):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe composer pill theme callback: %s", exc, exc_info=True)
 
 
 
@@ -669,5 +673,5 @@ class Composer(QWidget):
         """Release resources during object cleanup."""
         try:
             ThemeManager.unsubscribe(self.apply_theme)
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to unsubscribe composer theme callback: %s", exc, exc_info=True)

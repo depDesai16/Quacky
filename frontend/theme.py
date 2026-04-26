@@ -1,3 +1,4 @@
+import logging
 import sys
 
 from PyQt6.QtCore import QSettings, Qt
@@ -197,6 +198,7 @@ FONT_FAMILY_UI = _pick_font_family(_UI_FONT_CANDIDATES, _UI_FONT_CANDIDATES[0])
 FONT_FAMILY_MONO = _pick_font_family(_MONO_FONT_CANDIDATES, _MONO_FONT_CANDIDATES[0])
 FONT_STACK = _to_qss_stack(_UI_FONT_CANDIDATES, "sans-serif")
 FONT_MONO = _to_qss_stack(_MONO_FONT_CANDIDATES, "monospace")
+LOGGER = logging.getLogger(__name__)
 
 
 class ThemeManager:
@@ -230,7 +232,8 @@ class ThemeManager:
     @classmethod
     def set_theme(cls, name: str):
         """Set theme."""
-        assert name in ("dark", "light", "system")
+        if name not in ("dark", "light", "system"):
+            raise ValueError(f"Unsupported theme mode: {name!r}")
         cls._mode = name
         QSettings("Quacky", "App").setValue("theme", name)
         cls._attach_system_theme_listener()
@@ -264,8 +267,8 @@ class ThemeManager:
         for cb in list(cls._callbacks):
             try:
                 cb(t)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOGGER.debug("Theme callback failed: %s", exc, exc_info=True)
 
     @classmethod
     def _attach_system_theme_listener(cls):
@@ -280,8 +283,8 @@ class ThemeManager:
             if hasattr(hints, "colorSchemeChanged"):
                 hints.colorSchemeChanged.connect(cls._on_system_scheme_changed)
                 cls._system_listener_attached = True
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to attach system theme listener: %s", exc, exc_info=True)
 
     @classmethod
     def _on_system_scheme_changed(cls, *_args):
@@ -302,11 +305,12 @@ class ThemeManager:
                 return "light"
             if scheme == Qt.ColorScheme.Dark:
                 return "dark"
-        except Exception:
-            pass
+        except Exception as exc:
+            LOGGER.debug("Failed to read system color scheme: %s", exc, exc_info=True)
 
         try:
             window_color = app.palette().color(QPalette.ColorRole.Window)
             return "dark" if window_color.lightness() < 128 else "light"
-        except Exception:
+        except Exception as exc:
+            LOGGER.debug("Failed to detect fallback theme from palette: %s", exc, exc_info=True)
             return "dark"
