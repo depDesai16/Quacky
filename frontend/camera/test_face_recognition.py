@@ -1,17 +1,18 @@
 """
-Test script for face recognition
-Run this to test if face recognition is working properly
+Manual face-recognition smoke script.
+Import-safe so unittest discovery does not execute or fail on it.
 """
 import os
 import sys
 
-import cv2
-
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from camera.face_recognition import FaceRecognitionManager
 
 
 def main():
+    import cv2
+
+    from camera.face_recognition import FaceRecognitionManager
+
     print("Face Recognition Test")
     print("=" * 50)
     

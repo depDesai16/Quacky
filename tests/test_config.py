@@ -28,11 +28,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(settings.port, 9000)
         self.assertTrue(settings.tts_default_enabled)
 
-    def test_get_settings_requires_an_api_key(self):
+    def test_get_settings_allows_missing_api_key_for_setup_guidance(self):
         with patch.object(config, "load_dotenv", lambda *a, **kw: None):
             with patch.dict("os.environ", {}, clear=True):
-                with self.assertRaises(RuntimeError):
-                    config.get_settings()
+                settings = config.get_settings()
+
+        self.assertEqual(settings.api_key, "")
 
 
 if __name__ == "__main__":

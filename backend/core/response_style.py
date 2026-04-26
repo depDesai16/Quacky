@@ -1,5 +1,14 @@
 # backend/core/response_style.py
-from google.genai import errors as genai_errors
+try:
+    from google.genai import errors as genai_errors
+except ImportError:
+    class _GenAIErrorFallback(Exception):
+        """Fallback exception when google.genai is unavailable."""
+
+    class _GenAIErrorsModule:
+        APIError = _GenAIErrorFallback
+
+    genai_errors = _GenAIErrorsModule()
 
 
 def _safe_send_message(chat, prompt: str) -> str | None:

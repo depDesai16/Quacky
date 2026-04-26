@@ -2,9 +2,13 @@
 import os
 
 import requests
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
 
-load_dotenv()
+if load_dotenv is not None:
+    load_dotenv()
 
 BASE_URL = "https://api.weatherapi.com/v1"
 
