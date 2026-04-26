@@ -8,20 +8,65 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import (
-    QByteArray,
-    QBuffer,
-    QEventLoop,
-    QIODevice,
-    QObject,
-    QThread,
-    QTimer,
-    pyqtSignal,
-    pyqtSlot,
-)
-from PyQt6.QtGui import QImage, QPixmap, QScreen
-from PyQt6.QtMultimedia import QMediaCaptureSession, QScreenCapture, QVideoFrame, QVideoSink
+_QT_IMPORT_ERROR: Exception | None = None
+try:
+    from PyQt6.QtCore import (
+        QByteArray,
+        QBuffer,
+        QEventLoop,
+        QIODevice,
+        QObject,
+        QThread,
+        QTimer,
+        pyqtSignal,
+        pyqtSlot,
+    )
+    from PyQt6.QtGui import QImage, QPixmap, QScreen
+    from PyQt6.QtMultimedia import (
+        QMediaCaptureSession,
+        QScreenCapture,
+        QVideoFrame,
+        QVideoSink,
+    )
+    _QT_AVAILABLE = True
+except ImportError as exc:
+    _QT_AVAILABLE = False
+    _QT_IMPORT_ERROR = exc
+
+    QByteArray = QBuffer = QEventLoop = QIODevice = QImage = QMediaCaptureSession = object
+    QPixmap = QScreenCapture = QVideoFrame = QVideoSink = QThread = QTimer = object
+
+    class QObject:
+        def __init__(self, *_args, **_kwargs):
+            super().__init__()
+
+    class QScreen:
+        pass
+
+    class _SignalStub:
+        def connect(self, *_args, **_kwargs):
+            return None
+
+        def disconnect(self, *_args, **_kwargs):
+            return None
+
+        def emit(self, *_args, **_kwargs):
+            return None
+
+    def pyqtSignal(*_args, **_kwargs):
+        return _SignalStub()
+
+    def pyqtSlot(*_args, **_kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QImage as _QImage, QPixmap as _QPixmap, QScreen as _QScreen
+else:
+    _QImage = _QPixmap = _QScreen = Any
 
 
 @dataclass
@@ -29,6 +74,17 @@ class ScreenCaptureResult:
     png_bytes: bytes | None
     method: str
     error: str = ""
+
+
+def is_qt_capture_available() -> bool:
+    return bool(_QT_AVAILABLE)
+
+
+def _require_qt_capture() -> None:
+    if _QT_AVAILABLE:
+        return
+    detail = str(_QT_IMPORT_ERROR) if _QT_IMPORT_ERROR is not None else "PyQt6 screen capture dependencies are unavailable."
+    raise RuntimeError(detail)
 
 
 def _session_type() -> str:
@@ -49,7 +105,8 @@ def _preferred_capture_methods() -> tuple[str, ...]:
     return ("qt_grab", "qt_screen_capture")
 
 
-def _png_bytes_from_image(image: QImage) -> bytes | None:
+def _png_bytes_from_image(image: _QImage) -> bytes | None:
+    _require_qt_capture()
     if image.isNull():
         return None
     byte_array = QByteArray()
@@ -65,7 +122,8 @@ def _png_bytes_from_image(image: QImage) -> bytes | None:
     return bytes(byte_array)
 
 
-def _png_bytes_from_pixmap(pixmap: QPixmap) -> bytes | None:
+def _png_bytes_from_pixmap(pixmap: _QPixmap) -> bytes | None:
+    _require_qt_capture()
     if pixmap.isNull():
         return None
     byte_array = QByteArray()
@@ -82,7 +140,8 @@ def _png_bytes_from_pixmap(pixmap: QPixmap) -> bytes | None:
 
 
 class _FrameGrabber(QObject):
-    def __init__(self, screen: QScreen, timeout_ms: int = 4000, parent=None):
+    def __init__(self, screen: _QScreen, timeout_ms: int = 4000, parent=None):
+        _require_qt_capture()
         super().__init__(parent)
         self._screen = screen
         self._timeout_ms = max(500, int(timeout_ms))
@@ -115,6 +174,7 @@ class _FrameGrabber(QObject):
             self._loop.quit()
 
     def capture_png_bytes(self) -> ScreenCaptureResult:
+        _require_qt_capture()
         self._loop = QEventLoop(self)
         timer = QTimer(self)
         timer.setSingleShot(True)
@@ -159,6 +219,7 @@ class PersistentScreenCaptureSession(QObject):
     encode_requested = pyqtSignal(object)
 
     def __init__(self, parent=None):
+        _require_qt_capture()
         super().__init__(parent)
         self._capture = QScreenCapture(self)
         self._session = QMediaCaptureSession(self)
@@ -182,7 +243,8 @@ class PersistentScreenCaptureSession(QObject):
         self._encoder.failed.connect(self._on_encode_failed)
         self._encoder_thread.start()
 
-    def start(self, screen: QScreen | None = None) -> tuple[bool, str]:
+    def start(self, screen: _QScreen | None = None) -> tuple[bool, str]:
+        _require_qt_capture()
         self._last_error = ""
         self._latest_png_bytes = None
 
@@ -310,6 +372,8 @@ class PersistentScreenCaptureSession(QObject):
 
 
 def _capture_via_qt_grab(screen: QScreen | None) -> ScreenCaptureResult:
+    if not _QT_AVAILABLE:
+        return ScreenCaptureResult(None, "qt_grab", str(_QT_IMPORT_ERROR or "Qt capture unavailable."))
     if screen is None:
         return ScreenCaptureResult(None, "qt_grab", "No screen available for Qt grab.")
     pixmap = screen.grabWindow(0)
@@ -320,6 +384,8 @@ def _capture_via_qt_grab(screen: QScreen | None) -> ScreenCaptureResult:
 
 
 def _capture_via_qscreen_capture(screen: QScreen | None) -> ScreenCaptureResult:
+    if not _QT_AVAILABLE:
+        return ScreenCaptureResult(None, "qt_screen_capture", str(_QT_IMPORT_ERROR or "Qt capture unavailable."))
     if screen is None:
         return ScreenCaptureResult(None, "qt_screen_capture", "No screen available for screen capture.")
     return _FrameGrabber(screen).capture_png_bytes()
