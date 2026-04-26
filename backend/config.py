@@ -2,13 +2,15 @@
 import os
 from dataclasses import dataclass
 
+from backend.core.settings_service import get_api_key as get_saved_api_key
+
 try:
     from dotenv import load_dotenv
 except ImportError:
     load_dotenv = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class Settings:
     api_key: str
     model_name: str
@@ -30,18 +32,19 @@ def get_settings() -> Settings:
         load_dotenv("config.env")
 
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-    api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+    api_key = (
+        os.getenv("GOOGLE_API_KEY")
+        or os.getenv("GEMINI_API_KEY")
+        or get_saved_api_key()
+    )
     port = int(os.getenv("PORT", "8000"))
     elevenlabs_api_key = os.getenv("ELEVENLABS_API_KEY")
     elevenlabs_voice_id = os.getenv("ELEVENLABS_VOICE_ID", "JBFqnCBsd6RMkjVDRZzb")
     elevenlabs_model_id = os.getenv("ELEVENLABS_MODEL_ID", "eleven_flash_v2_5")
     tts_default_enabled = _as_bool(os.getenv("TTS_DEFAULT_ENABLED"), default=False)
 
-    if not api_key:
-        raise RuntimeError("Missing GOOGLE_API_KEY or GEMINI_API_KEY environment variable.")
-
     return Settings(
-        api_key=api_key,
+        api_key=api_key or "",
         model_name=model_name,
         port=port,
         elevenlabs_api_key=elevenlabs_api_key,

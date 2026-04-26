@@ -10,6 +10,9 @@ from backend.features.timers import (
     set_alarm as set_alarm_feature,
 )
 from backend.features.timers import (
+    set_reminder as set_reminder_feature,
+)
+from backend.features.timers import (
     set_timer as set_timer_feature,
 )
 
@@ -26,6 +29,13 @@ def set_alarm(alarm_time: str, label: str = "") -> str:
     Set an in-house alarm at a specific time.
     """
     return set_alarm_feature(alarm_time=alarm_time, label=label)
+
+
+def set_reminder(reminder_time: str, note: str) -> str:
+    """
+    Set an in-house reminder at a specific time with reminder text.
+    """
+    return set_reminder_feature(reminder_time=reminder_time, note=note)
 
 
 def list_timers() -> str:

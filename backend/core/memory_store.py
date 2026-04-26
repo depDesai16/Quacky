@@ -119,6 +119,40 @@ def _remove_item(items: list[dict], value: str) -> tuple[list[dict], bool]:
     return (filtered_sub, True) if found_substring else (items, False)
 
 
+def _update_item(items: list[dict], old_value: str, new_value: str, max_items: int) -> tuple[list[dict], bool]:
+    needle = _normalize(old_value).lower()
+    replacement = _normalize(new_value)
+    if not needle or not replacement:
+        return items, False
+
+    now = datetime.now().isoformat(timespec="seconds")
+    updated = False
+    rewritten: list[dict] = []
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        existing = _normalize(str(item.get("value", "")))
+        if not existing:
+            continue
+        if existing.lower() == needle and not updated:
+            rewritten.append({"value": replacement, "updated_at": now})
+            updated = True
+        else:
+            rewritten.append(
+                {
+                    "value": existing,
+                    "updated_at": str(item.get("updated_at", now)),
+                }
+            )
+
+    if not updated:
+        return items, False
+
+    deduped = _upsert_item(rewritten, replacement, max_items)
+    return deduped, True
+
+
 def add_preference(value: str) -> None:
     with _LOCK:
         data = _read_data()
@@ -157,6 +191,28 @@ def forget_task_note(value: str) -> bool:
             data["task_notes"] = updated[:_MAX_TASKS]
             _write_data(data)
         return removed
+
+
+def update_preference(old_value: str, new_value: str) -> bool:
+    with _LOCK:
+        data = _read_data()
+        original = list(data.get("preferences") or [])
+        updated, changed = _update_item(original, old_value, new_value, _MAX_PREFS)
+        if changed:
+            data["preferences"] = updated[:_MAX_PREFS]
+            _write_data(data)
+        return changed
+
+
+def update_task_note(old_value: str, new_value: str) -> bool:
+    with _LOCK:
+        data = _read_data()
+        original = list(data.get("task_notes") or [])
+        updated, changed = _update_item(original, old_value, new_value, _MAX_TASKS)
+        if changed:
+            data["task_notes"] = updated[:_MAX_TASKS]
+            _write_data(data)
+        return changed
 
 
 def clear_preferences() -> int:
@@ -201,6 +257,29 @@ def get_preferences(limit: int = 5) -> list[str]:
     return values[:limit]
 
 
+def get_preferences_data(limit: int = 25) -> list[dict]:
+    limit = max(0, int(limit))
+    with _LOCK:
+        data = _read_data()
+        items = list(data.get("preferences") or [])
+    out: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        value = _normalize(str(item.get("value", "")))
+        if not value:
+            continue
+        out.append(
+            {
+                "value": value,
+                "updated_at": str(item.get("updated_at", "")).strip(),
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out
+
+
 def get_task_notes(limit: int = 8) -> list[str]:
     limit = max(0, int(limit))
     with _LOCK:
@@ -209,3 +288,26 @@ def get_task_notes(limit: int = 8) -> list[str]:
     values = [_normalize(str(item.get("value", ""))) for item in items if isinstance(item, dict)]
     values = [value for value in values if value]
     return values[:limit]
+
+
+def get_task_notes_data(limit: int = 25) -> list[dict]:
+    limit = max(0, int(limit))
+    with _LOCK:
+        data = _read_data()
+        items = list(data.get("task_notes") or [])
+    out: list[dict] = []
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        value = _normalize(str(item.get("value", "")))
+        if not value:
+            continue
+        out.append(
+            {
+                "value": value,
+                "updated_at": str(item.get("updated_at", "")).strip(),
+            }
+        )
+        if len(out) >= limit:
+            break
+    return out

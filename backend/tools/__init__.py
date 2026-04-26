@@ -11,7 +11,7 @@ from .calendar_tool import (
 from .email_tool import send_email
 from .holiday_tool import get_holidays
 from .memory_tool import clear_memory, forget_memory_item, list_memory
-from .timer_tool import cancel_timer, list_timers, set_alarm, set_timer
+from .timer_tool import cancel_timer, list_timers, set_alarm, set_reminder, set_timer
 from .weather_tool import get_weather
 
 ALL_TOOLS = [
@@ -24,6 +24,7 @@ ALL_TOOLS = [
     send_email,
     set_timer,
     set_alarm,
+    set_reminder,
     list_timers,
     cancel_timer,
     list_memory,
@@ -41,6 +42,7 @@ __all__ = [
     "send_email",
     "set_timer",
     "set_alarm",
+    "set_reminder",
     "list_timers",
     "cancel_timer",
     "list_memory",

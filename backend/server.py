@@ -8,6 +8,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from backend.config import get_settings
 from backend.core.activity_store import list_calendar_events
 from backend.core.chat_runtime import ChatRuntime
+from backend.core.memory_store import (
+    get_preferences_data,
+    get_task_notes_data,
+    update_preference,
+    update_task_note,
+)
 from backend.core.runtime_logging import configure_runtime_logging, install_exception_logging
 from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
@@ -18,6 +24,7 @@ from backend.core.settings_service import (
     get_timer_confirmation_enabled,
     remove_api_key,
     save_api_key,
+    save_allowed_app_targets,
     save_open_app_confirmation_enabled,
     save_screen_viewing_enabled,
     save_timer_confirmation_enabled,
@@ -27,7 +34,9 @@ from backend.core.settings_service import (
     has_api_key as has_saved_api_key,
 )
 from backend.features.timers import get_active_timers_data
+from backend.features.open_app import get_app_control_snapshot
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
+from backend.tools.memory_tool import clear_memory, forget_memory_item
 
 settings = get_settings()
 LOGGER = logging.getLogger(__name__)
@@ -142,6 +151,79 @@ def _is_loopback_client(handler: BaseHTTPRequestHandler) -> bool:
     except ValueError:
         return host == "localhost"
 
+
+def _normalize_memory_scope(scope: str) -> str:
+    value = str(scope or "all").strip().lower()
+    if value in {"prefs", "pref", "preference"}:
+        return "preferences"
+    if value in {"task", "todo", "note", "notes"}:
+        return "tasks"
+    return value
+
+
+def _microphone_status() -> tuple[bool, str]:
+    try:
+        import speech_recognition as sr
+
+        names = sr.Microphone.list_microphone_names()
+    except Exception as exc:
+        return False, f"Microphone setup not ready: {exc}"
+
+    if not names:
+        return False, "No microphone input devices were detected yet."
+    return True, f"Detected {len(names)} microphone input device(s)."
+
+
+def _calendar_status() -> tuple[bool, str]:
+    return True, "Calendar actions use Outlook. If event changes fail, verify Outlook is installed and signed in."
+
+
+def _screen_viewing_status() -> tuple[bool, str]:
+    if screen_viewing_state["enabled"]:
+        return True, "Screen viewing is enabled. Quacky will request capture permission when needed."
+    return True, "Screen viewing is optional. Turn it on in Settings > Features when you want to share your screen."
+
+
+def _build_setup_status() -> dict:
+    mic_ready, mic_detail = _microphone_status()
+    calendar_ready, calendar_detail = _calendar_status()
+    screen_ready, screen_detail = _screen_viewing_status()
+    api_ready = bool(settings.api_key)
+
+    items = {
+        "api_key": {
+            "ready": api_ready,
+            "title": "Gemini API Key",
+            "detail": (
+                "API key configured."
+                if api_ready
+                else "Add a Gemini API key in Settings > API Key to enable assistant replies."
+            ),
+        },
+        "microphone": {
+            "ready": mic_ready,
+            "title": "Microphone",
+            "detail": mic_detail,
+        },
+        "calendar": {
+            "ready": calendar_ready,
+            "title": "Calendar",
+            "detail": calendar_detail,
+        },
+        "screen_viewing": {
+            "ready": screen_ready,
+            "title": "Screen Viewing",
+            "detail": screen_detail,
+        },
+    }
+
+    issues = [
+        f"{item['title']}: {item['detail']}"
+        for item in items.values()
+        if not item["ready"]
+    ]
+    return {"items": items, "issues": issues}
+
 class QuackyHandler(BaseHTTPRequestHandler):
     server_version = "Quacky"
     sys_version = ""
@@ -195,6 +277,25 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 self,
                 200,
                 {"enabled": bool(screen_viewing_state["enabled"])},
+            )
+            return
+
+        if self.path == "/settings/app-control":
+            _json_response(self, 200, get_app_control_snapshot())
+            return
+
+        if self.path == "/settings/setup-status":
+            _json_response(self, 200, _build_setup_status())
+            return
+
+        if self.path == "/memory":
+            _json_response(
+                self,
+                200,
+                {
+                    "preferences": get_preferences_data(limit=40),
+                    "tasks": get_task_notes_data(limit=80),
+                },
             )
             return
 
@@ -332,11 +433,15 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 _json_response(self, 400, {"error": "api_key is required"})
                 return
             save_api_key(key)
+            settings.api_key = key
+            runtime.set_api_key(key)
             _json_response(self, 200, {"status": "saved", "has_key": True})
             return
 
         if self.path == "/settings/api-key/remove":
             remove_api_key()
+            settings.api_key = ""
+            runtime.set_api_key("")
             _json_response(self, 200, {"status": "removed", "has_key": False})
             return
 
@@ -400,6 +505,102 @@ class QuackyHandler(BaseHTTPRequestHandler):
             runtime.set_screen_viewing_enabled(enabled)
             save_screen_viewing_enabled(enabled)
             _json_response(self, 200, {"enabled": bool(enabled)})
+            return
+
+        if self.path == "/settings/app-control":
+            data = _read_json(self)
+            raw_targets = data.get("allowed_targets")
+            if not isinstance(raw_targets, list):
+                _json_response(self, 400, {"error": "allowed_targets must be a list"})
+                return
+
+            snapshot = get_app_control_snapshot()
+            known_targets = {
+                str(item.get("target_id", "")).strip().lower()
+                for item in snapshot.get("options", [])
+            }
+            cleaned: list[str] = []
+            seen: set[str] = set()
+            for item in raw_targets:
+                value = str(item or "").strip()
+                lowered = value.lower()
+                if not value or lowered in seen or lowered not in known_targets:
+                    continue
+                seen.add(lowered)
+                cleaned.append(value)
+
+            save_allowed_app_targets(cleaned)
+            _json_response(self, 200, get_app_control_snapshot())
+            return
+
+        if self.path == "/memory/update":
+            data = _read_json(self)
+            scope = _normalize_memory_scope(data.get("scope", ""))
+            old_value = str(data.get("old_value", "")).strip()
+            new_value = str(data.get("new_value", "")).strip()
+            if scope not in {"preferences", "tasks"}:
+                _json_response(self, 400, {"error": "scope must be preferences or tasks"})
+                return
+            if not old_value or not new_value:
+                _json_response(self, 400, {"error": "old_value and new_value are required"})
+                return
+
+            changed = (
+                update_preference(old_value, new_value)
+                if scope == "preferences"
+                else update_task_note(old_value, new_value)
+            )
+            if not changed:
+                _json_response(self, 404, {"error": f"No remembered {scope[:-1]} matched '{old_value}'."})
+                return
+            _json_response(
+                self,
+                200,
+                {
+                    "status": "updated",
+                    "preferences": get_preferences_data(limit=40),
+                    "tasks": get_task_notes_data(limit=80),
+                },
+            )
+            return
+
+        if self.path == "/memory/forget":
+            data = _read_json(self)
+            scope = _normalize_memory_scope(data.get("scope", ""))
+            value = str(data.get("value", "")).strip()
+            if scope not in {"preferences", "tasks"}:
+                _json_response(self, 400, {"error": "scope must be preferences or tasks"})
+                return
+            if not value:
+                _json_response(self, 400, {"error": "value is required"})
+                return
+            result = forget_memory_item(scope=scope, value=value)
+            _json_response(
+                self,
+                200,
+                {
+                    "status": "ok",
+                    "message": result,
+                    "preferences": get_preferences_data(limit=40),
+                    "tasks": get_task_notes_data(limit=80),
+                },
+            )
+            return
+
+        if self.path == "/memory/clear":
+            data = _read_json(self)
+            scope = _normalize_memory_scope(data.get("scope", "all"))
+            result = clear_memory(scope=scope)
+            _json_response(
+                self,
+                200,
+                {
+                    "status": "ok",
+                    "message": result,
+                    "preferences": get_preferences_data(limit=40),
+                    "tasks": get_task_notes_data(limit=80),
+                },
+            )
             return
 
         _json_response(self, 404, {"error": "not found"})

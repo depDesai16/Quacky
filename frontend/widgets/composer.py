@@ -350,7 +350,7 @@ class _PlusMenuButton(QAbstractButton):
         te_row = self._make_menu_row(
             "timers_events",
             "Timers & Events",
-            "Ctrl+Y  for alarms and calendar actions",
+            "Ctrl+Y  for timers, reminders, and calendar actions",
             t,
         )
         te_action = QWidgetAction(menu)

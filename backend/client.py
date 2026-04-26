@@ -108,6 +108,34 @@ class QuackyClient:
     def set_screen_viewing_enabled(self, enabled: bool) -> dict:
         return self._post("/settings/screen-viewing", {"enabled": bool(enabled)})
 
+    def get_app_control_settings(self) -> dict:
+        return self._get("/settings/app-control")
+
+    def set_app_control_settings(self, allowed_targets: list[str]) -> dict:
+        return self._post("/settings/app-control", {"allowed_targets": list(allowed_targets or [])})
+
+    def get_setup_status(self) -> dict:
+        return self._get("/settings/setup-status")
+
+    def get_memory_snapshot(self) -> dict:
+        return self._get("/memory")
+
+    def update_memory_item(self, scope: str, old_value: str, new_value: str) -> dict:
+        return self._post(
+            "/memory/update",
+            {
+                "scope": scope,
+                "old_value": old_value,
+                "new_value": new_value,
+            },
+        )
+
+    def forget_memory_item(self, scope: str, value: str) -> dict:
+        return self._post("/memory/forget", {"scope": scope, "value": value})
+
+    def clear_memory(self, scope: str = "all") -> dict:
+        return self._post("/memory/clear", {"scope": scope})
+
     @staticmethod
     def decode_audio_bytes(response: dict) -> bytes | None:
         """

@@ -14,6 +14,7 @@ def _load_confirmation_module():
     tools_stub.send_email = Mock(return_value="email sent")
     tools_stub.set_timer = Mock(return_value="timer set")
     tools_stub.set_alarm = Mock(return_value="alarm set")
+    tools_stub.set_reminder = Mock(return_value="reminder set")
     tools_stub.cancel_timer = Mock(return_value="timer canceled")
     tools_stub.clear_memory = Mock(return_value="memory cleared")
 

@@ -30,13 +30,33 @@ from backend.tools import ALL_TOOLS
 
 class ChatRuntime:
     def __init__(self, api_key: str, model_name: str):
-        self.client = genai.Client(api_key=api_key)
+        self.api_key = str(api_key or "").strip()
+        self.client = None
         self.model_name = model_name
         self.chats: dict[str, Any] = {}
+        self._chat_configs: dict[str, dict[str, Any]] = {}
         self.memory: dict[str, dict] = {}
         self.open_app_confirmation_enabled = True
         self.timer_confirmation_enabled = True
         self.screen_viewing_enabled = False
+        self._refresh_client()
+
+    def _refresh_client(self) -> None:
+        """Create or clear the Gemini client based on current API key state."""
+        if not self.api_key:
+            self.client = None
+            return
+        try:
+            self.client = genai.Client(api_key=self.api_key)
+        except Exception:
+            self.client = None
+
+    def set_api_key(self, api_key: str) -> None:
+        """Update the API key and rebind active chat sessions."""
+        self.api_key = str(api_key or "").strip()
+        self._refresh_client()
+        for chat_id in list(self._chat_configs):
+            self.chats[chat_id] = None
 
     def set_open_app_confirmation_enabled(self, enabled: bool) -> None:
         """Set whether open-app actions require explicit confirmation."""
@@ -49,6 +69,28 @@ class ChatRuntime:
     def set_screen_viewing_enabled(self, enabled: bool) -> None:
         """Set whether screenshot context may be attached to chat requests."""
         self.screen_viewing_enabled = bool(enabled)
+
+    def _create_remote_chat(self, system_instruction: str | None, model: str | None):
+        if self.client is None:
+            return None
+        return self.client.chats.create(
+            model=model or self.model_name,
+            config=types.GenerateContentConfig(
+                system_instruction=system_instruction,
+                tools=ALL_TOOLS,
+                temperature=0.2,
+            ),
+        )
+
+    def _setup_guidance_message(self) -> str:
+        """Return a direct setup guidance message when assistant requests are unavailable."""
+        return (
+            "Quacky is almost ready, but it needs a Gemini API key before I can respond. "
+            "Open Settings > API Key, paste a key, click Save, then try again. "
+            "Microphone access is requested when you start voice input, screen-sharing permission "
+            "is requested when you enable Screen Viewing, and Outlook/calendar actions may require "
+            "Outlook to be installed and signed in."
+        )
 
     @staticmethod
     def _attach_screen_context_note(message: str) -> str:
@@ -103,21 +145,19 @@ class ChatRuntime:
 
     def create_chat(self, system_instruction: str | None = None, model: str | None = None) -> str:
         merged_system = merge_system_instruction(system_instruction)
-        chat = self.client.chats.create(
-            model=model or self.model_name,
-            config=types.GenerateContentConfig(
-                system_instruction=merged_system,
-                tools=ALL_TOOLS,
-                temperature=0.2,
-            ),
-        )
         chat_id = str(uuid.uuid4())
-        self.chats[chat_id] = chat
+        self._chat_configs[chat_id] = {
+            "system_instruction": merged_system,
+            "model": model,
+        }
+        self.chats[chat_id] = self._create_remote_chat(merged_system, model)
         self.memory[chat_id] = {}
         return chat_id
 
     def get_history(self, chat_id: str) -> list[dict]:
         chat = self._get_chat(chat_id)
+        if chat is None:
+            return []
         history = []
         for msg in chat.get_history():
             text = "".join(part.text for part in msg.parts if getattr(part, "text", None))
@@ -128,6 +168,7 @@ class ChatRuntime:
         if chat_id not in self.chats:
             raise KeyError("chat not found")
         del self.chats[chat_id]
+        self._chat_configs.pop(chat_id, None)
         self.memory.pop(chat_id, None)
 
     def handle_message(
@@ -145,6 +186,10 @@ class ChatRuntime:
         def finalize(response_text: str) -> str:
             return self._merge_due_alerts(response_text, due_alerts)
 
+        if chat is None:
+            update_memory(self.memory, chat_id, message)
+            return finalize(self._setup_guidance_message())
+
         pending = mem.get("pending_action")
         if pending:
             return finalize(handle_pending_action(chat, self.memory, chat_id, message))
@@ -157,14 +202,21 @@ class ChatRuntime:
                 "set timer",
                 "set a timer",
                 "set an alarm",
+                "set a reminder",
+                "remind me",
+                "reminder for",
                 "timer for",
                 "alarm for",
+                "remind",
                 "cancel timer",
                 "cancel alarm",
+                "cancel reminder",
                 "list timers",
                 "list alarms",
+                "list reminders",
                 "what timers",
                 "what alarms",
+                "what reminders",
             )
         )
         if is_preference_message(message) and not explicit_timer_request:
@@ -207,7 +259,7 @@ class ChatRuntime:
             kind = (intent.get("intent") or "").lower()
             if kind == "open_app" and not self.open_app_confirmation_enabled:
                 continue
-            if kind in {"set_timer", "set_alarm", "cancel_timer"} and not self.timer_confirmation_enabled:
+            if kind in {"set_timer", "set_alarm", "set_reminder", "cancel_timer"} and not self.timer_confirmation_enabled:
                 continue
             confirmable_candidates.append(intent)
 
@@ -246,4 +298,10 @@ class ChatRuntime:
     def _get_chat(self, chat_id: str):
         if not chat_id or chat_id not in self.chats:
             raise KeyError("chat not found")
+        if self.chats[chat_id] is None and self.client is not None:
+            config = self._chat_configs.get(chat_id, {})
+            self.chats[chat_id] = self._create_remote_chat(
+                system_instruction=config.get("system_instruction"),
+                model=config.get("model"),
+            )
         return self.chats[chat_id]

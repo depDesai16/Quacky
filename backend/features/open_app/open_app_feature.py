@@ -12,7 +12,10 @@ from pathlib import Path
 from typing import Iterable, List
 from urllib.parse import quote_plus, urlparse
 
+from backend.core.settings_service import get_allowed_app_targets
+
 APPLIST_PATH = Path(__file__).resolve().parent / "applist.txt"
+WEB_TARGET_ID = "__web__"
 
 _WEB_FALLBACK_URLS = {
     "mozilla firefox": "https://www.mozilla.org/firefox/new/",
@@ -113,6 +116,53 @@ def get_classifier_app_hints(path: Path = APPLIST_PATH) -> str:
         aliases = ", ".join(app.aliases) if app.aliases else "(none)"
         lines.append(f"- {app.name} | aliases: {aliases}")
     return "\n".join(lines)
+
+
+def get_app_control_options(path: Path = APPLIST_PATH) -> list[dict]:
+    options = [
+        {
+            "target_id": WEB_TARGET_ID,
+            "label": "Web links in browser",
+            "kind": "web",
+        }
+    ]
+    for app in load_app_list(path):
+        options.append(
+            {
+                "target_id": app.name,
+                "label": app.name,
+                "kind": "app",
+            }
+        )
+    return options
+
+
+def get_default_allowed_app_targets(path: Path = APPLIST_PATH) -> list[str]:
+    return [item["target_id"] for item in get_app_control_options(path)]
+
+
+def get_app_control_snapshot(path: Path = APPLIST_PATH) -> dict:
+    options = get_app_control_options(path)
+    default_allowed = [item["target_id"] for item in options]
+    allowed = get_allowed_app_targets(default=default_allowed)
+    allowed_lower = {item.strip().lower() for item in allowed}
+
+    return {
+        "options": [
+            {
+                **item,
+                "allowed": item["target_id"].strip().lower() in allowed_lower,
+            }
+            for item in options
+        ],
+        "allowed_targets": allowed,
+    }
+
+
+def _is_target_allowed(target_id: str, path: Path = APPLIST_PATH) -> bool:
+    snapshot = get_app_control_snapshot(path)
+    allowed = {str(item).strip().lower() for item in snapshot.get("allowed_targets", [])}
+    return str(target_id or "").strip().lower() in allowed
 
 
 def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
@@ -273,6 +323,11 @@ def _open_direct_url_target(value: str) -> str:
 
 def open_app(app_name: str) -> str:
     if _is_direct_url_target(app_name):
+        if not _is_target_allowed(WEB_TARGET_ID):
+            return (
+                "Opening web links is blocked by your security settings. "
+                "Allow 'Web links in browser' in Settings > Security."
+            )
         return _open_direct_url_target(app_name)
 
     apps = load_app_list()
@@ -289,6 +344,11 @@ def open_app(app_name: str) -> str:
         return f"Which app did you mean? Matches: {options}."
 
     app = matches[0]
+    if not _is_target_allowed(app.name):
+        return (
+            f"Opening {app.name} is blocked by your security settings. "
+            "Allow it in Settings > Security."
+        )
     command = _resolve_command(app)
     if not _ensure_command_exists(command):
         return _open_fallback_in_browser(app, app_name)

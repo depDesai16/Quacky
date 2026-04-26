@@ -9,6 +9,7 @@ from backend.tools import (
     open_app,
     send_email,
     set_alarm,
+    set_reminder,
     set_timer,
     update_outlook_event_time,
 )
@@ -59,6 +60,11 @@ def _execute_pending_action(pending: dict) -> str:
             return set_alarm(
                 alarm_time=args.get("alarm_time", ""),
                 label=args.get("label", ""),
+            )
+        if op == "set_reminder":
+            return set_reminder(
+                reminder_time=args.get("reminder_time", ""),
+                note=args.get("note", ""),
             )
         if op == "cancel":
             return cancel_timer(timer_ref=args.get("timer_ref", ""))

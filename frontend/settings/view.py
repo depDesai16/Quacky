@@ -1,5 +1,5 @@
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QLineEdit, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout, QWidget
 from theme import ThemeManager
 
 from .controller import SettingsController
@@ -63,6 +63,11 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._api_key_test_btn = None
         self._api_key_remove_btn = None
         self._has_saved_api_key = False
+        self._app_control_toggles: dict[str, object] = {}
+        self._setup_status_label = None
+        self._app_controls_layout = None
+        self._preferences_layout = None
+        self._tasks_layout = None
 
         self._settings_container = self._build_settings_page()
         root = QVBoxLayout(self)
@@ -110,6 +115,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._update_api_key_action_state()
         self._settings_controller.refresh_confirmation_settings_async()
         self._settings_controller.refresh_saved_api_key_async()
+        self._refresh_security_state()
 
     def _on_confirmation_settings_loaded(self, open_enabled, timer_enabled, screen_enabled, _error: str):
         """Handle async confirmation settings refresh callbacks."""
@@ -295,6 +301,240 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         if self._api_key_test_btn is not None:
             self._api_key_test_btn.setText("Test Connection")
         self._update_api_key_action_state()
+
+    def _clear_layout(self, layout):
+        """Delete all child widgets/layout items from a layout."""
+        if layout is None:
+            return
+        while layout.count():
+            item = layout.takeAt(0)
+            widget = item.widget()
+            child_layout = item.layout()
+            if child_layout is not None:
+                self._clear_layout(child_layout)
+            if widget is not None:
+                widget.deleteLater()
+
+    def _refresh_security_state(self):
+        """Refresh setup, app-control, and memory data."""
+        self._refresh_setup_status()
+        self._refresh_app_controls()
+        self._refresh_memory_snapshot()
+
+    def _refresh_setup_status(self):
+        """Load setup status and render a concise checklist."""
+        if self._client is None or not hasattr(self._client, "get_setup_status"):
+            return
+        try:
+            result = self._client.get_setup_status()
+        except Exception as exc:
+            if self._setup_status_label is not None:
+                self._setup_status_label.setText(f"Could not load setup status: {exc}")
+            return
+        if not isinstance(result, dict) or self._setup_status_label is None:
+            return
+
+        items = result.get("items") if isinstance(result.get("items"), dict) else {}
+        lines = []
+        for key in ("api_key", "microphone", "calendar", "screen_viewing"):
+            item = items.get(key) if isinstance(items, dict) else None
+            if not isinstance(item, dict):
+                continue
+            marker = "Ready" if bool(item.get("ready")) else "Needs attention"
+            title = str(item.get("title", key)).strip()
+            detail = str(item.get("detail", "")).strip()
+            lines.append(f"<b>{title}</b>: {marker}<br>{detail}")
+        self._setup_status_label.setText("<br><br>".join(lines))
+
+    def _refresh_app_controls(self):
+        """Load app-control toggles from backend state."""
+        if self._client is None or not hasattr(self._client, "get_app_control_settings"):
+            return
+        try:
+            result = self._client.get_app_control_settings()
+        except Exception as exc:
+            if self._app_controls_layout is not None:
+                self._clear_layout(self._app_controls_layout)
+                error = QLineEdit()
+                error.setObjectName("settingsInput")
+                error.setReadOnly(True)
+                error.setText(f"Could not load app controls: {exc}")
+                self._app_controls_layout.addWidget(error)
+            return
+        if not isinstance(result, dict) or self._app_controls_layout is None:
+            return
+
+        self._clear_layout(self._app_controls_layout)
+        self._app_control_toggles = {}
+        options = result.get("options") if isinstance(result.get("options"), list) else []
+        for item in options:
+            if not isinstance(item, dict):
+                continue
+            target_id = str(item.get("target_id", "")).strip()
+            label = str(item.get("label", target_id)).strip() or target_id
+            kind = str(item.get("kind", "app")).strip().lower()
+            subtitle = (
+                "Allow Quacky to open links in your browser."
+                if kind == "web"
+                else "Allow Quacky to open this application."
+            )
+            row, toggle = self._make_settings_toggle_row(
+                label,
+                subtitle,
+                bool(item.get("allowed")),
+            )
+            toggle.toggled.connect(
+                lambda checked, target=target_id: self._on_app_control_toggled(target, checked)
+            )
+            self._app_controls_layout.addWidget(row)
+            self._app_control_toggles[target_id] = toggle
+        self._app_controls_layout.addStretch(1)
+
+    def _on_app_control_toggled(self, _target_id: str, _checked: bool):
+        """Persist app-control changes after any toggle update."""
+        if self._client is None or not hasattr(self._client, "set_app_control_settings"):
+            return
+        allowed_targets = [
+            target_id
+            for target_id, toggle in self._app_control_toggles.items()
+            if toggle.isChecked()
+        ]
+        try:
+            result = self._client.set_app_control_settings(allowed_targets)
+        except Exception as exc:
+            self.toast.show_message(f"Failed to update app controls: {exc}", kind="error")
+            self._refresh_app_controls()
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.toast.show_message(f"Failed to update app controls: {result['error']}", kind="error")
+            self._refresh_app_controls()
+            return
+        self.toast.show_message("Updated app control permissions.", kind="success")
+
+    def _refresh_memory_snapshot(self):
+        """Load remembered preferences and tasks into editable rows."""
+        if self._client is None or not hasattr(self._client, "get_memory_snapshot"):
+            return
+        try:
+            result = self._client.get_memory_snapshot()
+        except Exception as exc:
+            self.toast.show_message(f"Failed to load memory: {exc}", kind="error")
+            return
+        if not isinstance(result, dict):
+            return
+        self._render_memory_scope(
+            self._preferences_layout,
+            "preferences",
+            result.get("preferences"),
+            "No remembered preferences yet.",
+        )
+        self._render_memory_scope(
+            self._tasks_layout,
+            "tasks",
+            result.get("tasks"),
+            "No remembered task notes yet.",
+        )
+
+    def _render_memory_scope(self, layout, scope: str, items, empty_text: str):
+        """Render editable memory rows for one scope."""
+        if layout is None:
+            return
+        self._clear_layout(layout)
+        rows = items if isinstance(items, list) else []
+        if not rows:
+            hint = QLineEdit()
+            hint.setObjectName("settingsInput")
+            hint.setReadOnly(True)
+            hint.setText(empty_text)
+            layout.addWidget(hint)
+            return
+
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            value = str(item.get("value", "")).strip()
+            if not value:
+                continue
+            row = QWidget()
+            row_lay = QHBoxLayout(row)
+            row_lay.setContentsMargins(0, 0, 0, 0)
+            row_lay.setSpacing(8)
+
+            editor = QLineEdit(value)
+            editor.setObjectName("settingsInput")
+            self._settings_inputs.append(editor)
+            row_lay.addWidget(editor, 1)
+
+            save_btn = QPushButton("Save")
+            save_btn.setObjectName("settingsActionButton")
+            save_btn.setProperty("role", "secondary")
+            save_btn.setMinimumHeight(34)
+            save_btn.clicked.connect(
+                lambda _=False, s=scope, old=value, edit=editor: self._on_memory_save(s, old, edit.text())
+            )
+            row_lay.addWidget(save_btn, 0)
+
+            remove_btn = QPushButton("Remove")
+            remove_btn.setObjectName("settingsActionButton")
+            remove_btn.setProperty("role", "danger")
+            remove_btn.setMinimumHeight(34)
+            remove_btn.clicked.connect(
+                lambda _=False, s=scope, old=value: self._on_memory_remove(s, old)
+            )
+            row_lay.addWidget(remove_btn, 0)
+
+            layout.addWidget(row)
+        layout.addStretch(1)
+
+    def _on_memory_save(self, scope: str, old_value: str, new_value: str):
+        """Persist an edited remembered item."""
+        if self._client is None or not hasattr(self._client, "update_memory_item"):
+            return
+        if not str(new_value or "").strip():
+            self.toast.show_message("Memory items cannot be empty.", kind="warn")
+            return
+        try:
+            result = self._client.update_memory_item(scope, old_value, new_value)
+        except Exception as exc:
+            self.toast.show_message(f"Failed to update memory: {exc}", kind="error")
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.toast.show_message(str(result["error"]), kind="error")
+            return
+        self.toast.show_message("Updated remembered item.", kind="success")
+        self._refresh_memory_snapshot()
+
+    def _on_memory_remove(self, scope: str, value: str):
+        """Remove one remembered item."""
+        if self._client is None or not hasattr(self._client, "forget_memory_item"):
+            return
+        try:
+            result = self._client.forget_memory_item(scope, value)
+        except Exception as exc:
+            self.toast.show_message(f"Failed to remove memory item: {exc}", kind="error")
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.toast.show_message(str(result["error"]), kind="error")
+            return
+        message = str(result.get("message", "Removed remembered item.")) if isinstance(result, dict) else "Removed remembered item."
+        self.toast.show_message(message, kind="warn")
+        self._refresh_memory_snapshot()
+
+    def _on_memory_clear(self, scope: str):
+        """Clear one memory scope."""
+        if self._client is None or not hasattr(self._client, "clear_memory"):
+            return
+        try:
+            result = self._client.clear_memory(scope)
+        except Exception as exc:
+            self.toast.show_message(f"Failed to clear memory: {exc}", kind="error")
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.toast.show_message(str(result["error"]), kind="error")
+            return
+        message = str(result.get("message", "Cleared remembered items.")) if isinstance(result, dict) else "Cleared remembered items."
+        self.toast.show_message(message, kind="warn")
+        self._refresh_memory_snapshot()
 
     def set_model_visible(self, visible: bool):
         """Set model visible."""

@@ -183,15 +183,16 @@ class TimersEventsPanel(QWidget):
 
     def _format_timers(self, timers: list[dict]) -> str:
         if not timers:
-            return "No active timers or alarms."
+            return "No active timers, alarms, or reminders."
         lines = []
         for timer in timers[:20]:
             kind = str(timer.get("kind", "timer")).strip().capitalize()
             timer_id = str(timer.get("timer_id", "")).strip()
             label = str(timer.get("label", "")).strip()
+            note = str(timer.get("note", "")).strip()
             remaining = str(timer.get("remaining_text", "")).strip()
             due = str(timer.get("due_at", "")).strip()
-            label_suffix = f" ({label})" if label else ""
+            label_suffix = f": {note}" if note and kind.lower() == "reminder" else (f" ({label})" if label else "")
             due_text = f" | due {due}" if due else ""
             remaining_text = f" | {remaining} left" if remaining else ""
             lines.append(f"- {kind} {timer_id}{label_suffix}{remaining_text}{due_text}")

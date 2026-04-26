@@ -1,4 +1,5 @@
 import base64
+import html
 import os
 import sys
 
@@ -232,6 +233,7 @@ class QuackyWindow(QWidget):
         self._screen_capture_session.error_occurred.connect(self._on_screen_capture_error)
 
         self._build_ui()
+        self._show_startup_setup_guidance()
         self._install_resize_cursor_tracking()
         ThemeManager.subscribe(self._on_theme_changed)
 
@@ -597,6 +599,27 @@ class QuackyWindow(QWidget):
             self.timeline._empty_widget.suggestion_clicked.connect(
                 self._on_suggestion
             )
+
+    def _show_startup_setup_guidance(self):
+        """Surface first-run setup guidance in chat when the app is not ready yet."""
+        if not hasattr(self._client, "get_setup_status"):
+            return
+        try:
+            status = self._client.get_setup_status()
+        except Exception:
+            return
+        if not isinstance(status, dict):
+            return
+        issues = status.get("issues") if isinstance(status.get("issues"), list) else []
+        if not issues:
+            return
+        safe_issues = [html.escape(str(item)) for item in issues[:4]]
+        details = "<br>".join(f"• {item}" for item in safe_issues)
+        self.timeline.add_system_message(
+            "Setup check:<br>"
+            f"{details}<br><br>"
+            "Open Settings for API key, memory, and security controls."
+        )
 
     def _on_suggestion(self, text: str):
         """Handle suggestion callbacks."""

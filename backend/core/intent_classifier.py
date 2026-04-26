@@ -15,6 +15,7 @@ Supported intents:
     send_email     -> compose/send an email through the email tool
     set_timer      -> set an in-house timer
     set_alarm      -> set an in-house alarm
+    set_reminder   -> set an in-house reminder with reminder text
     list_timers    -> list active timers/alarms
     cancel_timer   -> cancel a timer/alarm
     list_memory    -> list remembered preferences/task notes
@@ -89,35 +90,43 @@ AVAILABLE INTENTS
      e.g. "7:30 AM", "tomorrow 8:00", "2026-03-20 09:15".
    - If time is missing, use clarify.
 
-10. list_timers
+10. set_reminder
+   Required: reminder_time (str), note (str)
+   Notes:
+   - Use this when the user wants a reminder tied to a task/message.
+   - Keep reminder_time in natural language text the timer feature can parse.
+   - Keep note concise but preserve the requested task.
+   - If time or reminder text is missing, use clarify.
+
+11. list_timers
    No fields. Use when user asks to show/list/check active timers or alarms.
 
-11. cancel_timer
+12. cancel_timer
    Required: timer_ref (str)
    Notes:
    - timer_ref can be an id (e.g. "TMR-0001") or a label phrase.
    - If user asks to cancel but gives no reference and has multiple timers, use clarify.
 
-12. list_memory
+13. list_memory
    Optional: scope (str) - "all", "preferences", or "tasks". Default "all".
    Use when user asks to show/list remembered preferences or tasks.
 
-13. forget_memory_item
+14. forget_memory_item
    Required: scope (str - "preferences" or "tasks"), value (str)
    Use for forgetting one specific remembered preference or one task note.
 
-14. forget_all_memory
+15. forget_all_memory
    Optional: scope (str) - "all", "preferences", or "tasks". Default "all".
    Use when user asks to clear/forget everything in memory for a scope.
 
-15. clarify
+16. clarify
    Required: question (str - what to ask the user), reason (str - why clarification is needed)
    Use this when:
    - Calendar title is ambiguous (e.g. "move my meeting to 3pm" - which meeting?)
    - Multiple possible interpretations exist
    - Critical information is missing that cannot be inferred
 
-16. chat
+17. chat
    No fields. Use for casual conversation or anything that does not match above.
 
 RULES
@@ -148,6 +157,10 @@ RULES
   - Examples: "90 seconds" -> 90, "10 min" -> 600, "2 hours" -> 7200.
 - For set_alarm:
   - Keep alarm_time text human-readable. Do not convert to Unix timestamps.
+- For set_reminder:
+  - Extract reminder_time and note separately.
+  - "remind me tomorrow at 8 to call mom" -> {"intent":"set_reminder","reminder_time":"tomorrow 8:00","note":"call mom"}
+  - "set a reminder for friday 3pm to submit payroll" -> {"intent":"set_reminder","reminder_time":"Friday 3pm","note":"submit payroll"}
 - For list_timers:
   - Use when user asks what timers/alarms are active.
 - For cancel_timer:
@@ -273,6 +286,12 @@ EXAMPLES
 
 "set an alarm for tomorrow at 7:30 am called gym"
 [{"intent": "set_alarm", "alarm_time": "tomorrow 7:30 AM", "label": "gym"}]
+
+"remind me tomorrow at 8 to call mom"
+[{"intent": "set_reminder", "reminder_time": "tomorrow 8:00", "note": "call mom"}]
+
+"set a reminder for friday at 3pm to submit payroll"
+[{"intent": "set_reminder", "reminder_time": "Friday 3pm", "note": "submit payroll"}]
 
 "what timers do i have?"
 [{"intent": "list_timers"}]

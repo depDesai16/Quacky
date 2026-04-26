@@ -119,6 +119,44 @@ def save_screen_viewing_enabled(enabled: bool) -> None:
         _write_data(data)
 
 
+def get_allowed_app_targets(default: list[str] | None = None) -> list[str]:
+    with _LOCK:
+        data = _read_data()
+        raw = data.get("allowed_app_targets")
+        if raw is None:
+            return list(default or [])
+        if not isinstance(raw, list):
+            return list(default or [])
+
+        allowed: list[str] = []
+        seen: set[str] = set()
+        for item in raw:
+            value = str(item or "").strip()
+            lowered = value.lower()
+            if not value or lowered in seen:
+                continue
+            seen.add(lowered)
+            allowed.append(value)
+        return allowed
+
+
+def save_allowed_app_targets(targets: list[str]) -> None:
+    cleaned: list[str] = []
+    seen: set[str] = set()
+    for item in targets or []:
+        value = str(item or "").strip()
+        lowered = value.lower()
+        if not value or lowered in seen:
+            continue
+        seen.add(lowered)
+        cleaned.append(value)
+
+    with _LOCK:
+        data = _read_data()
+        data["allowed_app_targets"] = cleaned
+        _write_data(data)
+
+
 def test_api_key(api_key: str) -> tuple[bool, str]:
     key = api_key.strip()
     if not key:

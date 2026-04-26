@@ -53,6 +53,21 @@ class SettingsServiceTests(unittest.TestCase):
                 settings_service.save_screen_viewing_enabled(False)
                 self.assertFalse(settings_service.get_screen_viewing_enabled(default=True))
 
+    def test_allowed_app_targets_round_trip(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings_path = Path(tmpdir) / "local_settings.json"
+
+            with patch.object(settings_service, "_FILE", settings_path):
+                default = ["__web__", "Spotify"]
+                self.assertEqual(settings_service.get_allowed_app_targets(default=default), default)
+
+                settings_service.save_allowed_app_targets(["Spotify", "__web__", "spotify"])
+
+                self.assertEqual(
+                    settings_service.get_allowed_app_targets(default=[]),
+                    ["Spotify", "__web__"],
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

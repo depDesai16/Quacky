@@ -16,6 +16,7 @@ from backend.tools import (
     open_app,
     send_email,
     set_alarm,
+    set_reminder,
     set_timer,
 )
 
@@ -83,6 +84,14 @@ def dispatch_intents(intents: list[dict]) -> str | None:
             if result:
                 results.append(result)
 
+        elif kind == "set_reminder":
+            result = set_reminder(
+                reminder_time=intent.get("reminder_time", ""),
+                note=intent.get("note", ""),
+            )
+            if result:
+                results.append(result)
+
         elif kind == "list_timers":
             result = list_timers()
             if result:
@@ -135,7 +144,7 @@ def extract_confirmable_intent(intents: list[dict]) -> dict | None:
     """
     for intent in intents:
         kind = intent.get("intent", "").lower()
-        if kind in ("open_app", "send_email", "set_timer", "set_alarm", "cancel_timer", "forget_all_memory"):
+        if kind in ("open_app", "send_email", "set_timer", "set_alarm", "set_reminder", "cancel_timer", "forget_all_memory"):
             return intent
     return None
 
@@ -230,6 +239,14 @@ def validate_confirmable_intent(intent: dict) -> str | None:
         if not alarm_time:
             return "Alarm time is required."
 
+    if kind == "set_reminder":
+        reminder_time = (intent.get("reminder_time") or "").strip()
+        note = (intent.get("note") or "").strip()
+        if not reminder_time:
+            return "Reminder time is required."
+        if not note:
+            return "Reminder text is required."
+
     if kind == "cancel_timer":
         timer_ref = (intent.get("timer_ref") or "").strip()
         if not timer_ref:
@@ -316,6 +333,18 @@ def build_confirmable_action(intent: dict) -> dict | None:
             "op": "set_alarm",
             "args": {"alarm_time": alarm_time, "label": label},
             "summary": f"set an alarm for '{alarm_time}'{label_summary}",
+        }
+
+    if kind == "set_reminder":
+        reminder_time = (intent.get("reminder_time") or "").strip()
+        note = " ".join(str(intent.get("note") or "").split())
+        if not reminder_time or not note:
+            return None
+        return {
+            "kind": "timer",
+            "op": "set_reminder",
+            "args": {"reminder_time": reminder_time, "note": note},
+            "summary": f"set a reminder for '{reminder_time}' to '{note}'",
         }
 
     if kind == "cancel_timer":

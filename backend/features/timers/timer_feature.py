@@ -12,10 +12,11 @@ _MAX_TIMER_SECONDS = 7 * 24 * 60 * 60
 @dataclass
 class _TimerEntry:
     timer_id: str
-    kind: str  # "timer" | "alarm"
+    kind: str  # "timer" | "alarm" | "reminder"
     trigger_at: datetime
     label: str
     created_at: datetime
+    note: str = ""
     fired: bool = False
     canceled: bool = False
 
@@ -57,6 +58,20 @@ class _TimerManager:
             self._entries[entry.timer_id] = entry
             return entry
 
+    def create_reminder(self, trigger_at: datetime, note: str) -> _TimerEntry:
+        now = datetime.now()
+        with self._lock:
+            entry = _TimerEntry(
+                timer_id=self._next_id(),
+                kind="reminder",
+                trigger_at=trigger_at,
+                label="",
+                created_at=now,
+                note=note.strip(),
+            )
+            self._entries[entry.timer_id] = entry
+            return entry
+
     def cancel(self, timer_ref: str) -> _TimerEntry | None:
         ref = (timer_ref or "").strip().lower()
         if not ref:
@@ -80,6 +95,12 @@ class _TimerManager:
                 if entry.label and ref in entry.label.lower():
                     entry.canceled = True
                     return entry
+            for entry in self._entries.values():
+                if entry.canceled or entry.fired:
+                    continue
+                if entry.note and ref in entry.note.lower():
+                    entry.canceled = True
+                    return entry
         return None
 
     def list_active(self) -> list[_TimerEntry]:
@@ -99,9 +120,13 @@ class _TimerManager:
                     continue
                 if entry.trigger_at <= now:
                     entry.fired = True
-                    label = f" ({entry.label})" if entry.label else ""
-                    kind = "Timer" if entry.kind == "timer" else "Alarm"
-                    due.append(f"{kind} {entry.timer_id}{label} is due now.")
+                    if entry.kind == "reminder":
+                        reminder_note = f": {entry.note}" if entry.note else ""
+                        due.append(f"Reminder {entry.timer_id}{reminder_note} is due now.")
+                    else:
+                        label = f" ({entry.label})" if entry.label else ""
+                        kind = "Timer" if entry.kind == "timer" else "Alarm"
+                        due.append(f"{kind} {entry.timer_id}{label} is due now.")
         return due
 
 
@@ -196,16 +221,38 @@ def set_alarm(alarm_time: str, label: str = "") -> str:
     return f"Set alarm {entry.timer_id}{label_suffix} for {due_text}."
 
 
+def set_reminder(reminder_time: str, note: str) -> str:
+    """Set a reminder for a specific time with reminder text."""
+    trigger_at = _parse_alarm_time(reminder_time)
+    cleaned_note = " ".join((note or "").strip().split())
+    if not cleaned_note:
+        return "Reminder text is required."
+    if trigger_at is None:
+        return (
+            "Could not parse reminder time. Try formats like "
+            "'7:30 AM', '19:30', 'tomorrow 8:00', or '2026-03-20 09:15'."
+        )
+
+    entry = _MANAGER.create_reminder(trigger_at=trigger_at, note=cleaned_note)
+    due_text = entry.trigger_at.strftime("%Y-%m-%d %I:%M:%S %p")
+    return f"Set reminder {entry.timer_id} to '{cleaned_note}' for {due_text}."
+
+
 def list_timers() -> str:
-    """List active timers and alarms."""
+    """List active timers, alarms, and reminders."""
     active = _MANAGER.list_active()
     if not active:
-        return "No active timers or alarms."
+        return "No active timers, alarms, or reminders."
 
     now = datetime.now()
-    lines = ["Active timers and alarms:"]
+    lines = ["Active timers, alarms, and reminders:"]
     for entry in active:
         remaining = _format_remaining(entry.trigger_at - now)
+        if entry.kind == "reminder":
+            note = f": {entry.note}" if entry.note else ""
+            due = entry.trigger_at.strftime("%Y-%m-%d %I:%M:%S %p")
+            lines.append(f"- Reminder {entry.timer_id}{note}: due {due} ({remaining} remaining)")
+            continue
         label = f" ({entry.label})" if entry.label else ""
         kind = "Timer" if entry.kind == "timer" else "Alarm"
         due = entry.trigger_at.strftime("%Y-%m-%d %I:%M:%S %p")
@@ -214,7 +261,7 @@ def list_timers() -> str:
 
 
 def get_active_timers_data() -> list[dict]:
-    """Return active timers/alarms in a structured form for UI dashboards."""
+    """Return active timers/alarms/reminders in a structured form for UI dashboards."""
     now = datetime.now()
     items: list[dict] = []
     for entry in _MANAGER.list_active():
@@ -224,6 +271,7 @@ def get_active_timers_data() -> list[dict]:
                 "timer_id": entry.timer_id,
                 "kind": entry.kind,
                 "label": entry.label,
+                "note": entry.note,
                 "due_at": entry.trigger_at.isoformat(timespec="seconds"),
                 "created_at": entry.created_at.isoformat(timespec="seconds"),
                 "remaining_seconds": remaining_seconds,
@@ -234,14 +282,18 @@ def get_active_timers_data() -> list[dict]:
 
 
 def cancel_timer(timer_ref: str) -> str:
-    """Cancel an existing timer or alarm by id or label text."""
+    """Cancel an existing timer, alarm, or reminder by id or label text."""
     ref = (timer_ref or "").strip()
     if not ref:
         return "Please provide a timer id or label to cancel."
 
     entry = _MANAGER.cancel(ref)
     if entry is None:
-        return f"Could not find an active timer/alarm matching '{ref}'."
+        return f"Could not find an active timer/alarm/reminder matching '{ref}'."
+
+    if entry.kind == "reminder":
+        note = f": {entry.note}" if entry.note else ""
+        return f"Canceled Reminder {entry.timer_id}{note}."
 
     kind = "Timer" if entry.kind == "timer" else "Alarm"
     label = f" ({entry.label})" if entry.label else ""

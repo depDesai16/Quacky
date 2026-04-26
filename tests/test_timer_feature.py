@@ -28,6 +28,18 @@ class TimerFeatureTests(unittest.TestCase):
 
         self.assertIn("Set alarm TMR-0001 (gym) for 2030-01-02 09:15:00 AM.", result)
 
+    def test_set_reminder_stores_note_and_lists_it(self):
+        fresh_manager = timer_feature._TimerManager()
+        with patch.object(timer_feature, "_MANAGER", fresh_manager):
+            created = timer_feature.set_reminder("2030-01-02 09:15", note="call mom")
+            listed = timer_feature.list_timers()
+            items = timer_feature.get_active_timers_data()
+
+        self.assertIn("Set reminder TMR-0001 to 'call mom' for 2030-01-02 09:15:00 AM.", created)
+        self.assertIn("Reminder TMR-0001: call mom:", listed)
+        self.assertEqual(items[0]["kind"], "reminder")
+        self.assertEqual(items[0]["note"], "call mom")
+
     def test_drain_due_alerts_only_returns_each_alert_once(self):
         fresh_manager = timer_feature._TimerManager()
         with patch.object(timer_feature, "_MANAGER", fresh_manager):
@@ -39,6 +51,18 @@ class TimerFeatureTests(unittest.TestCase):
 
         self.assertEqual(first, ["Timer TMR-0001 (stretch) is due now."])
         self.assertEqual(second, [])
+
+    def test_reminder_due_alert_mentions_note(self):
+        fresh_manager = timer_feature._TimerManager()
+        with patch.object(timer_feature, "_MANAGER", fresh_manager):
+            entry = fresh_manager.create_reminder(
+                datetime.now() + timedelta(seconds=5),
+                note="submit payroll",
+            )
+            entry.trigger_at = datetime.now() - timedelta(seconds=1)
+            alerts = timer_feature.drain_due_alerts()
+
+        self.assertEqual(alerts, ["Reminder TMR-0001: submit payroll is due now."])
 
     def test_get_active_timers_data_returns_structured_entries(self):
         fresh_manager = timer_feature._TimerManager()
