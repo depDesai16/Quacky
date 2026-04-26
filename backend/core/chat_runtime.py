@@ -18,7 +18,11 @@ from backend.core.action_router import (
 from backend.core.confirmation import handle_pending_action
 from backend.core.intent_classifier import classify
 from backend.core.response_style import ask_quacky_confirmation, style_direct_output
-from backend.features.open_app import WEB_TARGET_ID, resolve_open_app_request
+from backend.features.open_app import (
+    WEB_TARGET_ID,
+    build_open_app_guidance,
+    resolve_open_app_request,
+)
 from backend.features.timers import drain_due_alerts
 from backend.personality.__init__ import (
     augment_with_context,
@@ -129,6 +133,25 @@ class ChatRuntime:
             "args": {"target_id": target_id, "app_name": app_name},
             "summary": f"allow {target_summary} in app controls and open '{display_name}'",
         }
+
+    def _preflight_open_app_intent(self, intent: dict) -> str | None:
+        """Return an immediate user-facing message when an app request should not be confirmed yet."""
+        app_name = str(intent.get("app") or "").strip()
+        if not app_name:
+            return None
+
+        resolution = resolve_open_app_request(app_name)
+        status = str(resolution.get("status") or "")
+
+        if status in {"no_apps_configured", "not_found", "ambiguous"}:
+            return build_open_app_guidance(app_name)
+
+        if status in {"app", "direct_url"} and not bool(resolution.get("allowed")):
+            if self.app_control_suggestions_enabled and bool(resolution.get("can_suggest_allow")):
+                return None
+            return build_open_app_guidance(app_name)
+
+        return None
 
     @staticmethod
     def _attach_screen_context_note(message: str) -> str:
@@ -295,6 +318,10 @@ class ChatRuntime:
         for intent in intents:
             if (intent.get("intent") or "").lower() != "open_app":
                 continue
+            guidance = self._preflight_open_app_intent(intent)
+            if guidance is not None:
+                update_memory(self.memory, chat_id, message)
+                return finalize(style_direct_output(chat, message, guidance))
             action = self._build_app_control_suggestion_action(intent)
             if action is None:
                 continue

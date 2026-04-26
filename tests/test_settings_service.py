@@ -9,6 +9,18 @@ from backend.core import settings_service
 
 
 class SettingsServiceTests(unittest.TestCase):
+    def test_test_api_key_uses_fixed_google_models_endpoint(self):
+        with patch("urllib.request.urlopen") as urlopen:
+            response = urlopen.return_value.__enter__.return_value
+            response.read.return_value = b'{"models":[{"name":"gemini"}]}'
+
+            ok, message = settings_service.test_api_key("test-key")
+
+        request = urlopen.call_args.args[0]
+        self.assertTrue(ok)
+        self.assertEqual(message, "API key test passed.")
+        self.assertEqual(request.full_url.split("?", 1)[0], settings_service._GOOGLE_MODELS_URL)
+
     def test_save_api_key_uses_private_file_permissions(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             settings_path = Path(tmpdir) / "local_settings.json"

@@ -39,7 +39,8 @@ class ElevenLabsTTS:
             },
         )
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+            # This request targets ElevenLabs' fixed https API host.
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
                 return resp.read()
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")

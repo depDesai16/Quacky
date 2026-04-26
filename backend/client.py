@@ -3,13 +3,22 @@ import json
 import os
 import socket
 import urllib.error
+import urllib.parse
 import urllib.request
 
 
 class QuackyClient:
     def __init__(self, base_url: str = "http://localhost:8000"):
-        self.base_url = base_url.rstrip("/")
+        self.base_url = self._normalize_base_url(base_url)
         self.timeout_seconds = int(os.getenv("QUACKY_CLIENT_TIMEOUT", "180"))
+
+    @staticmethod
+    def _normalize_base_url(base_url: str) -> str:
+        raw = str(base_url or "").strip()
+        parsed = urllib.parse.urlsplit(raw)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("base_url must use http or https and include a host")
+        return raw.rstrip("/")
 
     def _post(self, path: str, payload: dict):
         url = self.base_url + path
@@ -22,7 +31,8 @@ class QuackyClient:
         )
 
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:
+            # The request target is constrained to a validated http(s) base URL.
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
                 body = resp.read().decode("utf-8")
                 return json.loads(body) if body else {}
 
@@ -39,8 +49,10 @@ class QuackyClient:
 
     def _get(self, path: str) -> dict:
         url = f"{self.base_url}{path}"
+        req = urllib.request.Request(url, method="GET")
         try:
-            with urllib.request.urlopen(url, timeout=self.timeout_seconds) as resp:
+            # The request target is constrained to a validated http(s) base URL.
+            with urllib.request.urlopen(req, timeout=self.timeout_seconds) as resp:  # nosec B310
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8")

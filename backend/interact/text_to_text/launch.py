@@ -2,6 +2,15 @@ import os
 import subprocess
 import sys
 import time
+import urllib.parse
+
+
+def _normalize_base_url(url: str) -> str:
+    raw = str(url or "").strip()
+    parsed = urllib.parse.urlsplit(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("QUACKY_BASE_URL must use http or https and include a host")
+    return raw.rstrip("/")
 
 
 def _wait_for_server(url: str, timeout: float = 5.0) -> None:
@@ -11,7 +20,9 @@ def _wait_for_server(url: str, timeout: float = 5.0) -> None:
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(f"{url}/health") as resp:
+            req = urllib.request.Request(f"{url}/health", method="GET")
+            # The health check URL is constrained to a validated http(s) base URL.
+            with urllib.request.urlopen(req) as resp:  # nosec B310
                 if resp.status == 200:
                     return
         except urllib.error.URLError:
@@ -20,7 +31,7 @@ def _wait_for_server(url: str, timeout: float = 5.0) -> None:
 
 
 def main() -> int:
-    base_url = os.getenv("QUACKY_BASE_URL", "http://localhost:8000")
+    base_url = _normalize_base_url(os.getenv("QUACKY_BASE_URL", "http://localhost:8000"))
     server_cmd = [sys.executable, os.path.join(os.path.dirname(__file__), "server.py")]
 
     server_proc = subprocess.Popen(server_cmd)

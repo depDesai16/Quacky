@@ -40,6 +40,7 @@ def _load_chat_runtime_module():
 
     open_app_stub = types.ModuleType("backend.features.open_app")
     open_app_stub.WEB_TARGET_ID = "__web__"
+    open_app_stub.build_open_app_guidance = Mock(return_value="launcher guidance")
     open_app_stub.resolve_open_app_request = Mock(
         return_value={
             "status": "app",
@@ -109,6 +110,46 @@ class ChatRuntimeTests(unittest.TestCase):
         pending = runtime.memory["chat-1"]["pending_action"]
         self.assertEqual(pending["kind"], "app_control")
         self.assertEqual(pending["op"], "allow_and_open")
+
+    def test_ambiguous_open_app_returns_guidance_before_confirmation(self):
+        module, intent_classifier_stub, open_app_stub, response_style_stub = _load_chat_runtime_module()
+        runtime = module.ChatRuntime(api_key="test-key", model_name="gemini-2.5-flash")
+        chat = Mock()
+        runtime.chats["chat-1"] = chat
+        runtime._chat_configs["chat-1"] = {"system_instruction": "", "model": None}
+        intent_classifier_stub.classify.return_value = [{"intent": "open_app", "app": "code"}]
+        open_app_stub.resolve_open_app_request.return_value = {
+            "status": "ambiguous",
+            "requested_name": "code",
+            "display_name": "code",
+            "target_id": "",
+            "allowed": False,
+            "can_suggest_allow": False,
+            "matches": ["Cursor", "VS Code"],
+        }
+        response_style_stub.style_direct_output.return_value = "styled guidance"
+
+        result = runtime.handle_message("chat-1", "open code")
+
+        self.assertEqual(result, "styled guidance")
+        open_app_stub.build_open_app_guidance.assert_called_once_with("code")
+        self.assertNotIn("pending_action", runtime.memory["chat-1"])
+
+    def test_blocked_open_app_returns_guidance_when_suggestions_disabled(self):
+        module, intent_classifier_stub, open_app_stub, response_style_stub = _load_chat_runtime_module()
+        runtime = module.ChatRuntime(api_key="test-key", model_name="gemini-2.5-flash")
+        runtime.set_app_control_suggestions_enabled(False)
+        chat = Mock()
+        runtime.chats["chat-1"] = chat
+        runtime._chat_configs["chat-1"] = {"system_instruction": "", "model": None}
+        intent_classifier_stub.classify.return_value = [{"intent": "open_app", "app": "spotify"}]
+        response_style_stub.style_direct_output.return_value = "styled guidance"
+
+        result = runtime.handle_message("chat-1", "open spotify")
+
+        self.assertEqual(result, "styled guidance")
+        open_app_stub.build_open_app_guidance.assert_called_once_with("spotify")
+        self.assertNotIn("pending_action", runtime.memory["chat-1"])
 
 
 if __name__ == "__main__":

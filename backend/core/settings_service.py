@@ -8,6 +8,7 @@ from pathlib import Path
 
 _LOCK = threading.Lock()
 _FILE = Path(__file__).resolve().parents[1] / "data" / "local_settings.json"
+_GOOGLE_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 def _ensure_parent() -> None:
@@ -180,13 +181,11 @@ def test_api_key(api_key: str) -> tuple[bool, str]:
     if not key:
         return False, "Enter an API key first."
 
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models?"
-        + urllib.parse.urlencode({"key": key})
-    )
+    url = _GOOGLE_MODELS_URL + "?" + urllib.parse.urlencode({"key": key})
     req = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        # This endpoint is fixed to Google's https API host.
+        with urllib.request.urlopen(req, timeout=8) as resp:  # nosec B310
             body = resp.read().decode("utf-8")
         payload = json.loads(body) if body else {}
         if isinstance(payload, dict) and payload.get("models"):

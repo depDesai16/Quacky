@@ -7,6 +7,10 @@ from backend.client import QuackyClient
 
 
 class QuackyClientTests(unittest.TestCase):
+    def test_client_rejects_non_http_base_url(self):
+        with self.assertRaises(ValueError):
+            QuackyClient(base_url="file:///tmp/quacky")
+
     def test_send_message_includes_screenshot_payload_when_provided(self):
         client = QuackyClient()
 

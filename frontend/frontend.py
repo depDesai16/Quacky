@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from widgets.quacky_widget import get_quacky_icon
@@ -84,10 +85,17 @@ def _start_server() -> subprocess.Popen:
 
 def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
     """Handle wait for server."""
+    parsed = urllib.parse.urlsplit(str(base_url or "").strip())
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+
+    normalized_base_url = str(base_url or "").rstrip("/")
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            with urllib.request.urlopen(f"{base_url}/health", timeout=1) as resp:
+            req = urllib.request.Request(f"{normalized_base_url}/health", method="GET")
+            # The health check URL is constrained to a validated http(s) base URL.
+            with urllib.request.urlopen(req, timeout=1) as resp:  # nosec B310
                 if resp.status == 200:
                     return True
         except Exception:

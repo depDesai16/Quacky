@@ -6,6 +6,7 @@ Receives classified intents from intent_classifier.py and routes
 directly handled intents to their tool handlers.
 """
 
+from backend.features.open_app import get_open_app_confirmation_summary
 from backend.tools import (
     cancel_timer,
     forget_memory_item,
@@ -278,7 +279,7 @@ def build_confirmable_action(intent: dict) -> dict | None:
             "kind": "open_app",
             "op": "open",
             "args": {"app_name": app},
-            "summary": f"open '{app}'",
+            "summary": get_open_app_confirmation_summary(app),
         }
 
     if kind == "send_email":

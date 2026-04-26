@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import os
 import re
 import shlex
@@ -215,6 +216,7 @@ def resolve_open_app_request(app_name: str, path: Path = APPLIST_PATH) -> dict:
             "allowed": False,
             "can_suggest_allow": False,
             "available": sorted({a.name for a in apps}),
+            "suggestions": _suggest_app_names(raw, apps),
         }
 
     if len(matches) > 1:
@@ -229,6 +231,8 @@ def resolve_open_app_request(app_name: str, path: Path = APPLIST_PATH) -> dict:
         }
 
     app = matches[0]
+    command = _resolve_command(app)
+    desktop_available = _ensure_command_exists(command)
     return {
         "status": "app",
         "requested_name": raw,
@@ -236,6 +240,8 @@ def resolve_open_app_request(app_name: str, path: Path = APPLIST_PATH) -> dict:
         "target_id": app.name,
         "allowed": _is_target_allowed(app.name, path),
         "can_suggest_allow": True,
+        "desktop_available": desktop_available,
+        "fallback_url": _fallback_url(app, raw),
     }
 
 
@@ -256,6 +262,127 @@ def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
             loose.append(app)
 
     return exact or loose
+
+
+def _dedupe_preserving_order(values: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    results: list[str] = []
+    for value in values:
+        cleaned = str(value or "").strip()
+        if not cleaned:
+            continue
+        lowered = cleaned.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        results.append(cleaned)
+    return results
+
+
+def _format_name_list(values: Iterable[str], limit: int = 4) -> str:
+    items = _dedupe_preserving_order(values)
+    if not items:
+        return ""
+
+    trimmed = items[:limit]
+    if len(items) > limit:
+        trimmed.append(f"{len(items) - limit} more")
+    return ", ".join(trimmed)
+
+
+def _suggest_app_names(requested_name: str, apps: Iterable[AppEntry], limit: int = 3) -> list[str]:
+    entries = list(apps)
+    if not entries:
+        return []
+
+    alias_to_name: dict[str, str] = {}
+    for app in entries:
+        for alias in app.all_names():
+            alias_to_name[_normalize(alias)] = app.name
+
+    candidates = difflib.get_close_matches(
+        _normalize(requested_name),
+        list(alias_to_name.keys()),
+        n=limit * 2,
+        cutoff=0.45,
+    )
+    suggestions: list[str] = []
+    for candidate in candidates:
+        app_name = alias_to_name.get(candidate)
+        if app_name and app_name not in suggestions:
+            suggestions.append(app_name)
+        if len(suggestions) >= limit:
+            break
+    return suggestions
+
+
+def build_open_app_guidance(app_name: str, path: Path = APPLIST_PATH) -> str:
+    resolution = resolve_open_app_request(app_name, path)
+    status = str(resolution.get("status") or "")
+    requested_name = str(resolution.get("requested_name") or app_name).strip() or str(app_name or "").strip()
+    display_name = str(resolution.get("display_name") or requested_name).strip() or requested_name
+
+    if status == "direct_url":
+        if resolution.get("allowed"):
+            return f"Open {display_name} in your browser."
+        return (
+            "Opening web links is blocked by your security settings. "
+            "Allow 'Web links in browser' in Settings > Security."
+        )
+
+    if status == "no_apps_configured":
+        return "No apps are configured yet. Add entries to backend/features/open_app/applist.txt."
+
+    if status == "not_found":
+        suggestions = resolution.get("suggestions") or []
+        if suggestions:
+            return (
+                f"I couldn't find '{requested_name}'. "
+                f"Try one of these instead: {_format_name_list(suggestions)}."
+            )
+        available = resolution.get("available") or []
+        if available:
+            return (
+                f"I couldn't find '{requested_name}'. "
+                f"Available apps: {_format_name_list(available)}."
+            )
+        return f"I couldn't find '{requested_name}'."
+
+    if status == "ambiguous":
+        matches = resolution.get("matches") or []
+        return (
+            f"I found multiple matches for '{requested_name}': {_format_name_list(matches)}. "
+            "Say the exact app name you want."
+        )
+
+    if status == "app" and not resolution.get("allowed"):
+        return (
+            f"Opening {display_name} is blocked by your security settings. "
+            "Allow it in Settings > Security."
+        )
+
+    if status == "app" and not resolution.get("desktop_available", True):
+        fallback_url = str(resolution.get("fallback_url") or "").strip()
+        if fallback_url:
+            return f"{display_name} is not installed here, so I can open its web fallback instead."
+        return f"{display_name} is not installed here, so I can try a browser fallback instead."
+
+    return f"Open {display_name}."
+
+
+def get_open_app_confirmation_summary(app_name: str, path: Path = APPLIST_PATH) -> str:
+    resolution = resolve_open_app_request(app_name, path)
+    status = str(resolution.get("status") or "")
+    display_name = str(resolution.get("display_name") or app_name).strip() or str(app_name or "").strip()
+
+    if status == "direct_url":
+        return f"open '{display_name}' in your browser"
+    if status == "app" and not resolution.get("desktop_available", True):
+        return f"open '{display_name}' in your browser because the desktop app is unavailable"
+    if status == "app":
+        return f"open '{display_name}'"
+    app = str(app_name or "").strip()
+    return f"open '{app}'" if app else "open that app"
 
 
 def _expand(command: str) -> str:
@@ -400,32 +527,23 @@ def open_app(app_name: str) -> str:
 
     if resolution["status"] == "direct_url":
         if not resolution["allowed"]:
-            return (
-                "Opening web links is blocked by your security settings. "
-                "Allow 'Web links in browser' in Settings > Security."
-            )
+            return build_open_app_guidance(app_name)
         return _open_direct_url_target(app_name)
 
     if resolution["status"] == "no_apps_configured":
-        return "No apps configured yet. Add entries to backend/applist.txt."
+        return build_open_app_guidance(app_name)
 
     if resolution["status"] == "not_found":
-        apps = load_app_list()
-        available = ", ".join(sorted({a.name for a in apps}))
-        return f"App '{app_name}' not found. Available: {available}."
+        return build_open_app_guidance(app_name)
 
     if resolution["status"] == "ambiguous":
-        options = ", ".join(resolution.get("matches", []))
-        return f"Which app did you mean? Matches: {options}."
+        return build_open_app_guidance(app_name)
 
     apps = load_app_list()
     matches = _find_matches(app_name, apps)
     app = matches[0]
     if not resolution["allowed"]:
-        return (
-            f"Opening {app.name} is blocked by your security settings. "
-            "Allow it in Settings > Security."
-        )
+        return build_open_app_guidance(app_name)
     command = _resolve_command(app)
     if not _ensure_command_exists(command):
         return _open_fallback_in_browser(app, app_name)

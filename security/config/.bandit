@@ -1,16 +1,7 @@
 # Bandit configuration file
 [bandit]
 # Exclude test files and virtual environments
-exclude_dirs = [
-    '/venv/',
-    '/env/',
-    '/.venv/',
-    '/tests/',
-    '/__pycache__/',
-    '/.git/',
-    '/.github/',
-    '/node_modules/'
-]
+exclude_dirs = venv,env,.venv,tests,__pycache__,.git,.github,node_modules
 
 # Test IDs to skip (if needed)
 # skips = ['B101', 'B601']
