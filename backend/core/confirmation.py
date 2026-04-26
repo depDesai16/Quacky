@@ -1,5 +1,6 @@
 # backend/core/confirmation.py
 from backend.core.response_style import style_direct_output
+from backend.features.open_app import add_allowed_app_target
 from backend.personality.__init__ import update_memory
 from backend.tools import (
     add_outlook_event,
@@ -74,6 +75,14 @@ def _execute_pending_action(pending: dict) -> str:
         if op == "clear_all":
             return clear_memory(scope=args.get("scope", "all"))
         return "Unknown memory operation."
+
+    if kind == "app_control":
+        if op == "allow_and_open":
+            target_id = args.get("target_id", "")
+            app_name = args.get("app_name", "")
+            add_allowed_app_target(target_id)
+            return open_app(app_name)
+        return "Unknown app-control operation."
 
     return "Unknown pending operation."
 

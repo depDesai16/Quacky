@@ -927,6 +927,20 @@ class SettingsPanelMixin:
         self._app_controls_layout.setSpacing(0)
         app_card.add_widget(app_controls)
 
+        suggest_card = _SettingsCard()
+        self._settings_cards.append(suggest_card)
+        lay.addWidget(suggest_card)
+
+        row, self._toggle_app_control_suggestions = self._make_settings_toggle_row(
+            "Suggest Allowlist Updates",
+            "When an app request is blocked, let Quacky ask for permission to allow it and then open it.",
+            False,
+        )
+        self._toggle_app_control_suggestions.toggled.connect(
+            self.set_app_control_suggestions_enabled
+        )
+        suggest_card.add_row(row)
+
         prefs_card = _SettingsCard()
         self._settings_cards.append(prefs_card)
         lay.addWidget(prefs_card)

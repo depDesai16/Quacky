@@ -157,6 +157,24 @@ def save_allowed_app_targets(targets: list[str]) -> None:
         _write_data(data)
 
 
+def get_app_control_suggestions_enabled(default: bool = False) -> bool:
+    with _LOCK:
+        data = _read_data()
+        raw = data.get("app_control_suggestions_enabled", default)
+        if isinstance(raw, bool):
+            return raw
+        if isinstance(raw, str):
+            return raw.strip().lower() in {"1", "true", "yes", "y", "on"}
+        return bool(raw)
+
+
+def save_app_control_suggestions_enabled(enabled: bool) -> None:
+    with _LOCK:
+        data = _read_data()
+        data["app_control_suggestions_enabled"] = bool(enabled)
+        _write_data(data)
+
+
 def test_api_key(api_key: str) -> tuple[bool, str]:
     key = api_key.strip()
     if not key:

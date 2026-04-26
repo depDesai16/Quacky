@@ -18,6 +18,7 @@ from backend.core.action_router import (
 from backend.core.confirmation import handle_pending_action
 from backend.core.intent_classifier import classify
 from backend.core.response_style import ask_quacky_confirmation, style_direct_output
+from backend.features.open_app import WEB_TARGET_ID, resolve_open_app_request
 from backend.features.timers import drain_due_alerts
 from backend.personality.__init__ import (
     augment_with_context,
@@ -37,6 +38,7 @@ class ChatRuntime:
         self._chat_configs: dict[str, dict[str, Any]] = {}
         self.memory: dict[str, dict] = {}
         self.open_app_confirmation_enabled = True
+        self.app_control_suggestions_enabled = False
         self.timer_confirmation_enabled = True
         self.screen_viewing_enabled = False
         self._refresh_client()
@@ -61,6 +63,10 @@ class ChatRuntime:
     def set_open_app_confirmation_enabled(self, enabled: bool) -> None:
         """Set whether open-app actions require explicit confirmation."""
         self.open_app_confirmation_enabled = bool(enabled)
+
+    def set_app_control_suggestions_enabled(self, enabled: bool) -> None:
+        """Set whether Quacky may suggest allowlist updates for blocked app requests."""
+        self.app_control_suggestions_enabled = bool(enabled)
 
     def set_timer_confirmation_enabled(self, enabled: bool) -> None:
         """Set whether timer/alarm actions require explicit confirmation."""
@@ -91,6 +97,38 @@ class ChatRuntime:
             "is requested when you enable Screen Viewing, and Outlook/calendar actions may require "
             "Outlook to be installed and signed in."
         )
+
+    def _build_app_control_suggestion_action(self, intent: dict) -> dict | None:
+        """Create a confirmation action to allow a blocked app target, then open it."""
+        if not self.app_control_suggestions_enabled:
+            return None
+
+        app_name = str(intent.get("app") or "").strip()
+        if not app_name:
+            return None
+
+        resolution = resolve_open_app_request(app_name)
+        if not resolution.get("can_suggest_allow"):
+            return None
+        if bool(resolution.get("allowed")):
+            return None
+
+        target_id = str(resolution.get("target_id") or "").strip()
+        if not target_id:
+            return None
+
+        display_name = str(resolution.get("display_name") or app_name).strip() or app_name
+        target_summary = (
+            "browser links"
+            if target_id == WEB_TARGET_ID
+            else f"'{display_name}'"
+        )
+        return {
+            "kind": "app_control",
+            "op": "allow_and_open",
+            "args": {"target_id": target_id, "app_name": app_name},
+            "summary": f"allow {target_summary} in app controls and open '{display_name}'",
+        }
 
     @staticmethod
     def _attach_screen_context_note(message: str) -> str:
@@ -253,6 +291,17 @@ class ChatRuntime:
                 mem["pending_action"] = action
                 update_memory(self.memory, chat_id, message)
                 return finalize(ask_quacky_confirmation(chat, message, action["summary"]))
+
+        for intent in intents:
+            if (intent.get("intent") or "").lower() != "open_app":
+                continue
+            action = self._build_app_control_suggestion_action(intent)
+            if action is None:
+                continue
+            action["user_message"] = message
+            mem["pending_action"] = action
+            update_memory(self.memory, chat_id, message)
+            return finalize(ask_quacky_confirmation(chat, message, action["summary"]))
 
         confirmable_candidates: list[dict] = []
         for intent in intents:

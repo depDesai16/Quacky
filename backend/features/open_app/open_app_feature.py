@@ -159,10 +159,84 @@ def get_app_control_snapshot(path: Path = APPLIST_PATH) -> dict:
     }
 
 
+def add_allowed_app_target(target_id: str, path: Path = APPLIST_PATH) -> list[str]:
+    value = str(target_id or "").strip()
+    if not value:
+        return get_app_control_snapshot(path).get("allowed_targets", [])
+
+    snapshot = get_app_control_snapshot(path)
+    existing = list(snapshot.get("allowed_targets", []) or [])
+    lowered_existing = {str(item).strip().lower() for item in existing}
+    if value.strip().lower() not in lowered_existing:
+        existing.append(value)
+
+    from backend.core.settings_service import save_allowed_app_targets
+
+    save_allowed_app_targets(existing)
+    return existing
+
+
 def _is_target_allowed(target_id: str, path: Path = APPLIST_PATH) -> bool:
     snapshot = get_app_control_snapshot(path)
     allowed = {str(item).strip().lower() for item in snapshot.get("allowed_targets", [])}
     return str(target_id or "").strip().lower() in allowed
+
+
+def resolve_open_app_request(app_name: str, path: Path = APPLIST_PATH) -> dict:
+    raw = (app_name or "").strip()
+    if _is_direct_url_target(raw):
+        return {
+            "status": "direct_url",
+            "requested_name": raw,
+            "display_name": _normalize_direct_url_target(raw),
+            "target_id": WEB_TARGET_ID,
+            "allowed": _is_target_allowed(WEB_TARGET_ID, path),
+            "can_suggest_allow": True,
+        }
+
+    apps = load_app_list(path)
+    if not apps:
+        return {
+            "status": "no_apps_configured",
+            "requested_name": raw,
+            "display_name": raw,
+            "target_id": "",
+            "allowed": False,
+            "can_suggest_allow": False,
+        }
+
+    matches = _find_matches(raw, apps)
+    if not matches:
+        return {
+            "status": "not_found",
+            "requested_name": raw,
+            "display_name": raw,
+            "target_id": "",
+            "allowed": False,
+            "can_suggest_allow": False,
+            "available": sorted({a.name for a in apps}),
+        }
+
+    if len(matches) > 1:
+        return {
+            "status": "ambiguous",
+            "requested_name": raw,
+            "display_name": raw,
+            "target_id": "",
+            "allowed": False,
+            "can_suggest_allow": False,
+            "matches": sorted({a.name for a in matches}),
+        }
+
+    app = matches[0]
+    return {
+        "status": "app",
+        "requested_name": raw,
+        "display_name": app.name,
+        "target_id": app.name,
+        "allowed": _is_target_allowed(app.name, path),
+        "can_suggest_allow": True,
+    }
 
 
 def _find_matches(app_name: str, apps: Iterable[AppEntry]) -> List[AppEntry]:
@@ -322,29 +396,32 @@ def _open_direct_url_target(value: str) -> str:
 
 
 def open_app(app_name: str) -> str:
-    if _is_direct_url_target(app_name):
-        if not _is_target_allowed(WEB_TARGET_ID):
+    resolution = resolve_open_app_request(app_name)
+
+    if resolution["status"] == "direct_url":
+        if not resolution["allowed"]:
             return (
                 "Opening web links is blocked by your security settings. "
                 "Allow 'Web links in browser' in Settings > Security."
             )
         return _open_direct_url_target(app_name)
 
-    apps = load_app_list()
-    if not apps:
+    if resolution["status"] == "no_apps_configured":
         return "No apps configured yet. Add entries to backend/applist.txt."
 
-    matches = _find_matches(app_name, apps)
-    if not matches:
+    if resolution["status"] == "not_found":
+        apps = load_app_list()
         available = ", ".join(sorted({a.name for a in apps}))
         return f"App '{app_name}' not found. Available: {available}."
 
-    if len(matches) > 1:
-        options = ", ".join(sorted({a.name for a in matches}))
+    if resolution["status"] == "ambiguous":
+        options = ", ".join(resolution.get("matches", []))
         return f"Which app did you mean? Matches: {options}."
 
+    apps = load_app_list()
+    matches = _find_matches(app_name, apps)
     app = matches[0]
-    if not _is_target_allowed(app.name):
+    if not resolution["allowed"]:
         return (
             f"Opening {app.name} is blocked by your security settings. "
             "Allow it in Settings > Security."

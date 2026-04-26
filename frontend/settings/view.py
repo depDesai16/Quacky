@@ -44,6 +44,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self.open_app_confirmation_enabled = bool(open_app_confirmation_enabled)
         self.timer_confirmation_enabled = bool(timer_confirmation_enabled)
         self.screen_viewing_enabled = bool(screen_viewing_enabled)
+        self.app_control_suggestions_enabled = False
         self.toast = _ToastProxy(toast_callback)
         self._settings_controller = SettingsController(client, parent=self)
 
@@ -68,6 +69,7 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         self._app_controls_layout = None
         self._preferences_layout = None
         self._tasks_layout = None
+        self._toggle_app_control_suggestions = None
 
         self._settings_container = self._build_settings_page()
         root = QVBoxLayout(self)
@@ -364,6 +366,18 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
         if not isinstance(result, dict) or self._app_controls_layout is None:
             return
 
+        suggest_enabled = bool(result.get("suggest_updates_enabled", False))
+        self.app_control_suggestions_enabled = suggest_enabled
+        if (
+            self._toggle_app_control_suggestions is not None
+            and self._toggle_app_control_suggestions.isChecked() != suggest_enabled
+        ):
+            from PyQt6.QtCore import QSignalBlocker
+
+            blocker = QSignalBlocker(self._toggle_app_control_suggestions)
+            self._toggle_app_control_suggestions.setChecked(suggest_enabled)
+            del blocker
+
         self._clear_layout(self._app_controls_layout)
         self._app_control_toggles = {}
         options = result.get("options") if isinstance(result.get("options"), list) else []
@@ -400,7 +414,10 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
             if toggle.isChecked()
         ]
         try:
-            result = self._client.set_app_control_settings(allowed_targets)
+            result = self._client.set_app_control_settings(
+                allowed_targets,
+                suggest_updates_enabled=self.app_control_suggestions_enabled,
+            )
         except Exception as exc:
             self.toast.show_message(f"Failed to update app controls: {exc}", kind="error")
             self._refresh_app_controls()
@@ -410,6 +427,42 @@ class SettingsPanel(SettingsPanelMixin, QWidget):
             self._refresh_app_controls()
             return
         self.toast.show_message("Updated app control permissions.", kind="success")
+
+    def set_app_control_suggestions_enabled(self, enabled: bool):
+        """Persist whether Quacky may suggest allowlist updates."""
+        requested = bool(enabled)
+        self.app_control_suggestions_enabled = requested
+        if self._client is None or not hasattr(self._client, "set_app_control_settings"):
+            return
+
+        allowed_targets = [
+            target_id
+            for target_id, toggle in self._app_control_toggles.items()
+            if toggle.isChecked()
+        ]
+        try:
+            result = self._client.set_app_control_settings(
+                allowed_targets,
+                suggest_updates_enabled=requested,
+            )
+        except Exception as exc:
+            self.toast.show_message(
+                f"Failed to update app-control suggestions: {exc}",
+                kind="error",
+            )
+            self._refresh_app_controls()
+            return
+        if isinstance(result, dict) and "error" in result:
+            self.toast.show_message(
+                f"Failed to update app-control suggestions: {result['error']}",
+                kind="error",
+            )
+            self._refresh_app_controls()
+            return
+        self.toast.show_message(
+            "Updated app-control suggestion setting.",
+            kind="success",
+        )
 
     def _refresh_memory_snapshot(self):
         """Load remembered preferences and tasks into editable rows."""

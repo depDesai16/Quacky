@@ -38,6 +38,19 @@ def _load_chat_runtime_module():
     timers_stub = types.ModuleType("backend.features.timers")
     timers_stub.drain_due_alerts = Mock(return_value=[])
 
+    open_app_stub = types.ModuleType("backend.features.open_app")
+    open_app_stub.WEB_TARGET_ID = "__web__"
+    open_app_stub.resolve_open_app_request = Mock(
+        return_value={
+            "status": "app",
+            "requested_name": "spotify",
+            "display_name": "Spotify",
+            "target_id": "Spotify",
+            "allowed": False,
+            "can_suggest_allow": True,
+        }
+    )
+
     personality_stub = types.ModuleType("backend.personality.__init__")
     personality_stub.augment_with_context = Mock(side_effect=lambda memory, chat_id, message: message)
     personality_stub.is_preference_message = Mock(return_value=False)
@@ -58,18 +71,19 @@ def _load_chat_runtime_module():
             "backend.core.intent_classifier": intent_classifier_stub,
             "backend.core.response_style": response_style_stub,
             "backend.features.timers": timers_stub,
+            "backend.features.open_app": open_app_stub,
             "backend.personality.__init__": personality_stub,
             "backend.tools": tools_stub,
         },
     ):
         sys.modules.pop("backend.core.chat_runtime", None)
         module = importlib.import_module("backend.core.chat_runtime")
-    return module
+    return module, intent_classifier_stub, open_app_stub, response_style_stub
 
 
 class ChatRuntimeTests(unittest.TestCase):
     def test_handle_message_without_api_key_returns_setup_guidance(self):
-        module = _load_chat_runtime_module()
+        module, _intent_classifier_stub, _open_app_stub, _response_style_stub = _load_chat_runtime_module()
         runtime = module.ChatRuntime(api_key="", model_name="gemini-2.5-flash")
         chat_id = runtime.create_chat()
 
@@ -77,6 +91,24 @@ class ChatRuntimeTests(unittest.TestCase):
 
         self.assertIn("needs a Gemini API key", result)
         self.assertIn("Settings > API Key", result)
+
+    def test_blocked_open_app_can_become_allowlist_confirmation(self):
+        module, intent_classifier_stub, _open_app_stub, response_style_stub = _load_chat_runtime_module()
+        runtime = module.ChatRuntime(api_key="test-key", model_name="gemini-2.5-flash")
+        runtime.set_app_control_suggestions_enabled(True)
+        chat = Mock()
+        chat.send_message.return_value.text = "confirm app control"
+        runtime.chats["chat-1"] = chat
+        runtime._chat_configs["chat-1"] = {"system_instruction": "", "model": None}
+        intent_classifier_stub.classify.return_value = [{"intent": "open_app", "app": "spotify"}]
+        response_style_stub.ask_quacky_confirmation.return_value = "confirm app control"
+
+        result = runtime.handle_message("chat-1", "open spotify")
+
+        self.assertEqual(result, "confirm app control")
+        pending = runtime.memory["chat-1"]["pending_action"]
+        self.assertEqual(pending["kind"], "app_control")
+        self.assertEqual(pending["op"], "allow_and_open")
 
 
 if __name__ == "__main__":

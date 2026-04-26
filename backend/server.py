@@ -19,12 +19,14 @@ from backend.core.settings_service import (
     get_api_key as get_saved_api_key,
 )
 from backend.core.settings_service import (
+    get_app_control_suggestions_enabled,
     get_open_app_confirmation_enabled,
     get_screen_viewing_enabled,
     get_timer_confirmation_enabled,
     remove_api_key,
     save_api_key,
     save_allowed_app_targets,
+    save_app_control_suggestions_enabled,
     save_open_app_confirmation_enabled,
     save_screen_viewing_enabled,
     save_timer_confirmation_enabled,
@@ -72,6 +74,10 @@ screen_viewing_state = {
     "enabled": bool(get_screen_viewing_enabled(default=False))
 }
 runtime.set_screen_viewing_enabled(screen_viewing_state["enabled"])
+app_control_suggestions_state = {
+    "enabled": bool(get_app_control_suggestions_enabled(default=False))
+}
+runtime.set_app_control_suggestions_enabled(app_control_suggestions_state["enabled"])
 _MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 
 
@@ -281,7 +287,9 @@ class QuackyHandler(BaseHTTPRequestHandler):
             return
 
         if self.path == "/settings/app-control":
-            _json_response(self, 200, get_app_control_snapshot())
+            snapshot = get_app_control_snapshot()
+            snapshot["suggest_updates_enabled"] = bool(app_control_suggestions_state["enabled"])
+            _json_response(self, 200, snapshot)
             return
 
         if self.path == "/settings/setup-status":
@@ -513,6 +521,12 @@ class QuackyHandler(BaseHTTPRequestHandler):
             if not isinstance(raw_targets, list):
                 _json_response(self, 400, {"error": "allowed_targets must be a list"})
                 return
+            suggest_updates_enabled = app_control_suggestions_state["enabled"]
+            if "suggest_updates_enabled" in data:
+                suggest_updates_enabled = _as_bool(
+                    data.get("suggest_updates_enabled"),
+                    default=app_control_suggestions_state["enabled"],
+                )
 
             snapshot = get_app_control_snapshot()
             known_targets = {
@@ -530,7 +544,14 @@ class QuackyHandler(BaseHTTPRequestHandler):
                 cleaned.append(value)
 
             save_allowed_app_targets(cleaned)
-            _json_response(self, 200, get_app_control_snapshot())
+            app_control_suggestions_state["enabled"] = bool(suggest_updates_enabled)
+            runtime.set_app_control_suggestions_enabled(
+                app_control_suggestions_state["enabled"]
+            )
+            save_app_control_suggestions_enabled(app_control_suggestions_state["enabled"])
+            response = get_app_control_snapshot()
+            response["suggest_updates_enabled"] = bool(app_control_suggestions_state["enabled"])
+            _json_response(self, 200, response)
             return
 
         if self.path == "/memory/update":

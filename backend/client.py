@@ -111,8 +111,15 @@ class QuackyClient:
     def get_app_control_settings(self) -> dict:
         return self._get("/settings/app-control")
 
-    def set_app_control_settings(self, allowed_targets: list[str]) -> dict:
-        return self._post("/settings/app-control", {"allowed_targets": list(allowed_targets or [])})
+    def set_app_control_settings(
+        self,
+        allowed_targets: list[str],
+        suggest_updates_enabled: bool | None = None,
+    ) -> dict:
+        payload = {"allowed_targets": list(allowed_targets or [])}
+        if suggest_updates_enabled is not None:
+            payload["suggest_updates_enabled"] = bool(suggest_updates_enabled)
+        return self._post("/settings/app-control", payload)
 
     def get_setup_status(self) -> dict:
         return self._get("/settings/setup-status")

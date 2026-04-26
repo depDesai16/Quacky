@@ -68,6 +68,20 @@ class SettingsServiceTests(unittest.TestCase):
                     ["Spotify", "__web__"],
                 )
 
+    def test_app_control_suggestions_setting_round_trips(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            settings_path = Path(tmpdir) / "local_settings.json"
+
+            with patch.object(settings_service, "_FILE", settings_path):
+                self.assertFalse(
+                    settings_service.get_app_control_suggestions_enabled(default=False)
+                )
+
+                settings_service.save_app_control_suggestions_enabled(True)
+                self.assertTrue(
+                    settings_service.get_app_control_suggestions_enabled(default=False)
+                )
+
 
 if __name__ == "__main__":
     unittest.main()
