@@ -24,8 +24,8 @@ from backend.core.settings_service import (
     get_screen_viewing_enabled,
     get_timer_confirmation_enabled,
     remove_api_key,
-    save_api_key,
     save_allowed_app_targets,
+    save_api_key,
     save_app_control_suggestions_enabled,
     save_open_app_confirmation_enabled,
     save_screen_viewing_enabled,
@@ -35,8 +35,8 @@ from backend.core.settings_service import (
 from backend.core.settings_service import (
     has_api_key as has_saved_api_key,
 )
-from backend.features.timers import get_active_timers_data
 from backend.features.open_app import get_app_control_snapshot
+from backend.features.timers import get_active_timers_data
 from backend.interact.speech_to_text.elevenlabs_wrapper import ElevenLabsTTS
 from backend.tools.memory_tool import clear_memory, forget_memory_item
 

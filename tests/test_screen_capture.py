@@ -1,9 +1,8 @@
-import importlib
+import importlib.util
 import os
 import sys
 import unittest
 from unittest.mock import patch
-
 
 _MODULE_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
