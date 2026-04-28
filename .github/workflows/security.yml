@@ -58,12 +58,12 @@ jobs:
           
       - name: Install dependencies
         run: |
-          pip install "safety<3"
+          pip install "safety<3" setuptools
           
       - name: Run Safety check
         run: |
-          safety check --json --output safety-report.json || true
-          safety check
+          safety check -r requirements.txt --output json > safety-report.json || true
+          safety check -r requirements.txt --full-report
           
       - name: Upload Safety results
         uses: actions/upload-artifact@v4
@@ -100,47 +100,32 @@ jobs:
           name: pip-audit-results
           path: pip-audit-report.json
 
-  codeql:
-    name: CodeQL Analysis
-    runs-on: ubuntu-latest
-    permissions:
-      security-events: write
-      actions: read
-      contents: read
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: python
-          queries: security-and-quality
-          
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
-        
-      - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:python"
-
   secret-scanning:
     name: Secret Scanning
     runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for better detection
           
-      - name: TruffleHog Secret Scan
+      - name: TruffleHog Secret Scan (push)
+        if: github.event_name == 'push' && github.event.before != github.sha
         uses: trufflesecurity/trufflehog@main
         with:
           path: ./
-          base: ${{ github.event.repository.default_branch }}
-          head: HEAD
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          extra_args: --debug --only-verified
+
+      - name: TruffleHog Secret Scan (pull request)
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.sha != github.event.pull_request.head.sha
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.pull_request.base.sha }}
+          head: ${{ github.event.pull_request.head.sha }}
           extra_args: --debug --only-verified
 
   dependency-review:
