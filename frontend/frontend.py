@@ -60,6 +60,7 @@ from PyQt6.QtGui import QFont, QFontDatabase
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
 from theme import FONT_FAMILY_UI
 
+from backend.core.app_paths import executable_dir, resource_path
 from backend.client import QuackyClient
 from backend.core.runtime_logging import configure_runtime_logging, install_exception_logging
 
@@ -80,6 +81,14 @@ def _configure_app_identity(app: QApplication) -> None:
 def _start_server() -> subprocess.Popen:
     """Handle start server."""
     LOGGER.info("Starting backend subprocess from desktop app")
+    if getattr(sys, "frozen", False):
+        backend_exe = executable_dir() / (
+            "QuackyBackend.exe" if sys.platform == "win32" else "QuackyBackend"
+        )
+        if not backend_exe.exists():
+            raise FileNotFoundError(f"Missing packaged backend executable: {backend_exe}")
+        return subprocess.Popen([str(backend_exe)], cwd=str(executable_dir()))
+
     return subprocess.Popen([sys.executable, "-m", "backend.server"], cwd=ROOT_DIR)
 
 
@@ -105,7 +114,7 @@ def _wait_for_server(base_url: str, timeout: float = 10.0) -> bool:
 
 def _load_system_prompt() -> str | None:
     """Load system prompt."""
-    path = os.path.join(ROOT_DIR, "backend", "system_prompt.txt")
+    path = resource_path("backend", "system_prompt.txt")
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
@@ -140,7 +149,7 @@ def build_system_tray(app: QApplication) -> QSystemTrayIcon:
     tray.setToolTip("Quacky")
 
     tray_menu = QMenu()
-    css_path = os.path.join(FRONTEND_DIR, "css", "tray_menu.css")
+    css_path = resource_path("frontend", "css", "tray_menu.css")
     with open(css_path, "r", encoding="utf-8") as f:
         tray_menu.setStyleSheet(f.read())
 

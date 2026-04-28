@@ -4,8 +4,9 @@ import threading
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-LOGS_DIR = ROOT_DIR / "logs"
+from backend.core.app_paths import user_data_path
+
+LOGS_DIR = user_data_path("logs")
 MAX_LOG_BYTES = 1_000_000
 BACKUP_COUNT = 5
 

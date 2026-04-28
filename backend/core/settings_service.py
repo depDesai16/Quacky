@@ -6,8 +6,10 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
+from backend.core.app_paths import user_data_path
+
 _LOCK = threading.Lock()
-_FILE = Path(__file__).resolve().parents[1] / "data" / "local_settings.json"
+_FILE = user_data_path("local_settings.json")
 _GOOGLE_MODELS_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 
 

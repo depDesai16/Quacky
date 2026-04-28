@@ -2,6 +2,7 @@
 import os
 from dataclasses import dataclass
 
+from backend.core.app_paths import resource_path
 from backend.core.settings_service import get_api_key as get_saved_api_key
 
 try:
@@ -29,7 +30,7 @@ def _as_bool(value: str | None, default: bool = False) -> bool:
 
 def get_settings() -> Settings:
     if load_dotenv:
-        load_dotenv("config.env")
+        load_dotenv(resource_path("config.env"))
 
     model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
     api_key = (

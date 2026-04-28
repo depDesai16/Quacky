@@ -2,6 +2,34 @@
 
 Quacky is a local-first desktop assistant built in Python. It combines a PyQt desktop UI, a lightweight local HTTP backend, Gemini-based chat/tool orchestration, and a growing set of assistant features such as calendar actions, timers, memory, weather, and app launching.
 
+## Packaging
+
+Quacky can now be bundled as a desktop app with PyInstaller.
+
+Local packaging:
+
+```bash
+python -m pip install -r requirements.txt -r requirements-packaging.txt
+python scripts/build_release.py --clean
+```
+
+Outputs:
+
+- Windows app folder: `dist/Quacky/`
+- Windows installer input: `dist/Quacky/`
+- macOS app bundle folder: `dist/Quacky/`
+- Linux app folder: `dist/Quacky/`
+
+Windows installer:
+
+- The repository includes an Inno Setup script at `packaging/windows/Quacky.iss`
+- GitHub Actions builds a Windows installer `.exe` from the packaged app folder
+
+Cross-platform CI packaging:
+
+- `.github/workflows/release-packages.yml` builds native artifacts on `windows-latest`, `macos-latest`, and `ubuntu-latest`
+- Desktop packaging is native-build only in CI; the workflow does not attempt to cross-compile all OS targets from one runner
+
 ## Run Model
 
 Quacky is not deployed through GitHub Actions.

@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import threading
 from datetime import datetime
-from pathlib import Path
+
+from backend.core.app_paths import user_data_path
 
 _LOCK = threading.Lock()
-_FILE = Path(__file__).resolve().parents[1] / "data" / "activity_log.json"
+_FILE = user_data_path("activity_log.json")
 _MAX_EVENTS = 120
 
 
