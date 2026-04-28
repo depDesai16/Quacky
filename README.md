@@ -30,6 +30,11 @@ Cross-platform CI packaging:
 - `.github/workflows/release-packages.yml` builds native artifacts on `windows-latest`, `macos-latest`, and `ubuntu-latest`
 - Desktop packaging is native-build only in CI; the workflow does not attempt to cross-compile all OS targets from one runner
 
+Downloadable GitHub Actions Windows builds:
+
+- `.github/workflows/windows-package.yml` builds `Quacky.exe` plus a Windows installer on pushes, pull requests, and manual runs
+- Download the generated `.zip` app bundle and installer `.exe` from the workflow run artifacts
+
 ## Run Model
 
 Quacky is not deployed through GitHub Actions.
