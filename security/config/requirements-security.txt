@@ -7,7 +7,7 @@ safety==3.0.1                # Dependency vulnerability scanner
 pip-audit==2.6.1             # PyPI package auditing
 
 # Code quality and linting
-black==23.12.1               # Code formatter
+black==26.3.1               # Code formatter
 flake8==7.0.0                # Linting
 isort==5.13.2                # Import sorting
 mypy==1.8.0                  # Static type checking
@@ -17,7 +17,7 @@ pylint==3.0.3                # Code analysis
 pre-commit==3.6.0            # Git hook framework
 
 # Testing and coverage
-pytest==7.4.4                # Testing framework
+pytest==9.0.3                # Testing framework
 pytest-cov==4.1.0            # Coverage plugin
 coverage[toml]==7.4.0        # Coverage measurement
 
